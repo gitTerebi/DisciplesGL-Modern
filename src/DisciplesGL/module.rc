@@ -1,0 +1,538 @@
+// Microsoft Visual C++ generated resource script.
+//
+#include "resource.h"
+#include "afxres.h"
+
+/////////////////////////////////////////////////////////////////////////////
+// English (United States) resources
+
+#if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_ENU)
+LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
+#pragma code_page(1252)
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Manifest
+//
+
+IDR_MANIFEST				RT_MANIFEST				"module.manifest"
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// String Table
+//
+
+STRINGTABLE DISCARDABLE
+BEGIN
+	IDS_ERROR_CHOOSE_PF				"ChoosePixelFormat failed"
+	IDS_ERROR_SET_PF				"SetPixelFormat failed"
+	IDS_ERROR_DESCRIBE_PF			"DescribePixelFormat failed"
+	IDS_ERROR_NEED_PALETTE			"Needs palette"
+	IDS_ERROR_BAD_PF				"Bad pixel type"
+	IDS_ERROR_ARB_VERSION			"Invalid ARB version"
+	IDS_ERROR_ARB_PROFILE			"Invalid ARB profile"
+	IDS_ERROR_LOAD_RESOURCE			"Load resource failed"
+	IDS_ERROR_COMPILE_SHADER		"Compile shader failed"
+	IDS_INFO_RESTART				"In order for the changes to take effect, please restart the game"
+	IDS_INFO_NEXT_BATTLE			"This option will be affected at the next battle"
+	IDS_WARN_RESET					"This option will reset all wrapper configuration to default.\r\nAre you sure you want to continue?"
+	IDS_INFO_RESET					"All settings have been reset. Changes take effect after game restart"
+	IDS_WARN_FAST_AI				"This option increases AI performance, but may cause an unexpected game crash. Do you wish to continue?"
+
+	IDS_TEXT_INTERPOLATIN			"Interpolation filter"
+	IDS_TEXT_UPSCALING				"Upscaling filter"
+	IDS_TEXT_FILT_OFF				"None"
+	IDS_TEXT_FILT_LINEAR			"Linear"
+	IDS_TEXT_FILT_HERMITE			"Hermite"
+	IDS_TEXT_FILT_CUBIC				"Cubic"
+	IDS_TEXT_FILT_LANCZOS			"Lanczos"
+	IDS_TEXT_FILT_NONE				"None"
+	IDS_TEXT_FILT_SCALENX			"ScaleNx"
+	IDS_TEXT_FILT_EAGLE				"Super Eagle"
+	IDS_TEXT_FILT_XSAL				"xSal"
+	IDS_TEXT_FILT_SCALEHQ			"ScaleHQ"
+	IDS_TEXT_FILT_XBRZ				"xBRz"
+
+	IDS_TEXT_RENDERER				"Renderer"
+
+	IDS_ON							"On"
+	IDS_OFF							"Off"
+
+	IDS_RES_FULL_SCREEN				"Fullscreen mode"
+
+	IDS_MODE_BORDERLESS				"Borderless"
+	IDS_MODE_EXCLUSIVE				"Exclusive"
+
+	IDS_VSYNC						"Vertical sync"
+
+	IDS_ASPECT_RATIO				"Aspect ratio"
+	IDS_ASPECT_KEEP					"Original"
+	IDS_ASPECT_STRETCH				"Stretch"
+
+	IDS_STRETCH						"Stretch windows"
+	IDS_BORDERS						"Borders"
+	IDS_BORDERS_CLASSIC				"Classic"
+	IDS_BORDERS_ALTERNATIVE			"Alternative"
+	IDS_BACKGROUND					"Background"
+
+	IDS_SPEED						"Speed"
+
+	IDS_MSG							"Messages timeout"
+	IDS_MSG_SECONDS					"second(s)"
+
+	IDS_FAST_AI						"Fast AI"
+	IDS_ALWAYS_ACTIVE				"Always active"
+	IDS_PATCH_CPU					"Cold CPU"
+	IDS_LOCALE						"Locale"
+	IDS_LOCALE_DEFAULT				"Default"
+
+	IDS_SCR_TYPE					"Screenshot"
+	IDS_SCR_BMP						"BMP"
+	IDS_SCR_PNG						"PNG"
+	IDS_SCR_FILE					"Screenshot created"
+
+	IDS_REND_AUTO					"Auto"
+	IDS_REND_GL1					"OpenGL 1"
+	IDS_REND_GL2					"OpenGL 2"
+	IDS_REND_GL3					"OpenGL 3"
+	IDS_REND_GDI					"GDI"
+END
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Menu
+//
+
+IDR_MENU MENU DISCARDABLE
+BEGIN
+	POPUP "&File"
+	BEGIN
+		POPUP "&Editor Mode"
+		BEGIN
+			MENUITEM "Scenarios",					IDM_EDITOR_SCENE
+			MENUITEM "Campaigns",					IDM_EDITOR_CAMP
+		END
+		MENUITEM "&Reset Wrapper"					IDM_FILE_RESET
+		MENUITEM SEPARATOR
+		MENUITEM "&Quit",							IDM_FILE_QUIT
+	END
+	POPUP "&Display"
+	BEGIN
+		POPUP "&Renderer"
+		BEGIN
+			MENUITEM "Auto",						IDM_REND_AUTO
+			MENUITEM SEPARATOR
+			MENUITEM "GDI",							IDM_REND_GDI
+			MENUITEM SEPARATOR
+			MENUITEM "OpenGL 1",					IDM_REND_GL1
+			MENUITEM "OpenGL 2",					IDM_REND_GL2
+			MENUITEM "OpenGL 3",					IDM_REND_GL3
+		END
+		MENUITEM SEPARATOR
+		POPUP "&Resolution"
+		BEGIN
+			MENUITEM "\a( ... )",					IDM_RES_CUSTOM
+			MENUITEM SEPARATOR
+			MENUITEM "640 x 480\a(4x3)",			IDM_RES_640_480
+			MENUITEM "800 x 600\a(4x3)",			IDM_RES_800_600
+			MENUITEM "960 x 768\a(5x4)",			IDM_RES_960_768
+			MENUITEM "1024 x 600\a(16x9)",			IDM_RES_1024_600
+			MENUITEM "1024 x 768\a(4x3)",			IDM_RES_1024_768
+			MENUITEM "1152 x 864\a(4x3)",			IDM_RES_1152_864
+			MENUITEM "1280 x 720\a(16x9)",			IDM_RES_1280_720
+			MENUITEM "1280 x 768\a(5x3)",			IDM_RES_1280_768
+			MENUITEM "1280 x 800\a(16x10)",			IDM_RES_1280_800
+			MENUITEM "1280 x 960\a(4x3)",			IDM_RES_1280_960
+			MENUITEM "1280 x 1024\a(5x4)",			IDM_RES_1280_1024
+			MENUITEM "1360 x 768\a(16x9)",			IDM_RES_1360_768
+			MENUITEM "1366 x 768\a(16x9)",			IDM_RES_1366_768
+			MENUITEM "1400 x 1050\a(4x3)",			IDM_RES_1400_1050
+			MENUITEM "1440 x 900\a(16x10)",			IDM_RES_1440_900
+			MENUITEM "1440 x 1080\a(4x3)",			IDM_RES_1440_1080
+			MENUITEM "1536 x 864\a(16x9)",			IDM_RES_1536_864
+			MENUITEM "1600 x 900\a(16x9)",			IDM_RES_1600_900
+			MENUITEM "1600 x 1200\a(4x3)",			IDM_RES_1600_1200
+			MENUITEM "1680 x 1050\a(16x10)",		IDM_RES_1680_1050
+			MENUITEM "1920 x 1080\a(16x9)",			IDM_RES_1920_1080
+			MENUITEM "1920 x 1200\a(16x10)",		IDM_RES_1920_1200
+			MENUITEM "1920 x 1440\a(4x3)",			IDM_RES_1920_1440
+			MENUITEM "2048 x 1536\a(4x3)",			IDM_RES_2048_1536
+			MENUITEM "2560 x 1440\a(16x9)",			IDM_RES_2560_1440
+			MENUITEM "2560 x 1600\a(16x10)",		IDM_RES_2560_1600
+			MENUITEM "3840 x 2160\a(16x9)",			IDM_RES_3840_2160
+			MENUITEM "7680 x 4320\a(16x9)",		    IDM_RES_7680_4320
+		END
+		MENUITEM "Full &Screen\a",					IDM_RES_FULL_SCREEN
+		MENUITEM SEPARATOR
+		MENUITEM "Enable &VSync\a",					IDM_VSYNC
+	END
+	POPUP "&Image"
+	BEGIN
+		POPUP "&Interpolation\a"
+		BEGIN
+			MENUITEM "&None",						IDM_FILT_OFF
+			MENUITEM SEPARATOR
+			MENUITEM "&Linear",						IDM_FILT_LINEAR
+			MENUITEM "&Hermite",					IDM_FILT_HERMITE
+			MENUITEM "&Cubic",						IDM_FILT_CUBIC
+			MENUITEM "&Lanczos",					IDM_FILT_LANCZOS
+		END
+		POPUP "&Upscaling"
+		BEGIN
+			MENUITEM "&None",						IDM_FILT_NONE
+			MENUITEM SEPARATOR
+			POPUP "&ScaleNx"
+			BEGIN
+				MENUITEM "x2",						IDM_FILT_SCALENX_2X
+				MENUITEM "x3",						IDM_FILT_SCALENX_3X
+			END
+			POPUP "Super &Eagle"
+			BEGIN
+				MENUITEM "x2",						IDM_FILT_EAGLE_2X
+			END
+			POPUP "x&SaI"
+			BEGIN
+				MENUITEM "x2",						IDM_FILT_XSAL_2X
+			END
+			POPUP "Scale&HQ"
+			BEGIN
+				MENUITEM "x2",						IDM_FILT_SCALEHQ_2X
+				MENUITEM "x4",						IDM_FILT_SCALEHQ_4X
+			END
+			POPUP "x&BRz"
+			BEGIN
+				MENUITEM "x2",						IDM_FILT_XRBZ_2X
+				MENUITEM "x3",						IDM_FILT_XRBZ_3X
+				MENUITEM "x4",						IDM_FILT_XRBZ_4X
+				MENUITEM "x5",						IDM_FILT_XRBZ_5X
+				MENUITEM "x6",						IDM_FILT_XRBZ_6X
+			END
+		END
+		MENUITEM SEPARATOR
+		POPUP "&Stretch Windows\a"
+		BEGIN
+			MENUITEM "Off",							IDM_STRETCH_OFF
+			MENUITEM SEPARATOR
+			MENUITEM "10%",							IDM_STRETCH_10
+			MENUITEM "20%",							IDM_STRETCH_20
+			MENUITEM "30%",							IDM_STRETCH_30
+			MENUITEM "40%",							IDM_STRETCH_40
+			MENUITEM "50%",							IDM_STRETCH_50
+			MENUITEM "60%",							IDM_STRETCH_60
+			MENUITEM "70%",							IDM_STRETCH_70
+			MENUITEM "80%",							IDM_STRETCH_80
+			MENUITEM "90%",							IDM_STRETCH_90
+			MENUITEM "100%",						IDM_STRETCH_100
+		END
+		MENUITEM "Keep &Aspect Ratio\a",			IDM_ASPECT_RATIO
+		MENUITEM SEPARATOR
+		MENUITEM "&Color Adjustment...",			IDM_COLOR_ADJUST
+		MENUITEM SEPARATOR
+		POPUP "Show &Borders"
+		BEGIN
+			MENUITEM "Off",							IDM_BORDERS_OFF
+			MENUITEM SEPARATOR
+			MENUITEM "Classic",						IDM_BORDERS_CLASSIC
+			MENUITEM "Alternative",					IDM_BORDERS_ALTERNATIVE
+		END
+		MENUITEM "Show Back&ground",				IDM_BACKGROUND
+	END
+	POPUP "&Options"
+	BEGIN
+		POPUP "&Full Screen Mode"
+		BEGIN
+			MENUITEM "&Borderless",					IDM_MODE_BORDERLESS
+			MENUITEM "&Exclusive",					IDM_MODE_EXCLUSIVE
+		END
+		MENUITEM "&Widescreen Battle",				IDM_MODE_WIDEBATTLE
+		MENUITEM SEPARATOR
+		POPUP "Game &Speed\a"
+		BEGIN
+			MENUITEM "1.0x",						IDM_SPEED_1_0
+			MENUITEM "1.1x",						IDM_SPEED_1_1
+			MENUITEM "1.2x",						IDM_SPEED_1_2
+			MENUITEM "1.3x",						IDM_SPEED_1_3
+			MENUITEM "1.4x",						IDM_SPEED_1_4
+			MENUITEM "1.5x",						IDM_SPEED_1_5
+			MENUITEM "1.6x",						IDM_SPEED_1_6
+			MENUITEM "1.7x",						IDM_SPEED_1_7
+			MENUITEM "1.8x",						IDM_SPEED_1_8
+			MENUITEM "1.9x",						IDM_SPEED_1_9
+			MENUITEM "2.0x",						IDM_SPEED_2_0
+			MENUITEM "2.1x",						IDM_SPEED_2_1
+			MENUITEM "2.2x",						IDM_SPEED_2_2
+			MENUITEM "2.3x",						IDM_SPEED_2_3
+			MENUITEM "2.4x",						IDM_SPEED_2_4
+			MENUITEM "2.5x",						IDM_SPEED_2_5
+			MENUITEM "2.6x",						IDM_SPEED_2_6
+			MENUITEM "2.7x",						IDM_SPEED_2_7
+			MENUITEM "2.8x",						IDM_SPEED_2_8
+			MENUITEM "2.9x",						IDM_SPEED_2_9
+			MENUITEM "3.0x",						IDM_SPEED_3_0
+		END
+		POPUP "&Message Timeout"
+		BEGIN
+			MENUITEM " 5 seconds",					IDM_MSG_5
+			MENUITEM "10 seconds",					IDM_MSG_10
+			MENUITEM "15 seconds",					IDM_MSG_15
+			MENUITEM "20 seconds",					IDM_MSG_20
+			MENUITEM "25 seconds",					IDM_MSG_25
+			MENUITEM "30 seconds",					IDM_MSG_30
+		END
+		POPUP "Map &Scroll"
+		BEGIN
+			MENUITEM "Left Mouse Button",			IDM_MAP_LMB
+			MENUITEM "Middle Mouse Button",			IDM_MAP_MMB
+			MENUITEM SEPARATOR
+			MENUITEM "Edge Detection",				IDM_MAP_EDGE
+		END
+		MENUITEM SEPARATOR
+		MENUITEM "Fast &AI",						IDM_FAST_AI
+		MENUITEM "&Cold CPU",						IDM_PATCH_CPU
+		MENUITEM "Always &Active",					IDM_ALWAYS_ACTIVE
+		MENUITEM SEPARATOR
+		POPUP "&Scenarios"
+		BEGIN
+			POPUP "&Order By"
+			BEGIN
+				MENUITEM "Title (Name)",			IDM_SCENE_SORT_NAME
+				MENUITEM "File Name",				IDM_SCENE_SORT_FILE
+				MENUITEM "Size (Asc)",				IDM_SCENE_SORT_SIZE_ASC
+				MENUITEM "Size (Desc)",				IDM_SCENE_SORT_SIZE_DESC
+			END
+			MENUITEM "&Show All",					IDM_SCENE_ALL
+		END
+		MENUITEM SEPARATOR
+		POPUP "&Locale"
+		BEGIN
+			MENUITEM "Default",						IDM_LOCALE_DEFAULT
+			MENUITEM SEPARATOR
+		END
+		POPUP "&Screenshot"
+		BEGIN
+			MENUITEM "&BMP",						IDM_SCR_BMP
+			MENUITEM "&PNG",						IDM_SCR_PNG
+			MENUITEM SEPARATOR
+			POPUP "&Level"
+			BEGIN
+				MENUITEM "1 - lowest",				IDM_SCR_1
+				MENUITEM "2",						IDM_SCR_2
+				MENUITEM "3",						IDM_SCR_3
+				MENUITEM "4",						IDM_SCR_4
+				MENUITEM "5",						IDM_SCR_5
+				MENUITEM "6",						IDM_SCR_6
+				MENUITEM "7",						IDM_SCR_7
+				MENUITEM "8",						IDM_SCR_8
+				MENUITEM "9 - highest",				IDM_SCR_9
+			END
+		END
+	END
+	POPUP "&Mods"
+	BEGIN
+		MENUITEM "",								IDM_MODS
+	END
+	POPUP "&Help"
+	BEGIN
+		MENUITEM "About &Application...",			IDM_HELP_ABOUT_APPLICATION
+		MENUITEM "About &Wrapper...",				IDM_HELP_ABOUT_WRAPPER
+	END
+END
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Dialog
+//
+
+IDD_ABOUT_APPLICATION DIALOGEX DISCARDABLE 29,23,216,113
+STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP
+FONT 8, "MS Sans Serif"
+BEGIN
+	CTEXT			"",IDC_TITLE,0,8,216,24
+	CTEXT			"Version %d.%d.%d.%d",IDC_VERSION,0,29,216,11
+	CTEXT			"",IDC_COPYRIGHT,0,51,216,11
+	CONTROL			"",IDC_LNK_WEB,"SysLink",WS_TABSTOP,56,63,216,11
+	ICON			"",IDC_STATIC,11,23,27,27
+	DEFPUSHBUTTON	"OK",IDOK,84,87,50,16,WS_GROUP
+END
+
+IDD_ABOUT_APPLICATION_OLD DIALOGEX DISCARDABLE 29,23,216,113
+STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP
+FONT 8, "MS Sans Serif"
+BEGIN
+	CTEXT			"",IDC_TITLE,0,8,216,24
+	CTEXT			"Version %d.%d.%d.%d",IDC_VERSION,0,29,216,11
+	CTEXT			"",IDC_COPYRIGHT,0,51,216,11
+	CTEXT			"",IDC_LNK_WEB,0,63,216,11
+	ICON			"",IDC_STATIC,11,23,27,27
+	DEFPUSHBUTTON	"OK",IDOK,84,87,50,16,WS_GROUP
+END
+
+IDD_ABOUT_WRAPPER DIALOGEX DISCARDABLE 29,23,216,190
+STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP
+FONT 8, "MS Sans Serif"
+BEGIN
+	CTEXT			"Disciples I && II\nOpenGL Wrapper",IDC_STATIC,0,8,216,24
+	CTEXT			"Version %d.%d%d   Build %d",IDC_VERSION,0,40,216,11
+	CTEXT			"Check for new version",IDC_STATIC,0,64,216,11
+	CONTROL			"",IDC_LNK_WEB,"SysLink",WS_TABSTOP,48,76,216,11
+	CTEXT			"Become a Patron",IDC_STATIC,0,96,216,11
+	CONTROL			"",IDC_LNK_PATRON,"SysLink",WS_TABSTOP,40,108,216,16
+	CTEXT			"Copyright © %d %s",IDC_COPYRIGHT,0,128,216,11
+	CONTROL			"",IDC_LNK_EMAIL,"SysLink",WS_TABSTOP,64,140,216,11
+	ICON			"",IDC_STATIC,11,23,27,27
+	DEFPUSHBUTTON	"OK",IDOK,85,164,50,16,WS_GROUP
+END
+
+IDD_ABOUT_WRAPPER_OLD DIALOGEX DISCARDABLE 29,23,216,190
+STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP
+FONT 8, "MS Sans Serif"
+BEGIN
+	CTEXT			"Disciples I && II\nOpenGL Wrapper",IDC_STATIC,0,8,216,24
+	CTEXT			"Version %d.%d%d   Build %d",IDC_VERSION,0,40,216,11
+	CTEXT			"Check for new version",IDC_STATIC,0,64,216,11
+	CTEXT			"",IDC_LNK_WEB,0,76,216,11
+	CTEXT			"Become a Patron",IDC_STATIC,0,96,216,11
+	CTEXT			"",IDC_LNK_PATRON,0,108,216,16
+	CTEXT			"Copyright © %d %s",IDC_COPYRIGHT,0,128,216,11
+	CTEXT			"",IDC_LNK_EMAIL,0,140,216,11
+	ICON			"",IDC_STATIC,11,23,27,27
+	DEFPUSHBUTTON	"OK",IDOK,85,164,50,16,WS_GROUP
+END
+
+IDD_RESOLUTION DIALOGEX DISCARDABLE 29,23,116,73
+STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP
+FONT 8, "MS Sans Serif"
+BEGIN
+	LTEXT			"Width:",IDC_STATIC,9,8,23,10
+	LTEXT			"Height:",IDC_STATIC,67,8,27,10 
+	CONTROL			"",IDC_WIDTH,EDIT,ES_NUMBER | ES_LEFT | WS_TABSTOP | WS_CHILD | WS_VISIBLE,9,21,40,14 
+	CONTROL			"",IDC_WIDTH_NUM,"msctls_updown32", UDS_SETBUDDYINT | UDS_ALIGNRIGHT | UDS_AUTOBUDDY | UDS_ARROWKEYS | UDS_NOTHOUSANDS | WS_CHILD | WS_VISIBLE,39,23,12,14 
+	CTEXT			"X",IDC_STATIC,52,23,10,10 
+	CONTROL			"",IDC_HEIGHT,EDIT,ES_NUMBER | ES_LEFT | WS_TABSTOP | WS_CHILD | WS_VISIBLE,67,21,40,14 
+	CONTROL			"",IDC_HEIGHT_NUM,"msctls_updown32", UDS_SETBUDDYINT | UDS_ALIGNRIGHT | UDS_AUTOBUDDY | UDS_ARROWKEYS | UDS_NOTHOUSANDS | WS_CHILD | WS_VISIBLE,104,22,12,14
+	DEFPUSHBUTTON   "OK",IDOK,8,50,39,16 
+    PUSHBUTTON      "Cancel",IDCANCEL,54,50,54,16 
+END
+
+IDD_COLOR_ADJUSTMENT DIALOGEX DISCARDABLE 29,23,287,280
+STYLE DS_SETFONT | DS_MODALFRAME | DS_3DLOOK | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Color Adjustment"
+FONT 8, "MS Sans Serif"
+BEGIN
+    GROUPBOX        "",IDC_STATIC,8,8,271,123
+    CONTROL         "",IDC_CANVAS,"Static",SS_OWNERDRAW,18,21,251,62
+    RTEXT           "Hue shift",IDC_STATIC,9,94,45,8
+    LTEXT           "",IDC_LBL_HUE,233,94,45,8
+    CONTROL         "",IDC_TRK_HUE,"msctls_trackbar32",TBS_BOTH | TBS_NOTICKS | WS_TABSTOP,58,92,171,15
+    RTEXT           "Saturation",IDC_STATIC,9,110,45,8
+    LTEXT           "",IDC_LBL_SAT,233,110,45,8
+    CONTROL         "",IDC_TRK_SAT,"msctls_trackbar32",TBS_BOTH | TBS_NOTICKS | WS_TABSTOP,58,108,171,15
+    GROUPBOX        "",IDC_STATIC,8,135,271,117
+    CONTROL         "RGB",IDC_RAD_RGB,"Button",BS_AUTORADIOBUTTON,65,148,39,10
+    CONTROL         "Red",IDC_RAD_RED,"Button",BS_AUTORADIOBUTTON,105,148,39,10
+    CONTROL         "Green",IDC_RAD_GREEN,"Button",BS_AUTORADIOBUTTON,145,148,39,10
+    CONTROL         "Blue",IDC_RAD_BLUE,"Button",BS_AUTORADIOBUTTON,185,148,39,10
+    RTEXT           "Input L",IDC_STATIC,9,167,45,8
+    LTEXT           "",IDC_LBL_IN_LEFT,233,167,45,8
+    CONTROL         "",IDC_TRK_IN_LEFT,"msctls_trackbar32",TBS_NOTICKS | WS_TABSTOP,58,165,171,15
+	RTEXT           "Input R",IDC_STATIC,9,183,45,8
+    LTEXT           "",IDC_LBL_IN_RIGHT,233,183,45,8
+	CONTROL         "",IDC_TRK_IN_RIGHT,"msctls_trackbar32",TBS_TOP | TBS_NOTICKS | WS_TABSTOP,58,181,171,15
+    RTEXT           "Gamma",IDC_STATIC,9,199,45,8
+    LTEXT           "",IDC_LBL_GAMMA,233,199,45,8
+    CONTROL         "",IDC_TRK_GAMMA,"msctls_trackbar32",TBS_BOTH | TBS_NOTICKS | WS_TABSTOP,58,197,171,15
+    RTEXT           "Output L",IDC_STATIC,9,215,45,8
+    LTEXT           "",IDC_LBL_OUT_LEFT,233,215,45,8
+    CONTROL         "",IDC_TRK_OUT_LEFT,"msctls_trackbar32",TBS_NOTICKS | WS_TABSTOP,58,213,171,15
+	RTEXT           "Output R",IDC_STATIC,9,231,45,8
+    LTEXT           "",IDC_LBL_OUT_RIGHT,233,231,45,8
+    CONTROL         "",IDC_TRK_OUT_RIGHT,"msctls_trackbar32",TBS_TOP | TBS_NOTICKS | WS_TABSTOP,58,229,171,15
+    PUSHBUTTON      "Reset",IDC_BTN_RESET,10,257,50,16
+	PUSHBUTTON      "Auto",IDC_BTN_AUTO,65,257,50,16
+    PUSHBUTTON      "Cancel",IDCANCEL,225,257,50,16
+    DEFPUSHBUTTON   "OK",IDOK,170,257,50,16
+END
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// RCDATA
+//
+
+IDR_LINEAR_VERTEX			RCDATA		DISCARDABLE			"..\\glsl\\linear\\vertex.glsl"
+IDR_LINEAR_FRAGMENT			RCDATA		DISCARDABLE			"..\\glsl\\linear\\fragment.glsl"
+IDR_HERMITE_FRAGMENT		RCDATA		DISCARDABLE			"..\\glsl\\hermite\\fragment.glsl"
+IDR_CUBIC_FRAGMENT			RCDATA		DISCARDABLE			"..\\glsl\\cubic\\fragment.glsl"
+IDR_LANCZOS_FRAGMENT		RCDATA		DISCARDABLE			"..\\glsl\\lanczos\\fragment.glsl"
+
+IDR_XBRZ_FRAGMENT_2X		RCDATA		DISCARDABLE			"..\\glsl\\xbrz\\fragment_2x.glsl"
+IDR_XBRZ_FRAGMENT_3X		RCDATA		DISCARDABLE			"..\\glsl\\xbrz\\fragment_3x.glsl"
+IDR_XBRZ_FRAGMENT_4X		RCDATA		DISCARDABLE			"..\\glsl\\xbrz\\fragment_4x.glsl"
+IDR_XBRZ_FRAGMENT_5X		RCDATA		DISCARDABLE			"..\\glsl\\xbrz\\fragment_5x.glsl"
+IDR_XBRZ_FRAGMENT_6X		RCDATA		DISCARDABLE			"..\\glsl\\xbrz\\fragment_6x.glsl"
+
+IDR_XSAL_FRAGMENT			RCDATA		DISCARDABLE			"..\\glsl\\xsal\\fragment.glsl"
+
+IDR_EAGLE_FRAGMENT			RCDATA		DISCARDABLE			"..\\glsl\\eagle\\fragment.glsl"
+
+IDR_SCALEHQ_FRAGMENT_2X		RCDATA		DISCARDABLE			"..\\glsl\\scalehq\\fragment_2x.glsl"
+IDR_SCALEHQ_FRAGMENT_4X		RCDATA		DISCARDABLE			"..\\glsl\\scalehq\\fragment_4x.glsl"
+
+IDR_SCALENX_FRAGMENT_2X		RCDATA		DISCARDABLE			"..\\glsl\\scalenx\\fragment_2x.glsl"
+IDR_SCALENX_FRAGMENT_3X		RCDATA		DISCARDABLE			"..\\glsl\\scalenx\\fragment_3x.glsl"
+
+IDR_BACK					RCDATA		DISCARDABLE			"..\\bmp\\back.png"
+IDR_BORDER					RCDATA		DISCARDABLE			"..\\bmp\\border.png"
+IDR_BORDER_WIDE				RCDATA		DISCARDABLE			"..\\bmp\\border_widest.png"
+IDR_ALT						RCDATA		DISCARDABLE			"..\\bmp\\alt.png"
+IDR_ALT_WIDE				RCDATA		DISCARDABLE			"..\\bmp\\alt_widest.png"
+
+IDR_DLG_BATTLE_B			RCDATA		DISCARDABLE			"..\\files\\DLG_BATTLE_B.dlg"
+IDR_DLG_ISO_NEW				RCDATA		DISCARDABLE			"..\\files\\DLG_ISO_NEW.dlg"
+IDR_DLG_ISO_VIEW_NEW		RCDATA		DISCARDABLE			"..\\files\\DLG_ISO_VIEW_NEW.dlg"
+IDR_DLG_STRATEGIC_OLD		RCDATA		DISCARDABLE			"..\\files\\DLG_STRATEGIC_OLD.dlg"
+IDR_DLG_STRATEGIC_NEW		RCDATA		DISCARDABLE			"..\\files\\DLG_STRATEGIC_NEW.dlg"
+IDR_DLG_STRAT_SPELL_NEW		RCDATA		DISCARDABLE			"..\\files\\DLG_STRAT_SPELL_NEW.dlg"
+IDR_DLG_STRAT_WAIT_NEW		RCDATA		DISCARDABLE			"..\\files\\DLG_STRAT_WAIT_NEW.dlg"
+IDR_DLG_ISO_EDIT			RCDATA		DISCARDABLE			"..\\files\\DLG_ISO_EDIT.dlg"
+IDR_DLG_MAP_EDIT			RCDATA		DISCARDABLE			"..\\files\\DLG_MAP_EDIT.dlg"
+IDR_DLG_LANDMARK_EDIT		RCDATA		DISCARDABLE			"..\\files\\DLG_LANDMARK_EDIT.dlg"
+IDR_DLG_EXCEPTIONAL_EDIT	RCDATA		DISCARDABLE			"..\\files\\DLG_EXCEPTIONAL_EDIT.dlg"
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Version
+//
+
+VS_VERSION_INFO VERSIONINFO
+ FILEVERSION 2022,1,5,2028
+ PRODUCTVERSION 1,9,0,0
+ FILEFLAGSMASK 0x17L
+#ifdef _DEBUG
+ FILEFLAGS VS_FF_DEBUG
+#else
+ FILEFLAGS 0x0L
+#endif
+ FILEOS VOS__WINDOWS32
+ FILETYPE VFT_DLL
+ FILESUBTYPE VFT2_UNKNOWN
+BEGIN
+	BLOCK "StringFileInfo"
+	BEGIN
+		BLOCK "040904b0"
+		BEGIN
+			VALUE "FileDescription", "Disciples I & II - OpenGL wrapper"
+			VALUE "FileVersion", "2022.01.05.2028"
+			VALUE "LegalCopyright", "© 2022 Verok (verokster@gmail.com)"
+			VALUE "OriginalFilename", "C4dll-R.dll"
+			VALUE "ProductVersion", "1.9.0"
+			VALUE "ProductName", "DisciplesGL"
+		END
+	END
+	BLOCK "VarFileInfo"
+	BEGIN
+		VALUE "Translation", 0x409, 1200
+	END
+END
+
+#endif    // English (United States) resources
+/////////////////////////////////////////////////////////////////////////////

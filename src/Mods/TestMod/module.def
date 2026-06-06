@@ -1,0 +1,8 @@
+LIBRARY	"TEST"
+EXPORTS
+	GetId			= _GetModId@0			PRIVATE
+	GetName			= _GetModName@0			PRIVATE
+	GetMenu			= _GetModMenu@4			PRIVATE
+	SetHWND			= _SetHWND@4			PRIVATE
+	Launch			= _Launch@0				PRIVATE
+	DrawFrame		= _DrawFrame@28			PRIVATE

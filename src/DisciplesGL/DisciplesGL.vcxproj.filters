@@ -1,0 +1,249 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="StdAfx.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="DllMain.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Main.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="GLib.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Config.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Hooks.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Window.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="OpenDraw.cpp">
+      <Filter>Source Files\Draw\Open</Filter>
+    </ClCompile>
+    <ClCompile Include="OpenDrawClipper.cpp">
+      <Filter>Source Files\Draw\Open</Filter>
+    </ClCompile>
+    <ClCompile Include="OpenDrawSurface.cpp">
+      <Filter>Source Files\Draw\Open</Filter>
+    </ClCompile>
+    <ClCompile Include="IDrawClipper.cpp">
+      <Filter>Source Files\Draw\Base</Filter>
+    </ClCompile>
+    <ClCompile Include="IDraw7.cpp">
+      <Filter>Source Files\Draw\Base</Filter>
+    </ClCompile>
+    <ClCompile Include="IDrawSurface7.cpp">
+      <Filter>Source Files\Draw\Base</Filter>
+    </ClCompile>
+    <ClCompile Include="IDrawPalette.cpp">
+      <Filter>Source Files\Draw\Base</Filter>
+    </ClCompile>
+    <ClCompile Include="OpenDrawPalette.cpp">
+      <Filter>Source Files\Draw\Open</Filter>
+    </ClCompile>
+    <ClCompile Include="IDrawUnknown.cpp">
+      <Filter>Source Files\Draw\Base</Filter>
+    </ClCompile>
+    <ClCompile Include="PngLib.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="StateBuffer.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Allocation.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="PixelBuffer.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Renderer.cpp">
+      <Filter>Source Files\Render</Filter>
+    </ClCompile>
+    <ClCompile Include="GDIRenderer.cpp">
+      <Filter>Source Files\Render</Filter>
+    </ClCompile>
+    <ClCompile Include="OGLRenderer.cpp">
+      <Filter>Source Files\Render</Filter>
+    </ClCompile>
+    <ClCompile Include="NewRenderer.cpp">
+      <Filter>Source Files\Render\OGL</Filter>
+    </ClCompile>
+    <ClCompile Include="MidRenderer.cpp">
+      <Filter>Source Files\Render\OGL</Filter>
+    </ClCompile>
+    <ClCompile Include="OldRenderer.cpp">
+      <Filter>Source Files\Render\OGL</Filter>
+    </ClCompile>
+    <ClCompile Include="ShaderGroup.cpp">
+      <Filter>Source Files\Shaders</Filter>
+    </ClCompile>
+    <ClCompile Include="ShaderProgram.cpp">
+      <Filter>Source Files\Shaders</Filter>
+    </ClCompile>
+    <ClCompile Include="Mods.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="Resource.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="StdAfx.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="ExtraTypes.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="GLib.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Hooks.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Main.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Config.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Window.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="OpenDraw.h">
+      <Filter>Header Files\Draw\Open</Filter>
+    </ClInclude>
+    <ClInclude Include="OpenDrawClipper.h">
+      <Filter>Header Files\Draw\Open</Filter>
+    </ClInclude>
+    <ClInclude Include="OpenDrawSurface.h">
+      <Filter>Header Files\Draw\Open</Filter>
+    </ClInclude>
+    <ClInclude Include="IDrawClipper.h">
+      <Filter>Header Files\Draw\Base</Filter>
+    </ClInclude>
+    <ClInclude Include="IDraw7.h">
+      <Filter>Header Files\Draw\Base</Filter>
+    </ClInclude>
+    <ClInclude Include="IDrawSurface7.h">
+      <Filter>Header Files\Draw\Base</Filter>
+    </ClInclude>
+    <ClInclude Include="IDrawPalette.h">
+      <Filter>Header Files\Draw\Base</Filter>
+    </ClInclude>
+    <ClInclude Include="OpenDrawPalette.h">
+      <Filter>Header Files\Draw\Open</Filter>
+    </ClInclude>
+    <ClInclude Include="IDrawUnknown.h">
+      <Filter>Header Files\Draw\Base</Filter>
+    </ClInclude>
+    <ClInclude Include="PngLib.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="StateBuffer.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Allocation.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="PixelBuffer.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Renderer.h">
+      <Filter>Header Files\Render</Filter>
+    </ClInclude>
+    <ClInclude Include="GDIRenderer.h">
+      <Filter>Header Files\Render</Filter>
+    </ClInclude>
+    <ClInclude Include="OGLRenderer.h">
+      <Filter>Header Files\Render</Filter>
+    </ClInclude>
+    <ClInclude Include="NewRenderer.h">
+      <Filter>Header Files\Render\OGL</Filter>
+    </ClInclude>
+    <ClInclude Include="MidRenderer.h">
+      <Filter>Header Files\Render\OGL</Filter>
+    </ClInclude>
+    <ClInclude Include="OldRenderer.h">
+      <Filter>Header Files\Render\OGL</Filter>
+    </ClInclude>
+    <ClInclude Include="ShaderGroup.h">
+      <Filter>Header Files\Shaders</Filter>
+    </ClInclude>
+    <ClInclude Include="ShaderProgram.h">
+      <Filter>Header Files\Shaders</Filter>
+    </ClInclude>
+    <ClInclude Include="Mods.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="Header Files">
+      <UniqueIdentifier>{52949067-004a-4f89-954e-76cac391770d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{9894f9f1-3b2e-44c1-b85b-f89a3c64f6a8}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Resource Files">
+      <UniqueIdentifier>{b48440de-744c-470c-835a-b1527d1c4325}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\Draw">
+      <UniqueIdentifier>{45233559-1f3e-4beb-a651-8d1d25e0b656}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\Draw">
+      <UniqueIdentifier>{a5eae026-f7bf-4cdc-9840-d87d3aad2dce}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\Draw\Base">
+      <UniqueIdentifier>{01a8b798-0f81-4a19-97ba-df0c574115c4}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\Draw\Base">
+      <UniqueIdentifier>{176903fb-180b-491f-8ee5-f8796eeee434}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\Draw\Open">
+      <UniqueIdentifier>{f2b3d40d-f341-490d-a2d3-76c34019acb7}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\Draw\Open">
+      <UniqueIdentifier>{0eb1e642-cba5-4583-908a-569f77f37fe0}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\Render">
+      <UniqueIdentifier>{7f07b90e-79e9-4f7c-9ce4-99edb31b492b}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\Render">
+      <UniqueIdentifier>{3fef6ba1-1f4c-4583-be7b-ea12e425e185}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\Render\OGL">
+      <UniqueIdentifier>{0d3118ae-0b5b-441e-af40-90184d584572}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\Render\OGL">
+      <UniqueIdentifier>{bfa9acb6-d47e-4f4b-b139-0478fc0e6b88}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\Shaders">
+      <UniqueIdentifier>{533bf25d-13a4-4dd7-9146-a7050c0b041a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\Shaders">
+      <UniqueIdentifier>{e4660601-4d7c-4fd1-8108-1b4b78989a40}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="module.def">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include=".clang-format">
+      <Filter>Resource Files</Filter>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="module.rc">
+      <Filter>Resource Files</Filter>
+    </ResourceCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <Manifest Include="module.manifest">
+      <Filter>Resource Files</Filter>
+    </Manifest>
+  </ItemGroup>
+</Project>
