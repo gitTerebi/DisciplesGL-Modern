@@ -15,7 +15,6 @@ Modern maintenance build of DisciplesGL for Disciples II.
 - Kept HD mode working with full hooks enabled.
 - Disabled only the unstable `trans_npc` transition-speed hook to prevent post-battle map crashes while keeping the rest of the deep hooks enabled.
 - Confirmed all other deep hooks can stay enabled.
-- Supports skipping startup intro movies with `Intro=0` in `Disciple.ini`.
 
 ## Included Folders
 
