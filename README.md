@@ -13,7 +13,7 @@ Modern maintenance build of DisciplesGL for Disciples II.
 - Added runtime debug logging to help trace future crashes.
 - Fixed guarded game-speed hook behavior that could crash during play.
 - Kept HD mode working with full hooks enabled.
-- Disabled only the unstable `trans_npc` transition hook, which caused crashes after battles when returning to the map and starting another battle.
+- Disabled only the unstable `trans_npc` transition-speed hook to prevent post-battle map crashes while keeping the rest of the deep hooks enabled.
 - Confirmed all other deep hooks can stay enabled.
 - Supports skipping startup intro movies with `Intro=0` in `Disciple.ini`.
 
@@ -40,7 +40,7 @@ G:\games\Disciples 2
 
 - `CB63.dll` and `SHW32.dll` are game runtime dependencies and should stay in the game folder.
 - Import libraries are kept under `src\lib`.
-- The unstable `trans_npc` transition hook is skipped; all other deep hooks remain enabled.
+- The unstable `trans_npc` transition-speed hook is disabled to prevent post-battle map crashes; all other deep hooks remain enabled.
 
 ## Release DLL
 
