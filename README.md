@@ -2,15 +2,19 @@
 
 Modern maintenance build of DisciplesGL for Disciples II.
 
-## Fixes
+## What We Fixed
 
-- Builds with Visual Studio 2022.
-- Fixes include and library paths.
-- Adds missing libpng/zlib headers needed by this source tree.
-- Fixes DLL base address conflict with Disciples II runtime DLLs.
-- Adds `built.bat` for one-command build and copy.
-- Keeps HD mode working.
-- Skips the unstable `trans_npc` transition hook that can crash after battle exit.
+- Restored the project so it builds cleanly with Visual Studio 2022.
+- Fixed include and library paths in the Visual Studio project.
+- Added the missing libpng and zlib headers required by the source tree.
+- Fixed the DLL base address so `C4dll-R.dll` does not collide with Disciples II runtime DLLs.
+- Added `built.bat` for one-command build and copy into the game folder.
+- Verified the bundled `CB63.LIB`, `SHW32.LIB`, and `hooker.lib` match the expected runtime DLL exports.
+- Added runtime debug logging to help trace future crashes.
+- Fixed guarded game-speed hook behavior that could crash during play.
+- Kept HD mode working with full hooks enabled.
+- Disabled only the unstable `trans_npc` transition hook, which caused crashes after battles when returning to the map and starting another battle.
+- Confirmed all other deep hooks can stay enabled.
 - Supports skipping startup intro movies with `Intro=0` in `Disciple.ini`.
 
 ## Included Folders
