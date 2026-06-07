@@ -401,7 +401,7 @@ namespace Config
 				if (!config.type.sacred)
 					Config::Set(CONFIG_KEYS, "ZoomImage", "");
 
-				config.keys.speedToggle = 5;
+				config.keys.speedToggle = 7;
 				Config::Set(CONFIG_KEYS, "SpeedToggle", config.keys.speedToggle);
 
 				config.keys.snapshot = 12;

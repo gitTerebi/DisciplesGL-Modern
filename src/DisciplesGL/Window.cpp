@@ -2261,6 +2261,11 @@
 
 		case WM_SYSKEYDOWN:
 		case WM_KEYDOWN: {
+			if (config.keys.windowedMode && config.keys.windowedMode + VK_F1 - 1 == wParam)
+			{
+				return WindowProc(hWnd, WM_COMMAND, IDM_RES_FULL_SCREEN, NULL);
+			}
+
 			if (!(HIWORD(lParam) & KF_ALTDOWN))
 			{
 				if (IsSmoothScrollKey(wParam))
@@ -2337,11 +2342,6 @@
 					return WindowProc(hWnd, WM_COMMAND, IDM_VSYNC, NULL);
 					return NULL;
 				}
-				else if (config.keys.windowedMode && config.keys.windowedMode + VK_F1 - 1 == wParam)
-				{
-					return WindowProc(hWnd, WM_COMMAND, IDM_RES_FULL_SCREEN, NULL);
-					return NULL;
-				}
 				else if (config.keys.zoomImage && config.keys.zoomImage + VK_F1 - 1 == wParam)
 				{
 					return WindowProc(hWnd, WM_COMMAND, IDM_STRETCH_OFF + (!config.zoom.enabled ? config.zoom.value : 0), NULL);
@@ -2374,6 +2374,12 @@
 					if (ddraw)
 						ddraw->isTakeSnapshot = SnapshotFile;
 
+					return NULL;
+				}
+				else if (wParam == VK_F5)
+				{
+					CallWindowProc(OldWindowProc, hWnd, WM_KEYDOWN, 'Q', lParam);
+					CallWindowProc(OldWindowProc, hWnd, WM_KEYUP, 'Q', lParam);
 					return NULL;
 				}
 				else if (!config.type.sacred && wParam == VK_F12)
@@ -2498,6 +2504,9 @@
 
 						if (!config.windowedMode)
 						{
+							KillTimer(hWnd, TIMER_MAXIMIZED_WINDOW);
+							maximizedWindowTicks = 0;
+
 							CHAR str1[32];
 							LoadString(hDllModule, IDS_RES_FULL_SCREEN, str1, sizeof(str1));
 

@@ -1023,14 +1023,6 @@ namespace Hooks
 		return bShow ? 1 : -1;
 	}
 
-	BOOL __stdcall ShowWindowHook(HWND hWnd, INT nCmdShow)
-	{
-		if (hWnd == hWndMain && config.windowedMode && config.maximizedWindow)
-			nCmdShow = SW_MAXIMIZE;
-
-		return ShowWindow(hWnd, nCmdShow);
-	}
-
 	BOOL __stdcall ClipCursorHook(RECT*)
 	{
 		return TRUE;
@@ -5008,6 +5000,14 @@ namespace Hooks
 
 		switch (key)
 		{
+		case 'Q':
+			if (GetAsyncKeyState(VK_F5) & 0x8000)
+				return 0x8000;
+			break;
+		case VK_CONTROL:
+			if (GetAsyncKeyState(VK_F5) & 0x8000)
+				return 0x8000;
+			break;
 		case 'A':
 			return GetAsyncKeyState('Q');
 		case 'S':
@@ -7329,6 +7329,7 @@ namespace Hooks
 			sub_PlayDeath = RedirectCall(hooker, hookSpace->async_death, hook_004EF722);
 			sub_PlayRuin = RedirectCall(hooker, hookSpace->async_ruin, hook_004F1D80);
 		}
+
 		if (deepHooksStage == 11)
 		{
 			DebugLog("DeepHooksStage 11 stop after async");
@@ -8028,7 +8029,6 @@ namespace Hooks
 				PatchImportByName(hooker, "SetThreadPriority", SetThreadPriorityHook);
 
 				PatchImportByName(hooker, "ShowCursor", ShowCursorHook);
-				PatchImportByName(hooker, "ShowWindow", ShowWindowHook);
 				PatchImportByName(hooker, "ClipCursor", ClipCursorHook);
 
 				PatchImportByName(hooker, "GetClientRect", GetClientRectHook);
