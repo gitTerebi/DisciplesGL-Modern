@@ -37,10 +37,12 @@
 
 #define WM_REDRAW_CANVAS 0x8001
 
-namespace Window
+	namespace Window
 {
 	HHOOK OldKeysHook;
 	WNDPROC OldWindowProc, OldPanelProc;
+	const UINT_PTR TIMER_MAXIMIZED_WINDOW = 0xD152;
+	DWORD maximizedWindowTicks;
 
 	VOID BeginDialog(DialogParams* params)
 	{
@@ -490,6 +492,12 @@ namespace Window
 		}
 		break;
 
+		case MenuMaximizedWindow: {
+			EnableMenuItem(config.menu, IDM_MAXIMIZED_WINDOW, MF_BYCOMMAND | (config.windowedMode ? MF_ENABLED : (MF_DISABLED | MF_GRAYED)));
+			CheckMenuItem(config.menu, IDM_MAXIMIZED_WINDOW, MF_BYCOMMAND | (config.windowedMode && config.maximizedWindow ? MF_CHECKED : MF_UNCHECKED));
+		}
+		break;
+
 		case MenuWindowType: {
 			MenuItemData mData;
 			mData.childId = IDM_MODE_BORDERLESS;
@@ -708,6 +716,7 @@ namespace Window
 		CheckMenu(MenuBackground);
 		CheckMenu(MenuStretch);
 		CheckMenu(MenuWindowMode);
+		CheckMenu(MenuMaximizedWindow);
 		CheckMenu(MenuWindowType);
 		CheckMenu(MenuFastAI);
 		CheckMenu(MenuActive);
@@ -840,6 +849,36 @@ namespace Window
 			SendMessage(hDlg, WM_SETFONT, (WPARAM)config.font, TRUE);
 
 		return TRUE;
+	}
+
+	WPARAM RemapShortcutKey(UINT uMsg, WPARAM wParam)
+	{
+		if (uMsg == WM_KEYDOWN || uMsg == WM_KEYUP || uMsg == WM_SYSKEYDOWN || uMsg == WM_SYSKEYUP)
+		{
+			if (wParam == 'Q')
+				return 'A';
+			if (wParam == 'E')
+				return 'S';
+		}
+		else if (uMsg == WM_CHAR)
+		{
+			if (wParam == 'q')
+				return 'a';
+			if (wParam == 'Q')
+				return 'A';
+			if (wParam == 'e')
+				return 's';
+			if (wParam == 'E')
+				return 'S';
+		}
+
+		return wParam;
+	}
+
+	BOOL IsSmoothScrollKey(WPARAM wParam)
+	{
+		return wParam == 'W' || wParam == 'A' || wParam == 'S' || wParam == 'D' ||
+			wParam == 'w' || wParam == 'a' || wParam == 's' || wParam == 'd';
 	}
 
 	LRESULT __stdcall KeysHook(INT nCode, WPARAM wParam, LPARAM lParam)
@@ -2036,10 +2075,40 @@ namespace Window
 		return DefWindowProc(hDlg, uMsg, wParam, lParam);
 	}
 
+	VOID StartMaximizedWindowTimer(HWND hWnd)
+	{
+		if (config.windowedMode && config.maximizedWindow && !maximizedWindowTicks)
+		{
+			maximizedWindowTicks = 10;
+			SetTimer(hWnd, TIMER_MAXIMIZED_WINDOW, 50, NULL);
+		}
+	}
+
 	LRESULT __stdcall WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 	{
 		switch (uMsg)
 		{
+		case WM_SHOWWINDOW:
+			StartMaximizedWindowTimer(hWnd);
+			return CallWindowProc(OldWindowProc, hWnd, uMsg, wParam, lParam);
+
+		case WM_TIMER:
+			if (wParam == TIMER_MAXIMIZED_WINDOW)
+			{
+				if (config.windowedMode && config.maximizedWindow && maximizedWindowTicks)
+				{
+					ShowWindow(hWnd, SW_MAXIMIZE);
+					if (!--maximizedWindowTicks)
+						KillTimer(hWnd, TIMER_MAXIMIZED_WINDOW);
+				}
+				else
+					KillTimer(hWnd, TIMER_MAXIMIZED_WINDOW);
+
+				return NULL;
+			}
+
+			return CallWindowProc(OldWindowProc, hWnd, uMsg, wParam, lParam);
+
 		case WM_PAINT: {
 			PAINTSTRUCT paint;
 			HDC hDc = BeginPaint(hWnd, &paint);
@@ -2194,6 +2263,11 @@ namespace Window
 		case WM_KEYDOWN: {
 			if (!(HIWORD(lParam) & KF_ALTDOWN))
 			{
+				if (IsSmoothScrollKey(wParam))
+					return NULL;
+
+				wParam = RemapShortcutKey(uMsg, wParam);
+
 				if (wParam == VK_OEM_PLUS || wParam == VK_OEM_MINUS || wParam == VK_ADD || wParam == VK_SUBTRACT)
 				{
 					DWORD index = config.speed.enabled ? config.speed.index : 0;
@@ -2323,6 +2397,16 @@ namespace Window
 			return CallWindowProc(OldWindowProc, hWnd, uMsg, wParam, lParam);
 		}
 
+		case WM_SYSKEYUP:
+		case WM_KEYUP:
+		case WM_CHAR: {
+			if (IsSmoothScrollKey(wParam))
+				return NULL;
+
+			wParam = RemapShortcutKey(uMsg, wParam);
+			return CallWindowProc(OldWindowProc, hWnd, uMsg, wParam, lParam);
+		}
+
 		case WM_MOUSEWHEEL: {
 			config.scroll.isWheel = TRUE;
 			return CallWindowProc(OldWindowProc, hWnd, WM_KEYDOWN, GET_WHEEL_DELTA_WPARAM(wParam) < 0 ? VK_DOWN : VK_UP, 1);
@@ -2425,12 +2509,37 @@ namespace Window
 
 							Hooks::PrintText(text);
 						}
+						else if (config.maximizedWindow)
+							ShowWindow(hWnd, SW_MAXIMIZE);
 
 						CheckMenu(MenuWindowMode);
+						CheckMenu(MenuMaximizedWindow);
 					}
 					ddraw->RenderStart();
 				}
 
+				return NULL;
+			}
+
+			case IDM_MAXIMIZED_WINDOW: {
+				config.maximizedWindow = !config.maximizedWindow;
+				Config::Set(CONFIG_WRAPPER, "MaximizedWindow", config.maximizedWindow);
+				if (config.windowedMode)
+				{
+					if (config.maximizedWindow)
+					{
+						maximizedWindowTicks = 0;
+						StartMaximizedWindowTimer(hWnd);
+					}
+					else
+					{
+						KillTimer(hWnd, TIMER_MAXIMIZED_WINDOW);
+						maximizedWindowTicks = 0;
+						ShowWindow(hWnd, SW_SHOWNORMAL);
+					}
+				}
+
+				CheckMenu(MenuMaximizedWindow);
 				return NULL;
 			}
 
@@ -3143,6 +3252,9 @@ namespace Window
 		case WM_CHAR: {
 			HWND hParent = GetParent(hWnd);
 			WNDPROC proc = (WNDPROC)GetWindowLong(hParent, GWL_WNDPROC);
+			if (IsSmoothScrollKey(wParam))
+				return NULL;
+
 			return CallWindowProc(proc, hParent, uMsg, wParam, lParam);
 		}
 
@@ -3168,6 +3280,7 @@ namespace Window
 	VOID SetCaptureWindow(HWND hWnd)
 	{
 		OldWindowProc = (WNDPROC)SetWindowLong(hWnd, GWL_WNDPROC, (LPARAM)WindowProc);
+		StartMaximizedWindowTimer(hWnd);
 	}
 
 	VOID SetCapturePanel(HWND hWnd)

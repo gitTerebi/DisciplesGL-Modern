@@ -244,6 +244,7 @@ BEGIN
 			MENUITEM "&Borderless",					IDM_MODE_BORDERLESS
 			MENUITEM "&Exclusive",					IDM_MODE_EXCLUSIVE
 		END
+		MENUITEM "Start &Maximized Window",			IDM_MAXIMIZED_WINDOW
 		MENUITEM "&Widescreen Battle",				IDM_MODE_WIDEBATTLE
 		MENUITEM SEPARATOR
 		POPUP "Game &Speed\a"

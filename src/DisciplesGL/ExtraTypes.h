@@ -230,6 +230,7 @@ struct ConfigItems {
 	} type;
 
 	BOOL windowedMode;
+	BOOL maximizedWindow;
 	DisplayMode* mode;
 	Resolution resolution;
 
@@ -468,6 +469,7 @@ enum MenuType
 	MenuBackground,
 	MenuStretch,
 	MenuWindowMode,
+	MenuMaximizedWindow,
 	MenuWindowType,
 	MenuFastAI,
 	MenuActive,

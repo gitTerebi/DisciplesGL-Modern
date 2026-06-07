@@ -917,7 +917,11 @@ namespace Hooks
 			hWndMain = hWnd;
 
 			if (config.windowedMode)
+			{
 				SetMenu(hWnd, config.menu);
+				if (config.maximizedWindow)
+					ShowWindow(hWnd, SW_MAXIMIZE);
+			}
 		}
 		else if (!StrCompare(lpClassName, "ThreadWindowClass"))
 			OldWindowProc = (WNDPROC)SetWindowLong(hWnd, GWL_WNDPROC, (LPARAM)WindowProc);
@@ -1017,6 +1021,14 @@ namespace Hooks
 	INT __stdcall ShowCursorHook(BOOL bShow)
 	{
 		return bShow ? 1 : -1;
+	}
+
+	BOOL __stdcall ShowWindowHook(HWND hWnd, INT nCmdShow)
+	{
+		if (hWnd == hWndMain && config.windowedMode && config.maximizedWindow)
+			nCmdShow = SW_MAXIMIZE;
+
+		return ShowWindow(hWnd, nCmdShow);
 	}
 
 	BOOL __stdcall ClipCursorHook(RECT*)
@@ -3877,11 +3889,31 @@ namespace Hooks
 
 	DWORD __fastcall PreCheckScroll(ScrollDirection dir)
 	{
-		if (!config.scroll.edge.active)
+		BOOL wasdScroll = FALSE;
+		if ((GetAsyncKeyState('W') | GetAsyncKeyState('A') | GetAsyncKeyState('S') | GetAsyncKeyState('D')) & 0x8000)
+		{
+			BOOL up = (GetAsyncKeyState('W') & 0x8000) != 0;
+			BOOL left = (GetAsyncKeyState('A') & 0x8000) != 0;
+			BOOL down = (GetAsyncKeyState('S') & 0x8000) != 0;
+			BOOL right = (GetAsyncKeyState('D') & 0x8000) != 0;
+
+			if (up && !down)
+				dir = left && !right ? ScrollTopLeft : right && !left ? ScrollTopRight : ScrollTop;
+			else if (down && !up)
+				dir = left && !right ? ScrollBottomLeft : right && !left ? ScrollBottomRight : ScrollBottom;
+			else if (left && !right)
+				dir = ScrollLeft;
+			else if (right && !left)
+				dir = ScrollRight;
+
+			wasdScroll = dir != ScrollCenter;
+		}
+		else if (!config.scroll.edge.active)
 			return ScrollCenter;
 
 		if (dir != ScrollCenter)
 		{
+			config.scroll.speed = wasdScroll ? config.scroll.speed + 115 : config.scroll.speed;
 			config.scroll.dir = dir;
 			if (config.scroll.state != ScrollStarted)
 				config.scroll.state = ScrollStarting;
@@ -4023,27 +4055,27 @@ namespace Hooks
 		switch (dir)
 		{
 		case ScrollTop:
-			if (GetAsyncKeyState(VK_LEFT) & 0x8000)
+			if ((GetAsyncKeyState(VK_LEFT) | GetAsyncKeyState('A')) & 0x8000)
 				dir = ScrollTopLeft;
-			else if (GetAsyncKeyState(VK_RIGHT) & 0x8000)
+			else if ((GetAsyncKeyState(VK_RIGHT) | GetAsyncKeyState('D')) & 0x8000)
 				dir = ScrollTopRight;
 			break;
 		case ScrollRight:
-			if (GetAsyncKeyState(VK_UP) & 0x8000)
+			if ((GetAsyncKeyState(VK_UP) | GetAsyncKeyState('W')) & 0x8000)
 				dir = ScrollTopRight;
-			else if (GetAsyncKeyState(VK_DOWN) & 0x8000)
+			else if ((GetAsyncKeyState(VK_DOWN) | GetAsyncKeyState('S')) & 0x8000)
 				dir = ScrollBottomRight;
 			break;
 		case ScrollBottom:
-			if (GetAsyncKeyState(VK_LEFT) & 0x8000)
+			if ((GetAsyncKeyState(VK_LEFT) | GetAsyncKeyState('A')) & 0x8000)
 				dir = ScrollBottomLeft;
-			else if (GetAsyncKeyState(VK_RIGHT) & 0x8000)
+			else if ((GetAsyncKeyState(VK_RIGHT) | GetAsyncKeyState('D')) & 0x8000)
 				dir = ScrollBottomRight;
 			break;
 		case ScrollLeft:
-			if (GetAsyncKeyState(VK_UP) & 0x8000)
+			if ((GetAsyncKeyState(VK_UP) | GetAsyncKeyState('W')) & 0x8000)
 				dir = ScrollTopLeft;
-			else if (GetAsyncKeyState(VK_DOWN) & 0x8000)
+			else if ((GetAsyncKeyState(VK_DOWN) | GetAsyncKeyState('S')) & 0x8000)
 				dir = ScrollBottomLeft;
 			break;
 		default:
@@ -4078,6 +4110,7 @@ namespace Hooks
 			retn
 		}
 	}
+
 #pragma endregion
 
 #pragma region CPU patch
@@ -4967,6 +5000,35 @@ namespace Hooks
 			pop ecx
 			retn
 		}
+	}
+
+	SHORT WINAPI GetAsyncKeyStateHook(INT key)
+	{
+		SHORT state = GetAsyncKeyState(key);
+
+		switch (key)
+		{
+		case 'A':
+			return GetAsyncKeyState('Q');
+		case 'S':
+			return GetAsyncKeyState('E');
+		case VK_UP:
+			state |= GetAsyncKeyState('W');
+			break;
+		case VK_LEFT:
+			state |= GetAsyncKeyState('A');
+			break;
+		case VK_DOWN:
+			state |= GetAsyncKeyState('S');
+			break;
+		case VK_RIGHT:
+			state |= GetAsyncKeyState('D');
+			break;
+		default:
+			break;
+		}
+
+		return state;
 	}
 #pragma endregion
 
@@ -5914,6 +5976,149 @@ namespace Hooks
 		}
 	}
 
+	HANDLE hAutoSave = NULL;
+	CHAR autoSaveFile[MAX_PATH];
+	DWORD autoSaveCount = 0;
+
+	struct AutoSaveArchive
+	{
+		CHAR path[MAX_PATH];
+		DWORD turn;
+	};
+
+	DWORD ReadAutoSaveTurn()
+	{
+		DWORD turn = 0;
+		HANDLE hFile = CreateFile(autoSaveFile, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+		if (hFile != INVALID_HANDLE_VALUE)
+		{
+			if (SetFilePointer(hFile, 0x248, NULL, FILE_BEGIN) != INVALID_SET_FILE_POINTER)
+			{
+				DWORD read = 0;
+				ReadFile(hFile, &turn, sizeof(turn), &read, NULL);
+				if (read != sizeof(turn))
+					turn = 0;
+			}
+
+			CloseHandle(hFile);
+		}
+
+		return turn;
+	}
+
+	BOOL IsAutoSaveArchiveName(CHAR* name, DWORD* turn)
+	{
+		if (StrLength(name) != 14 || StrCompareInsensitive(name + 11, ".sg"))
+			return FALSE;
+
+		CHAR prefix = name[8];
+		name[8] = NULL;
+		BOOL isAutoSave = !StrCompareInsensitive(name, "AutoSave");
+		name[8] = prefix;
+		if (!isAutoSave)
+			return FALSE;
+
+		DWORD value = 0;
+		for (DWORD i = 8; i < 11; ++i)
+		{
+			if (name[i] < '0' || name[i] > '9')
+				return FALSE;
+
+			value = value * 10 + name[i] - '0';
+		}
+
+		*turn = value;
+		return TRUE;
+	}
+
+	VOID TrimAutoSaveArchives()
+	{
+		CHAR* slash = StrLastChar(autoSaveFile, '\\');
+		if (!slash)
+			return;
+
+		CHAR search[MAX_PATH];
+		DWORD dirLen = slash - autoSaveFile + 1;
+		if (dirLen >= sizeof(search) - 16)
+			return;
+
+		MemoryCopy(search, autoSaveFile, dirLen);
+		StrCopy(search + dirLen, "AutoSave*.sg");
+
+		AutoSaveArchive files[128];
+		DWORD count = 0;
+		WIN32_FIND_DATA find;
+		HANDLE hFind = FindFirstFile(search, &find);
+		if (hFind != INVALID_HANDLE_VALUE)
+		{
+			do
+			{
+				DWORD turn = 0;
+				if (!(find.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) && IsAutoSaveArchiveName(find.cFileName, &turn))
+				{
+					if (count < sizeof(files) / sizeof(files[0]))
+					{
+						MemoryCopy(files[count].path, autoSaveFile, dirLen);
+						StrCopy(files[count].path + dirLen, find.cFileName);
+						files[count].turn = turn;
+						++count;
+					}
+				}
+			} while (FindNextFile(hFind, &find));
+
+			FindClose(hFind);
+		}
+
+		while (count > 50)
+		{
+			DWORD oldest = 0;
+			for (DWORD i = 1; i < count; ++i)
+			{
+				if (files[i].turn < files[oldest].turn)
+					oldest = i;
+			}
+
+			DeleteFile(files[oldest].path);
+			--count;
+			files[oldest] = files[count];
+		}
+	}
+
+	VOID CopyAutoSave()
+	{
+		if (!autoSaveFile[0])
+			return;
+
+		++autoSaveCount;
+		DWORD turn = ReadAutoSaveTurn();
+
+		CHAR* ext = StrLastChar(autoSaveFile, '.');
+		CHAR dst[MAX_PATH];
+		if (ext)
+		{
+			DWORD len = ext - autoSaveFile;
+			if (len >= sizeof(dst) - 16)
+				return;
+
+			MemoryCopy(dst, autoSaveFile, len);
+			if (turn)
+				StrPrint(dst + len, "%03u.sg", turn);
+			else
+				StrPrint(dst + len, "%03u.sg", autoSaveCount);
+		}
+		else
+		{
+			if (turn)
+				StrPrint(dst, "%s%03u.sg", autoSaveFile, turn);
+			else
+				StrPrint(dst, "%s%03u.sg", autoSaveFile, autoSaveCount);
+		}
+
+		CopyFile(autoSaveFile, dst, FALSE);
+		TrimAutoSaveArchives();
+		DebugLog("Autosave copy turn=%u file=%s", turn, dst);
+	}
+
 	HANDLE __stdcall CreateFileHook(LPCSTR lpFileName, DWORD dwDesiredAccess, DWORD dwShareMode, LPSECURITY_ATTRIBUTES lpSecurityAttributes, DWORD dwCreationDisposition, DWORD dwFlagsAndAttributes, HANDLE hTemplateFile)
 	{
 		HANDLE hFile = CreateFile(lpFileName, dwDesiredAccess, dwShareMode, lpSecurityAttributes, dwCreationDisposition, dwFlagsAndAttributes, hTemplateFile);
@@ -5921,6 +6126,11 @@ namespace Hooks
 		CHAR* p = StrLastChar((CHAR*)lpFileName, '\\');
 		if (p && !StrCompareInsensitive(p, !config.type.editor ? "\\Interf.dlg" : "\\ScenEdit.dlg"))
 			hInterf = hFile;
+		else if (p && hFile != INVALID_HANDLE_VALUE && (dwDesiredAccess & GENERIC_WRITE) && !StrCompareInsensitive(p, "\\AutoSave.sg"))
+		{
+			hAutoSave = hFile;
+			StrCopy(autoSaveFile, lpFileName);
+		}
 
 		return hFile;
 	}
@@ -6069,6 +6279,14 @@ namespace Hooks
 	{
 		if (hInterf && hObject == hInterf)
 			hInterf = NULL;
+		else if (hAutoSave && hObject == hAutoSave)
+		{
+			hAutoSave = NULL;
+			BOOL res = CloseHandle(hObject);
+			if (res)
+				CopyAutoSave();
+			return res;
+		}
 
 		return CloseHandle(hObject);
 	}
@@ -7047,10 +7265,8 @@ namespace Hooks
 				}
 
 				{
-					PatchImportByName(hooker, "CreateFileA", CreateFileHook);
 					PatchImportByName(hooker, "GetFileSize", GetFileSizeHook);
 					PatchImportByName(hooker, "ReadFile", ReadFileHook);
-					PatchImportByName(hooker, "CloseHandle", CloseHandleHook);
 				}
 
 				hud.pitch = config.mode->width + 179;
@@ -7812,6 +8028,7 @@ namespace Hooks
 				PatchImportByName(hooker, "SetThreadPriority", SetThreadPriorityHook);
 
 				PatchImportByName(hooker, "ShowCursor", ShowCursorHook);
+				PatchImportByName(hooker, "ShowWindow", ShowWindowHook);
 				PatchImportByName(hooker, "ClipCursor", ClipCursorHook);
 
 				PatchImportByName(hooker, "GetClientRect", GetClientRectHook);
@@ -7870,10 +8087,12 @@ namespace Hooks
 
 				PatchImportByName(hooker, "GetCursorPos", GetCursorPosHookV2);
 				PatchImportByName(hooker, "SetCursorPos", SetCursorPosHook);
-				PatchImportByName(hooker, "GetAsyncKeyState", GetKeyState);
+				PatchImportByName(hooker, "GetAsyncKeyState", GetAsyncKeyStateHook);
 				PatchImportByName(hooker, "GetSystemMetrics", GetSystemMetricsHook);
 
 				PatchImportByName(hooker, "GetPrivateProfileStringA", GetPrivateProfileStringHook);
+				PatchImportByName(hooker, "CreateFileA", CreateFileHook);
+				PatchImportByName(hooker, "CloseHandle", CloseHandleHook);
 
 				if (PatchImportByName(hooker, "RegOpenKeyExA", RegOpenKeyExHook))
 				{
