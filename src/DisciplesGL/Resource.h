@@ -201,6 +201,7 @@
 #define IDM_MAP_LMB 110
 #define IDM_MAP_MMB 111
 #define IDM_MAP_EDGE 112
+#define IDM_MAP_WASD 113
 
 #define IDM_RES_CUSTOM 200
 #define IDM_RES_640_480 201

@@ -3882,7 +3882,7 @@ namespace Hooks
 	DWORD __fastcall PreCheckScroll(ScrollDirection dir)
 	{
 		BOOL wasdScroll = FALSE;
-		if ((GetAsyncKeyState('W') | GetAsyncKeyState('A') | GetAsyncKeyState('S') | GetAsyncKeyState('D')) & 0x8000)
+		if (config.scroll.wasd && (GetAsyncKeyState('W') | GetAsyncKeyState('A') | GetAsyncKeyState('S') | GetAsyncKeyState('D')) & 0x8000)
 		{
 			BOOL up = (GetAsyncKeyState('W') & 0x8000) != 0;
 			BOOL left = (GetAsyncKeyState('A') & 0x8000) != 0;
@@ -3905,7 +3905,7 @@ namespace Hooks
 
 		if (dir != ScrollCenter)
 		{
-			config.scroll.speed = wasdScroll ? config.scroll.speed + 115 : config.scroll.speed;
+			config.scroll.speed = wasdScroll ? config.scroll.speed + 70 : config.scroll.speed;
 			config.scroll.dir = dir;
 			if (config.scroll.state != ScrollStarted)
 				config.scroll.state = ScrollStarting;

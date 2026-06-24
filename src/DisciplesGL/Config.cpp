@@ -379,6 +379,7 @@ namespace Config
 					ptr = Add(ptr, "FastAI", config.ai.fast, "Increases AI performance, but may cause an unexpected game crash (0 - no 'default'; 1 - yes)");
 					ptr = Add(ptr, "MouseScroll", config.scroll.buttons.left | (config.scroll.buttons.middle << 1), "Allows map scrolling by pressing mouse button (0 - no; 1 - left button; 2 - middle button; 3 - both buttons 'default')");
 					ptr = Add(ptr, "EdgeScroll", config.scroll.edge.active, "Allows map scrolling on window/screen edge detection (0 - no; 1 - yes 'default')");
+					ptr = Add(ptr, "WasdScroll", config.scroll.wasd, "Enables WASD scroll, Q/E remaps, and F5 shortcut (0 - no 'default'; 1 - yes)");
 					ptr = Add(ptr, "EasyScroll", config.scroll.easy.value, "Easy function timeout for map scrolling (150 - 'default')");
 					ptr = Add(ptr, "CloudsFactor", 1, "Defines clouds count multiplier (1 - min 'default')");
 					*ptr = NULL;
@@ -596,6 +597,8 @@ namespace Config
 				config.scroll.buttons.middle = (value & 2) >> 1;
 
 				config.scroll.edge.active = (BOOL)Config::Get(CONFIG_WRAPPER, "EdgeScroll", TRUE);
+
+				config.scroll.wasd = (BOOL)Config::Get(CONFIG_WRAPPER, "WasdScroll", FALSE);
 
 				value = Config::Get(CONFIG_WRAPPER, "EasyScroll", 100);
 				if (value < 0)

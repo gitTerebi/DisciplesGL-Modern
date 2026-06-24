@@ -697,6 +697,11 @@
 			break;
 		}
 
+		case MenuScrollWASD: {
+			CheckMenuItem(config.menu, IDM_MAP_WASD, MF_BYCOMMAND | (config.scroll.wasd ? MF_CHECKED : MF_UNCHECKED));
+			break;
+		}
+
 		default:
 			break;
 		}
@@ -732,6 +737,7 @@
 		CheckMenu(MenuScrollLMB);
 		CheckMenu(MenuScrollMMB);
 		CheckMenu(MenuScrollEdge);
+		CheckMenu(MenuScrollWASD);
 	}
 
 	VOID FilterChanged(HWND hWnd, const CHAR* name, INT value)
@@ -2268,10 +2274,11 @@
 
 			if (!(HIWORD(lParam) & KF_ALTDOWN))
 			{
-				if (IsSmoothScrollKey(wParam))
+				if (config.scroll.wasd && IsSmoothScrollKey(wParam))
 					return NULL;
 
-				wParam = RemapShortcutKey(uMsg, wParam);
+				if (config.scroll.wasd)
+					wParam = RemapShortcutKey(uMsg, wParam);
 
 				if (wParam == VK_OEM_PLUS || wParam == VK_OEM_MINUS || wParam == VK_ADD || wParam == VK_SUBTRACT)
 				{
@@ -2376,7 +2383,7 @@
 
 					return NULL;
 				}
-				else if (wParam == VK_F5)
+				else if (config.scroll.wasd && wParam == VK_F5)
 				{
 					CallWindowProc(OldWindowProc, hWnd, WM_KEYDOWN, 'Q', lParam);
 					CallWindowProc(OldWindowProc, hWnd, WM_KEYUP, 'Q', lParam);
@@ -2406,10 +2413,11 @@
 		case WM_SYSKEYUP:
 		case WM_KEYUP:
 		case WM_CHAR: {
-			if (IsSmoothScrollKey(wParam))
+			if (config.scroll.wasd && IsSmoothScrollKey(wParam))
 				return NULL;
 
-			wParam = RemapShortcutKey(uMsg, wParam);
+			if (config.scroll.wasd)
+				wParam = RemapShortcutKey(uMsg, wParam);
 			return CallWindowProc(OldWindowProc, hWnd, uMsg, wParam, lParam);
 		}
 
@@ -2971,6 +2979,13 @@
 				return NULL;
 			}
 
+			case IDM_MAP_WASD: {
+				config.scroll.wasd = !config.scroll.wasd;
+				Config::Set(CONFIG_WRAPPER, "WasdScroll", config.scroll.wasd);
+				CheckMenu(MenuScrollWASD);
+				return NULL;
+			}
+
 			case IDM_RES_CUSTOM: {
 				INT_PTR res;
 				DialogParams params = { hWnd, TRUE, NULL };
@@ -3261,7 +3276,7 @@
 		case WM_CHAR: {
 			HWND hParent = GetParent(hWnd);
 			WNDPROC proc = (WNDPROC)GetWindowLong(hParent, GWL_WNDPROC);
-			if (IsSmoothScrollKey(wParam))
+			if (config.scroll.wasd && IsSmoothScrollKey(wParam))
 				return NULL;
 
 			return CallWindowProc(proc, hParent, uMsg, wParam, lParam);

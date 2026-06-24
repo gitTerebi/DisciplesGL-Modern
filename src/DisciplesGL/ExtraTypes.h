@@ -419,6 +419,7 @@ struct ConfigItems {
 			BOOL active;
 			BOOL hooked;
 		} edge;
+		BOOL wasd;
 		BOOL isWheel;
 	} scroll;
 
@@ -484,7 +485,8 @@ enum MenuType
 	MenuScroll,
 	MenuScrollLMB,
 	MenuScrollMMB,
-	MenuScrollEdge
+	MenuScrollEdge,
+	MenuScrollWASD
 };
 
 struct SpritePosition {

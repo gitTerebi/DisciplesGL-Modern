@@ -286,6 +286,8 @@ BEGIN
 			MENUITEM "Middle Mouse Button",			IDM_MAP_MMB
 			MENUITEM SEPARATOR
 			MENUITEM "Edge Detection",				IDM_MAP_EDGE
+			MENUITEM SEPARATOR
+			MENUITEM "WASD Scroll",					IDM_MAP_WASD
 		END
 		MENUITEM SEPARATOR
 		MENUITEM "Fast &AI",						IDM_FAST_AI
@@ -378,7 +380,7 @@ BEGIN
 	CONTROL			"",IDC_LNK_WEB,"SysLink",WS_TABSTOP,48,76,216,11
 	CTEXT			"Become a Patron",IDC_STATIC,0,96,216,11
 	CONTROL			"",IDC_LNK_PATRON,"SysLink",WS_TABSTOP,40,108,216,16
-	CTEXT			"Copyright © %d %s",IDC_COPYRIGHT,0,128,216,11
+	CTEXT			"Copyright ï¿½ %d %s",IDC_COPYRIGHT,0,128,216,11
 	CONTROL			"",IDC_LNK_EMAIL,"SysLink",WS_TABSTOP,64,140,216,11
 	ICON			"",IDC_STATIC,11,23,27,27
 	DEFPUSHBUTTON	"OK",IDOK,85,164,50,16,WS_GROUP
@@ -394,7 +396,7 @@ BEGIN
 	CTEXT			"",IDC_LNK_WEB,0,76,216,11
 	CTEXT			"Become a Patron",IDC_STATIC,0,96,216,11
 	CTEXT			"",IDC_LNK_PATRON,0,108,216,16
-	CTEXT			"Copyright © %d %s",IDC_COPYRIGHT,0,128,216,11
+	CTEXT			"Copyright ï¿½ %d %s",IDC_COPYRIGHT,0,128,216,11
 	CTEXT			"",IDC_LNK_EMAIL,0,140,216,11
 	ICON			"",IDC_STATIC,11,23,27,27
 	DEFPUSHBUTTON	"OK",IDOK,85,164,50,16,WS_GROUP
@@ -523,7 +525,7 @@ BEGIN
 		BEGIN
 			VALUE "FileDescription", "Disciples I & II - OpenGL wrapper"
 			VALUE "FileVersion", "2022.01.05.2028"
-			VALUE "LegalCopyright", "© 2022 Verok (verokster@gmail.com)"
+			VALUE "LegalCopyright", "ï¿½ 2022 Verok (verokster@gmail.com)"
 			VALUE "OriginalFilename", "C4dll-R.dll"
 			VALUE "ProductVersion", "1.9.0"
 			VALUE "ProductName", "DisciplesGL"
