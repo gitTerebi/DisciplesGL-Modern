@@ -5986,29 +5986,106 @@ namespace Hooks
 		DWORD turn;
 	};
 
-	DWORD ReadAutoSaveTurn()
+	struct AutoSaveInfo
 	{
-		DWORD turn = 0;
+		DWORD turn;
+		CHAR scenario[64];
+	};
+
+	VOID SanitizeAutoSaveName(CHAR* name)
+	{
+		CHAR* dst = name;
+		BOOL lastSpace = TRUE;
+		for (CHAR* src = name; *src; ++src)
+		{
+			CHAR ch = *src;
+			if (ch < 32 || ch == '<' || ch == '>' || ch == ':' || ch == '"' || ch == '/' || ch == '\\' || ch == '|' || ch == '?' || ch == '*')
+				ch = ' ';
+
+			if (ch == ' ')
+			{
+				if (lastSpace)
+					continue;
+
+				lastSpace = TRUE;
+			}
+			else
+				lastSpace = FALSE;
+
+			*dst++ = ch;
+		}
+
+		while (dst > name && (dst[-1] == ' ' || dst[-1] == '.'))
+			--dst;
+
+		*dst = NULL;
+	}
+
+	BOOL ReadAutoSaveString(HANDLE hFile, DWORD offset, CHAR* value, DWORD size)
+	{
+		if (!size)
+			return FALSE;
+
+		value[0] = NULL;
+		if (SetFilePointer(hFile, offset, NULL, FILE_BEGIN) == INVALID_SET_FILE_POINTER)
+			return FALSE;
+
+		DWORD read = 0;
+		if (!ReadFile(hFile, value, size - 1, &read, NULL) || !read)
+			return FALSE;
+
+		value[read] = NULL;
+		SanitizeAutoSaveName(value);
+		return value[0] != NULL;
+	}
+
+	BOOL ReadAutoSaveInfo(AutoSaveInfo* info)
+	{
+		info->turn = 0;
+		info->scenario[0] = NULL;
+
 		HANDLE hFile = CreateFile(autoSaveFile, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
 		if (hFile != INVALID_HANDLE_VALUE)
 		{
-			if (SetFilePointer(hFile, 0x248, NULL, FILE_BEGIN) != INVALID_SET_FILE_POINTER)
+			DWORD turnOffset = 0;
+			DWORD scenarioOffset = 0;
+			CHAR signature[16] = {};
+			DWORD read = 0;
+			if (ReadFile(hFile, signature, sizeof(signature), &read, NULL) && read == sizeof(signature))
 			{
-				DWORD read = 0;
-				ReadFile(hFile, &turn, sizeof(turn), &read, NULL);
-				if (read != sizeof(turn))
-					turn = 0;
+				if (!MemoryCompare(signature, "MidFile", 7))
+				{
+					turnOffset = 0x248;
+					scenarioOffset = 0x140;
+				}
+				else if (!MemoryCompare(signature, "D2EESFISIG", 10))
+				{
+					turnOffset = 0xB0C;
+					scenarioOffset = 0x141;
+				}
 			}
+
+			if (turnOffset && SetFilePointer(hFile, turnOffset, NULL, FILE_BEGIN) != INVALID_SET_FILE_POINTER)
+			{
+				read = 0;
+				ReadFile(hFile, &info->turn, sizeof(info->turn), &read, NULL);
+				if (read != sizeof(info->turn))
+					info->turn = 0;
+			}
+
+			if (scenarioOffset)
+				ReadAutoSaveString(hFile, scenarioOffset, info->scenario, sizeof(info->scenario));
 
 			CloseHandle(hFile);
 		}
 
-		return turn;
+		return info->turn || info->scenario[0];
 	}
 
 	BOOL IsAutoSaveArchiveName(CHAR* name, DWORD* turn)
 	{
-		if (StrLength(name) != 14 || StrCompareInsensitive(name + 11, ".sg"))
+		DWORD length = StrLength(name);
+		if (length < 14 || StrCompareInsensitive(name + length - 3, ".sg"))
 			return FALSE;
 
 		CHAR prefix = name[8];
@@ -6018,8 +6095,19 @@ namespace Hooks
 		if (!isAutoSave)
 			return FALSE;
 
+		DWORD start = 8;
+		DWORD digits = 3;
+		if (length > 14)
+		{
+			if (length < 17 || name[length - 8] != 'T')
+				return FALSE;
+
+			start = length - 7;
+			digits = 4;
+		}
+
 		DWORD value = 0;
-		for (DWORD i = 8; i < 11; ++i)
+		for (DWORD i = start; i < start + digits; ++i)
 		{
 			if (name[i] < '0' || name[i] > '9')
 				return FALSE;
@@ -6090,33 +6178,42 @@ namespace Hooks
 			return;
 
 		++autoSaveCount;
-		DWORD turn = ReadAutoSaveTurn();
+		AutoSaveInfo info;
+		ReadAutoSaveInfo(&info);
 
 		CHAR* ext = StrLastChar(autoSaveFile, '.');
 		CHAR dst[MAX_PATH];
 		if (ext)
 		{
 			DWORD len = ext - autoSaveFile;
-			if (len >= sizeof(dst) - 16)
+			if (len >= sizeof(dst) - 80)
 				return;
 
 			MemoryCopy(dst, autoSaveFile, len);
-			if (turn)
-				StrPrint(dst + len, "%03u.sg", turn);
+			if (info.turn && info.scenario[0])
+				StrPrint(dst + len, " (%s) T%04u.sg", info.scenario, info.turn);
+			else if (info.turn)
+				StrPrint(dst + len, " T%04u.sg", info.turn);
+			else if (info.scenario[0])
+				StrPrint(dst + len, " (%s) T%04u.sg", info.scenario, autoSaveCount);
 			else
-				StrPrint(dst + len, "%03u.sg", autoSaveCount);
+				StrPrint(dst + len, " T%04u.sg", autoSaveCount);
 		}
 		else
 		{
-			if (turn)
-				StrPrint(dst, "%s%03u.sg", autoSaveFile, turn);
+			if (info.turn && info.scenario[0])
+				StrPrint(dst, "%s (%s) T%04u.sg", autoSaveFile, info.scenario, info.turn);
+			else if (info.turn)
+				StrPrint(dst, "%s T%04u.sg", autoSaveFile, info.turn);
+			else if (info.scenario[0])
+				StrPrint(dst, "%s (%s) T%04u.sg", autoSaveFile, info.scenario, autoSaveCount);
 			else
-				StrPrint(dst, "%s%03u.sg", autoSaveFile, autoSaveCount);
+				StrPrint(dst, "%s T%04u.sg", autoSaveFile, autoSaveCount);
 		}
 
 		CopyFile(autoSaveFile, dst, FALSE);
 		TrimAutoSaveArchives();
-		DebugLog("Autosave copy turn=%u file=%s", turn, dst);
+		DebugLog("Autosave copy turn=%u scenario=%s file=%s", info.turn, info.scenario, dst);
 	}
 
 	HANDLE __stdcall CreateFileHook(LPCSTR lpFileName, DWORD dwDesiredAccess, DWORD dwShareMode, LPSECURITY_ATTRIBUTES lpSecurityAttributes, DWORD dwCreationDisposition, DWORD dwFlagsAndAttributes, HANDLE hTemplateFile)
