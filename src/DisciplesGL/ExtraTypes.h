@@ -306,6 +306,8 @@ struct ConfigItems {
 		BOOL wide;
 		BOOL zoomable;
 		BOOL mirror;
+		DWORD speedIndex;
+		DWORD speedValue;
 	} battle;
 
 	struct {
@@ -465,6 +467,7 @@ enum MenuType
 	MenuUpscale,
 	MenuResolution,
 	MenuSpeed,
+	MenuBattleSpeed,
 	MenuColors,
 	MenuBorders,
 	MenuBackground,

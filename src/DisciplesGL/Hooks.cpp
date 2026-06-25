@@ -3531,11 +3531,19 @@ namespace Hooks
 	}
 
 	DWORD battleAddress;
+	VOID __stdcall SetAnimSpeed();
 	VOID __stdcall CheckBordersV2(DWORD* object, BOOL isborder)
 	{
 		config.borders.active = isborder & 1;
 		if (*(object + 2) != 0xFFFFFFFF)
-			config.battle.active = *object == battleAddress;
+		{
+			BOOL battleActive = *object == battleAddress;
+			if (config.battle.active != battleActive)
+			{
+				config.battle.active = battleActive;
+				SetAnimSpeed();
+			}
+		}
 	}
 
 	VOID __declspec(naked) hook_00538FEB()
@@ -3617,7 +3625,8 @@ namespace Hooks
 	DWORD __stdcall timeGetTimeHook()
 	{
 		static TimeScale time;
-		return GetTimeSpeed(&time, config.speed.enabled ? config.speed.value : 10);
+		DWORD scale = config.battle.active ? config.battle.speedValue : (config.speed.enabled ? config.speed.value : 10);
+		return GetTimeSpeed(&time, scale);
 	}
 
 	DWORD __stdcall GetDoubleClickTimeHook()
@@ -3633,7 +3642,8 @@ namespace Hooks
 		AnimListEntry* entry = animList;
 		if (entry)
 		{
-			DWORD speed = config.speed.enabled ? 10000 / (config.speed.value * 15) : 66;
+			DWORD value = config.battle.active ? config.battle.speedValue : (config.speed.enabled ? config.speed.value : 10);
+			DWORD speed = 10000 / (value * 15);
 			do
 			{
 				*entry->speed = speed;

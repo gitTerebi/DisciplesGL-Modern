@@ -414,6 +414,18 @@
 		}
 		break;
 
+		case MenuBattleSpeed: {
+			DWORD count = IDM_BATTLE_SPEED_3_0 - IDM_BATTLE_SPEED_1_0 + 1;
+			DWORD id = IDM_BATTLE_SPEED_1_0;
+			while (count)
+			{
+				--count;
+				CheckMenuItem(config.menu, id, MF_BYCOMMAND | (id - IDM_BATTLE_SPEED_1_0 == config.battle.speedIndex ? MF_CHECKED : MF_UNCHECKED));
+				++id;
+			}
+		}
+		break;
+
 		case MenuColors: {
 			EnableMenuItem(config.menu, IDM_COLOR_ADJUST, MF_BYCOMMAND | (config.gl.version.value >= GL_VER_2_0 ? MF_ENABLED : (MF_DISABLED | MF_GRAYED)));
 		}
@@ -716,6 +728,7 @@
 		CheckMenu(MenuUpscale);
 		CheckMenu(MenuResolution);
 		CheckMenu(MenuSpeed);
+		CheckMenu(MenuBattleSpeed);
 		CheckMenu(MenuColors);
 		CheckMenu(MenuBorders);
 		CheckMenu(MenuBackground);
@@ -3119,6 +3132,27 @@
 
 						Hooks::SetGameSpeed();
 						CheckMenu(MenuSpeed);
+					}
+
+					return NULL;
+				}
+				else if (wParam >= IDM_BATTLE_SPEED_1_0 && wParam <= IDM_BATTLE_SPEED_3_0)
+				{
+					DWORD index = wParam - IDM_BATTLE_SPEED_1_0;
+					if (index != config.battle.speedIndex)
+					{
+						config.battle.speedIndex = index;
+						config.battle.speedValue = index + 10;
+						Config::Set(CONFIG_WRAPPER, "BattleSpeed", *(INT*)&index);
+
+						{
+							CHAR text[64];
+							StrPrint(text, "Battle Speed: %.1fx", 0.1f * config.battle.speedValue);
+							Hooks::PrintText(text);
+						}
+
+						Hooks::SetGameSpeed();
+						CheckMenu(MenuBattleSpeed);
 					}
 
 					return NULL;

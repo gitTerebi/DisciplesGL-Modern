@@ -301,6 +301,8 @@ namespace Config
 					config.background.enabled = TRUE;
 					config.battle.mirror = TRUE;
 				}
+				config.battle.speedIndex = 20;
+				config.battle.speedValue = config.battle.speedIndex + 10;
 
 				config.zoom.enabled = TRUE;
 				config.zoom.value = 100;
@@ -361,6 +363,7 @@ namespace Config
 					ptr = Add(ptr, "MaximizedWindow", config.maximizedWindow, "Starts windowed mode maximized (0 - no 'default'; 1 - yes)");
 					ptr = Add(ptr, "GameSpeed", config.speed.index, "Animation speed (1 - ..., 5 - 1.5x 'deafult'");
 					ptr = Add(ptr, "SpeedEnabled", config.speed.enabled, "Enables animation speed (0 - no; 1 - yes 'default')");
+					ptr = Add(ptr, "BattleSpeed", config.battle.speedIndex, "Battle animation speed (0 - 1.0x, 10 - 2.0x, 20 - 3.0x 'default')");
 					ptr = Add(ptr, "AlwaysActive", config.alwaysActive, "Game window is always active (0 - no 'default'; 1 - yes)");
 					ptr = Add(ptr, "ColdCPU", config.cpu.cold, "Decrease CPU usage for OpenGL renderer (0 - no 'default'; 1 - yes)");
 
@@ -546,6 +549,14 @@ namespace Config
 				config.speed.value = config.speed.index + 10;
 
 				config.speed.enabled = (BOOL)Config::Get(CONFIG_WRAPPER, "SpeedEnabled", TRUE);
+
+				value = Config::Get(CONFIG_WRAPPER, "BattleSpeed", 20);
+				if (value < 0)
+					value = 20;
+				else if (value > 20)
+					value = 20;
+				config.battle.speedIndex = *(DWORD*)&value;
+				config.battle.speedValue = config.battle.speedIndex + 10;
 
 				config.alwaysActive = (BOOL)Config::Get(CONFIG_WRAPPER, "AlwaysActive", FALSE);
 				config.cpu.cold = (BOOL)Config::Get(CONFIG_WRAPPER, "ColdCPU", FALSE);
