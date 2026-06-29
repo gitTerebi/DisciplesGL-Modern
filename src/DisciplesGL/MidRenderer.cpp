@@ -236,6 +236,23 @@ BOOL MidRenderer::RenderInner(BOOL ready, BOOL force, StateBufferAligned** lpSta
 			this->zoomStatus = stateBuffer->isZoomed;
 		}
 
+		if (stateBuffer->isBack)
+		{
+			GLViewport(0, this->ddraw->viewport.offset, this->ddraw->viewport.width, this->ddraw->viewport.height);
+
+			this->program->Use(this->texSize, FALSE);
+			GLActiveTexture(GL_TEXTURE0);
+			GLBindTexFilter(this->textureId[1], state.interpolation != InterpolateNearest ? GL_LINEAR : GL_NEAREST);
+			GLDrawArrays(GL_TRIANGLE_FAN, 0, 4);
+
+			this->program->Use(this->texSize, TRUE);
+			GLViewport(this->ddraw->viewport.rectangle.x, this->ddraw->viewport.rectangle.y + this->ddraw->viewport.offset, this->ddraw->viewport.rectangle.width, this->ddraw->viewport.rectangle.height);
+			GLActiveTexture(GL_TEXTURE1);
+			GLBindTexFilter(this->textureId[1], state.interpolation != InterpolateNearest ? GL_LINEAR : GL_NEAREST);
+			GLActiveTexture(GL_TEXTURE0);
+			GLBindTexFilter(this->textureId[0], state.interpolation == InterpolateLinear || state.interpolation == InterpolateHermite ? GL_LINEAR : GL_NEAREST);
+		}
+
 		if (stateBuffer->isZoomed)
 		{
 			if (this->zoomSize.width != frameSize.width || this->zoomSize.height != frameSize.height)

@@ -267,97 +267,17 @@ namespace Main
 								}
 							}
 
-							DWORD startX = DWORD(config.randPos.x % infoWidth);
-							DWORD startY = DWORD(config.randPos.y % infoHeight);
-
-							DWORD divX = width / (DWORD)infoWidth;
-							DWORD modX = width % (DWORD)infoWidth;
-							if (modX)
-								++divX;
-
-							DWORD divY = height / (DWORD)infoHeight;
-							DWORD modY = height % (DWORD)infoHeight;
-							if (modY)
-								++divY;
-
-							DWORD* dstH = (DWORD*)buffer;
-
-							DWORD divH = divY;
-							while (divH)
+							DWORD* dst = (DWORD*)buffer;
+							for (DWORD y = 0; y < height; ++y)
 							{
-								--divH;
-								DWORD cheight = !divH && modY ? modY : (DWORD)infoHeight;
-
-								DWORD* dstW = dstH;
-
-								DWORD divW = divX;
-								while (divW)
+								DWORD srcY = height > 1 ? (DWORD)(((UINT64)y * (infoHeight - 1)) / (height - 1)) : 0;
+								BYTE* srcData = data + bytesInRow * srcY;
+								for (DWORD x = 0; x < width; ++x)
 								{
-									--divW;
-									DWORD cwidth = !divW && modX ? modX : (DWORD)infoWidth;
-
-									BYTE* srcData = data + bytesInRow * startY;
-									DWORD* dstData = dstW;
-
-									DWORD copyY = startY;
-									DWORD copyHeight = cheight;
-									while (copyHeight)
-									{
-										--copyHeight;
-										if (copyY == (DWORD)infoHeight)
-										{
-											copyY = 0;
-											srcData = data;
-										}
-										++copyY;
-
-										BYTE* src = srcData + (info_ptr->pixel_depth == 4 ? (startX >> 1) : startX);
-										DWORD* dst = dstData;
-
-										DWORD copyX = startX;
-										DWORD copyWidth = cwidth;
-										if (info_ptr->pixel_depth == 4)
-										{
-											BOOL tick = startX & 1;
-											while (copyWidth)
-											{
-												--copyWidth;
-												if (copyX == (DWORD)infoWidth)
-												{
-													copyX = 0;
-													src = srcData;
-													tick = FALSE;
-												}
-												++copyX;
-
-												*dst++ = palette[!tick ? (*src >> 4) : (*src++ & 0xF)];
-												tick = !tick;
-											}
-										}
-										else
-										{
-											while (copyWidth)
-											{
-												--copyWidth;
-												if (copyX == (DWORD)infoWidth)
-												{
-													copyX = 0;
-													src = srcData;
-												}
-												++copyX;
-
-												*dst++ = palette[*src++];
-											}
-										}
-
-										srcData += bytesInRow;
-										dstData += width;
-									}
-
-									dstW += cwidth;
+									DWORD srcX = width > 1 ? (DWORD)(((UINT64)x * (infoWidth - 1)) / (width - 1)) : 0;
+									BYTE* src = srcData + (info_ptr->pixel_depth == 4 ? (srcX >> 1) : srcX);
+									*dst++ = palette[info_ptr->pixel_depth == 4 ? ((srcX & 1) ? (*src & 0xF) : (*src >> 4)) : *src];
 								}
-
-								dstH += cheight * width;
 							}
 						}
 						MemoryFree(data);

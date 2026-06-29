@@ -508,6 +508,18 @@ BOOL NewRenderer::RenderInner(BOOL ready, BOOL force, StateBufferAligned** lpSta
 
 			this->program->Use(this->viewSize, stateBuffer->isBack);
 			{
+				if (stateBuffer->isBack)
+				{
+					GLViewport(0, this->ddraw->viewport.offset, this->ddraw->viewport.width, this->ddraw->viewport.height);
+
+					this->program->Use(this->viewSize, FALSE);
+					GLActiveTexture(GL_TEXTURE0);
+					GLBindTexFilter(textureId.backBO, state.interpolation != InterpolateNearest ? GL_LINEAR : GL_NEAREST);
+					GLDrawArrays(GL_TRIANGLE_FAN, 8, 4);
+
+					this->program->Use(this->viewSize, TRUE);
+				}
+
 				GLViewport(this->ddraw->viewport.rectangle.x, this->ddraw->viewport.rectangle.y + this->ddraw->viewport.offset, this->ddraw->viewport.rectangle.width, this->ddraw->viewport.rectangle.height);
 
 				if (stateBuffer->isBack)
@@ -633,6 +645,23 @@ BOOL NewRenderer::RenderInner(BOOL ready, BOOL force, StateBufferAligned** lpSta
 				this->borderStatus = stateBuffer->borders;
 				this->backStatus = stateBuffer->isBack;
 				this->zoomStatus = stateBuffer->isZoomed;
+			}
+
+			if (stateBuffer->isBack)
+			{
+				GLViewport(0, this->ddraw->viewport.offset, this->ddraw->viewport.width, this->ddraw->viewport.height);
+
+				this->program->Use(this->texSize, FALSE);
+				GLActiveTexture(GL_TEXTURE0);
+				GLBindTexFilter(textureId.back, state.interpolation != InterpolateNearest ? GL_LINEAR : GL_NEAREST);
+				GLDrawArrays(GL_TRIANGLE_FAN, 0, 4);
+
+				this->program->Use(this->texSize, TRUE);
+				GLViewport(this->ddraw->viewport.rectangle.x, this->ddraw->viewport.rectangle.y + this->ddraw->viewport.offset, this->ddraw->viewport.rectangle.width, this->ddraw->viewport.rectangle.height);
+				GLActiveTexture(GL_TEXTURE1);
+				GLBindTexFilter(textureId.back, state.interpolation != InterpolateNearest ? GL_LINEAR : GL_NEAREST);
+				GLActiveTexture(GL_TEXTURE0);
+				GLBindTexFilter(textureId.primary, state.interpolation == InterpolateLinear || state.interpolation == InterpolateHermite ? GL_LINEAR : GL_NEAREST);
 			}
 
 			if (stateBuffer->isZoomed)

@@ -528,10 +528,7 @@ BOOL OpenDraw::CheckViewport(BOOL isDouble)
 			RECT clipRect;
 			GetClientRect(this->hWnd, &clipRect);
 
-			clipRect.left = this->viewport.rectangle.x;
-			clipRect.right = clipRect.left + this->viewport.rectangle.width;
-			clipRect.bottom -= this->viewport.rectangle.y + this->viewport.offset;
-			clipRect.top = clipRect.bottom - this->viewport.rectangle.height;
+			clipRect.bottom -= this->viewport.offset;
 
 			ClientToScreen(this->hWnd, (POINT*)&clipRect.left);
 			ClientToScreen(this->hWnd, (POINT*)&clipRect.right);
@@ -563,6 +560,16 @@ VOID OpenDraw::ScaleMouse(LPPOINT p)
 		p->x = LONG((FLOAT)((p->x - this->viewport.rectangle.x) * sz->cx) / this->viewport.rectangle.width * kx) + ((config.mode->width - config.zoom.size.width) >> 1);
 		p->y = LONG((FLOAT)((p->y - this->viewport.rectangle.y) * sz->cy) / this->viewport.rectangle.height * ky) + ((config.mode->height - config.zoom.size.height) >> 1);
 	}
+
+	if (p->x < 0)
+		p->x = 0;
+	else if (p->x >= sz->cx)
+		p->x = sz->cx - 1;
+
+	if (p->y < 0)
+		p->y = 0;
+	else if (p->y >= sz->cy)
+		p->y = sz->cy - 1;
 }
 
 OpenDraw::OpenDraw(IDrawUnknown** list)
