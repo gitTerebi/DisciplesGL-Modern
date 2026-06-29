@@ -5989,11 +5989,13 @@ namespace Hooks
 	HANDLE hAutoSave = NULL;
 	CHAR autoSaveFile[MAX_PATH];
 	DWORD autoSaveCount = 0;
+	const DWORD AUTO_SAVE_ARCHIVE_LIMIT = 15;
 
 	struct AutoSaveArchive
 	{
 		CHAR path[MAX_PATH];
 		DWORD turn;
+		FILETIME writeTime;
 	};
 
 	struct AutoSaveInfo
@@ -6092,25 +6094,52 @@ namespace Hooks
 		return info->turn || info->scenario[0];
 	}
 
-	BOOL IsAutoSaveArchiveName(CHAR* name, DWORD* turn)
+	BOOL IsAutoSaveArchiveName(CHAR* name, CHAR* currentName, DWORD* turn)
 	{
 		DWORD length = StrLength(name);
-		if (length < 14 || StrCompareInsensitive(name + length - 3, ".sg"))
+		if (length < 12 || StrCompareInsensitive(name + length - 3, ".sg"))
 			return FALSE;
 
-		CHAR prefix = name[8];
-		name[8] = NULL;
-		BOOL isAutoSave = !StrCompareInsensitive(name, "AutoSave");
-		name[8] = prefix;
-		if (!isAutoSave)
-			return FALSE;
-
-		DWORD start = 8;
-		DWORD digits = 3;
-		if (length > 14)
+		DWORD start = 0;
+		DWORD digits = 0;
+		if (length == 14)
 		{
-			if (length < 17 || name[length - 8] != 'T')
+			CHAR prefix = name[8];
+			name[8] = NULL;
+			BOOL isAutoSave = !StrCompareInsensitive(name, "AutoSave");
+			name[8] = prefix;
+			if (!isAutoSave)
 				return FALSE;
+
+			start = 8;
+			digits = 3;
+		}
+		else
+		{
+			if (length < 17 || name[length - 8] != 'T' || name[length - 9] != ' ')
+				return FALSE;
+
+			BOOL isAutoSave = FALSE;
+			if (length > 8)
+			{
+				CHAR prefix = name[8];
+				name[8] = NULL;
+				isAutoSave = !StrCompareInsensitive(name, "AutoSave");
+				name[8] = prefix;
+			}
+
+			if (!isAutoSave)
+			{
+				if (!currentName[0] || length <= 8)
+					return FALSE;
+
+				CHAR suffix = name[length - 9];
+				name[length - 9] = NULL;
+				BOOL isCurrentName = !StrCompareInsensitive(name, currentName);
+				name[length - 9] = suffix;
+				if (!isCurrentName)
+					return FALSE;
+			}
 
 			start = length - 7;
 			digits = 4;
@@ -6129,7 +6158,7 @@ namespace Hooks
 		return TRUE;
 	}
 
-	VOID TrimAutoSaveArchives()
+	VOID TrimAutoSaveArchives(CHAR* currentName)
 	{
 		CHAR* slash = StrLastChar(autoSaveFile, '\\');
 		if (!slash)
@@ -6141,9 +6170,9 @@ namespace Hooks
 			return;
 
 		MemoryCopy(search, autoSaveFile, dirLen);
-		StrCopy(search + dirLen, "AutoSave*.sg");
+		StrCopy(search + dirLen, "*.sg");
 
-		AutoSaveArchive files[128];
+		AutoSaveArchive files[AUTO_SAVE_ARCHIVE_LIMIT];
 		DWORD count = 0;
 		WIN32_FIND_DATA find;
 		HANDLE hFind = FindFirstFile(search, &find);
@@ -6152,33 +6181,45 @@ namespace Hooks
 			do
 			{
 				DWORD turn = 0;
-				if (!(find.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) && IsAutoSaveArchiveName(find.cFileName, &turn))
+				if (!(find.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) && IsAutoSaveArchiveName(find.cFileName, currentName, &turn))
 				{
 					if (count < sizeof(files) / sizeof(files[0]))
 					{
 						MemoryCopy(files[count].path, autoSaveFile, dirLen);
 						StrCopy(files[count].path + dirLen, find.cFileName);
 						files[count].turn = turn;
+						files[count].writeTime = find.ftLastWriteTime;
 						++count;
+					}
+					else
+					{
+						DWORD oldest = 0;
+						for (DWORD i = 1; i < count; ++i)
+						{
+							LONG cmp = CompareFileTime(&files[i].writeTime, &files[oldest].writeTime);
+							if (cmp < 0 || !cmp && files[i].turn < files[oldest].turn)
+								oldest = i;
+						}
+
+						CHAR path[MAX_PATH];
+						MemoryCopy(path, autoSaveFile, dirLen);
+						StrCopy(path + dirLen, find.cFileName);
+
+						LONG cmp = CompareFileTime(&find.ftLastWriteTime, &files[oldest].writeTime);
+						if (cmp > 0 || !cmp && turn > files[oldest].turn)
+						{
+							DeleteFile(files[oldest].path);
+							StrCopy(files[oldest].path, path);
+							files[oldest].turn = turn;
+							files[oldest].writeTime = find.ftLastWriteTime;
+						}
+						else
+							DeleteFile(path);
 					}
 				}
 			} while (FindNextFile(hFind, &find));
 
 			FindClose(hFind);
-		}
-
-		while (count > 50)
-		{
-			DWORD oldest = 0;
-			for (DWORD i = 1; i < count; ++i)
-			{
-				if (files[i].turn < files[oldest].turn)
-					oldest = i;
-			}
-
-			DeleteFile(files[oldest].path);
-			--count;
-			files[oldest] = files[count];
 		}
 	}
 
@@ -6191,38 +6232,45 @@ namespace Hooks
 		AutoSaveInfo info;
 		ReadAutoSaveInfo(&info);
 
+		CHAR currentName[64];
+		StrCopy(currentName, info.scenario[0] ? info.scenario : "AutoSave");
+
 		CHAR* ext = StrLastChar(autoSaveFile, '.');
 		CHAR dst[MAX_PATH];
 		if (ext)
 		{
-			DWORD len = ext - autoSaveFile;
-			if (len >= sizeof(dst) - 80)
+			DWORD dirLen = 0;
+			CHAR* slash = StrLastChar(autoSaveFile, '\\');
+			if (slash)
+				dirLen = slash - autoSaveFile + 1;
+
+			if (dirLen >= sizeof(dst) - 80)
 				return;
 
-			MemoryCopy(dst, autoSaveFile, len);
-			if (info.turn && info.scenario[0])
-				StrPrint(dst + len, " (%s) T%04u.sg", info.scenario, info.turn);
-			else if (info.turn)
-				StrPrint(dst + len, " T%04u.sg", info.turn);
+			MemoryCopy(dst, autoSaveFile, dirLen);
+			if (info.scenario[0] && info.turn)
+				StrPrint(dst + dirLen, "%s T%04u.sg", currentName, info.turn);
 			else if (info.scenario[0])
-				StrPrint(dst + len, " (%s) T%04u.sg", info.scenario, autoSaveCount);
+				StrPrint(dst + dirLen, "%s T%04u.sg", currentName, autoSaveCount);
+			else if (info.turn)
+				StrPrint(dst + dirLen, "AutoSave T%04u.sg", info.turn);
 			else
-				StrPrint(dst + len, " T%04u.sg", autoSaveCount);
+				StrPrint(dst + dirLen, "AutoSave T%04u.sg", autoSaveCount);
 		}
 		else
 		{
-			if (info.turn && info.scenario[0])
-				StrPrint(dst, "%s (%s) T%04u.sg", autoSaveFile, info.scenario, info.turn);
+			if (info.scenario[0] && info.turn)
+				StrPrint(dst, "%s T%04u.sg", currentName, info.turn);
+			else if (info.scenario[0])
+				StrPrint(dst, "%s T%04u.sg", currentName, autoSaveCount);
 			else if (info.turn)
 				StrPrint(dst, "%s T%04u.sg", autoSaveFile, info.turn);
-			else if (info.scenario[0])
-				StrPrint(dst, "%s (%s) T%04u.sg", autoSaveFile, info.scenario, autoSaveCount);
 			else
 				StrPrint(dst, "%s T%04u.sg", autoSaveFile, autoSaveCount);
 		}
 
 		CopyFile(autoSaveFile, dst, FALSE);
-		TrimAutoSaveArchives();
+		TrimAutoSaveArchives(currentName);
 		DebugLog("Autosave copy turn=%u scenario=%s file=%s", info.turn, info.scenario, dst);
 	}
 
