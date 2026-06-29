@@ -267,6 +267,8 @@ BOOL NewRenderer::RenderInner(BOOL ready, BOOL force, StateBufferAligned** lpSta
 
 		if (this->pixelBuffer->Update(lpStateBuffer, ready, TRUE) || state.flags || stateChanged)
 		{
+			BOOL clearBackTransition = this->backStatus && !stateBuffer->isBack;
+
 			if (this->isVSync != config.image.vSync)
 			{
 				this->isVSync = config.image.vSync;
@@ -413,6 +415,12 @@ BOOL NewRenderer::RenderInner(BOOL ready, BOOL force, StateBufferAligned** lpSta
 				}
 				else
 					this->upscaleProgram->Use(this->texSize, FALSE);
+
+				if (clearBackTransition)
+				{
+					GLViewport(0, 0, LOWORD(this->viewSize), HIWORD(this->viewSize));
+					GLClear(GL_COLOR_BUFFER_BIT);
+				}
 
 				if (stateBuffer->isZoomed)
 					GLViewport(0, 0, DWORD(kw * LOWORD(this->viewSize)), DWORD(kh * HIWORD(this->viewSize)));
