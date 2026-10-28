@@ -218,6 +218,82 @@ enum ScrollState
 	ScrollEnded
 };
 
+enum BindAction
+{
+	BindScrollUp = 0,
+	BindScrollDown,
+	BindScrollLeft,
+	BindScrollRight,
+	BindEndTurn,
+	BindSpellBook,
+	BindCapital,
+	BindQuickSave,
+	BindClosePopup,
+	BindAutoBattle,
+	BindDefend,
+	BindRetreat,
+	BindWait,
+	BindBuildStructure,
+	BindResearchSpells,
+	BindParty,
+	BindDiplomacy,
+	BindExchange,
+	BindGuard,
+	BindNextLeader,
+	BindWandScroll,
+	BindDropRod,
+	BindContinueMove,
+	BindBanners,
+	BindCenterStack,
+	BindCenterTarget,
+	BindQuestLog,
+	BindReport,
+	BindOptions,
+	BindTopPalette,
+	BindGrowCity,
+	BindNextCity,
+	BindPrevCity,
+	BindKnownSpells,
+	BindResourcePopup,
+	BindHeal,
+	BindRevive,
+	BindDismiss,
+	BindLevelToggle,
+	BindUnitInfo,
+	BindPickUpDrop,
+	BindTraining,
+	BindSpellLevel1,
+	BindSpellLevel2,
+	BindSpellLevel3,
+	BindSpellLevel4,
+	BindSpellLevel5,
+	BindOtherParty,
+	BindCount
+};
+
+enum BindScope
+{
+	ScopeMap = 0,
+	ScopeBattle,
+	ScopePopup,
+	ScopeScreen,
+	ScopeAny
+};
+
+struct BindInfo {
+	const CHAR* key;
+	BYTE native;
+	BOOL ctrl;
+	BYTE wasd;
+	BindScope scope;
+	BYTE fullNative;
+};
+
+struct KeyName {
+	BYTE vk;
+	const CHAR* name;
+};
+
 struct ConfigItems {
 	struct {
 		VERSION major;
@@ -389,6 +465,15 @@ struct ConfigItems {
 		BYTE snapshot;
 	} keys;
 
+	BYTE binds[BindCount];
+
+	struct {
+		BOOL popup;
+		BOOL map;
+		BOOL full;
+		BOOL menu;
+	} screen;
+
 	struct {
 		const Adjustment* current;
 		Adjustment active;
@@ -421,7 +506,6 @@ struct ConfigItems {
 			BOOL active;
 			BOOL hooked;
 		} edge;
-		BOOL wasd;
 		BOOL isWheel;
 	} scroll;
 
@@ -488,8 +572,7 @@ enum MenuType
 	MenuScroll,
 	MenuScrollLMB,
 	MenuScrollMMB,
-	MenuScrollEdge,
-	MenuScrollWASD
+	MenuScrollEdge
 };
 
 struct SpritePosition {

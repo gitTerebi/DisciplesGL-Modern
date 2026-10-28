@@ -75,6 +75,76 @@ const Resolution resolutionsList[] = {
 	7680, 4320
 };
 
+const BindInfo bindsList[] = {
+	"ScrollUp", VK_UP, FALSE, 'W', ScopeMap, 0,
+	"ScrollDown", VK_DOWN, FALSE, 'S', ScopeMap, 0,
+	"ScrollLeft", VK_LEFT, FALSE, 'A', ScopeMap, 0,
+	"ScrollRight", VK_RIGHT, FALSE, 'D', ScopeMap, 0,
+	"EndTurn", VK_SPACE, FALSE, 0, ScopeMap, 0,
+	"SpellBook", 'S', FALSE, 'E', ScopeMap, 0,
+	"Capital", 'A', FALSE, 'Q', ScopeMap, 0,
+	"QuickSave", 'Q', TRUE, VK_F5, ScopeMap, 0,
+	"ClosePopup", VK_RETURN, FALSE, 0, ScopePopup, VK_ESCAPE,
+	"AutoBattle", 'A', FALSE, 0, ScopeBattle, 0,
+	"Defend", 'D', FALSE, 0, ScopeBattle, 0,
+	"Retreat", 'R', FALSE, 0, ScopeBattle, 0,
+	"Wait", 'W', FALSE, 0, ScopeBattle, 0,
+	"BuildStructure", 'S', FALSE, 0, ScopeScreen, 0,
+	"ResearchSpells", 'R', FALSE, 0, ScopeScreen, 0,
+	"Party", 'P', FALSE, 0, ScopeScreen, 0,
+	"Diplomacy", 'P', FALSE, 0, ScopeMap, 0,
+	"Exchange", 'X', FALSE, 0, ScopeMap, 0,
+	"Guard", 'G', FALSE, 0, ScopeMap, 0,
+	"NextLeader", VK_TAB, FALSE, 0, ScopeMap, 0,
+	"WandScroll", 'U', FALSE, 0, ScopeMap, 0,
+	"DropRod", 'R', FALSE, 0, ScopeMap, 0,
+	"ContinueMove", 'M', FALSE, 0, ScopeMap, 0,
+	"Banners", 'B', FALSE, 0, ScopeMap, 0,
+	"CenterStack", 'C', FALSE, 0, ScopeMap, 0,
+	"CenterTarget", 'D', FALSE, 0, ScopeMap, 0,
+	"QuestLog", VK_F3, FALSE, 0, ScopeMap, 0,
+	"Report", VK_F1, FALSE, 0, ScopeMap, 0,
+	"Options", VK_F4, FALSE, 0, ScopeMap, 0,
+	"TopPalette", VK_F5, FALSE, 0, ScopeMap, 0,
+	"GrowCity", 'G', FALSE, 0, ScopeScreen, 0,
+	"NextCity", VK_RIGHT, FALSE, 0, ScopeScreen, 0,
+	"PrevCity", VK_LEFT, FALSE, 0, ScopeScreen, 0,
+	"KnownSpells", 'S', FALSE, 0, ScopeScreen, 0,
+	"ResourcePopup", VK_F6, FALSE, 0, ScopeMap, 0,
+	"Heal", 'H', FALSE, 0, ScopeScreen, 0,
+	"Revive", 'R', FALSE, 0, ScopeScreen, 0,
+	"Dismiss", 'D', FALSE, 0, ScopeScreen, 0,
+	"LevelToggle", 'L', FALSE, 0, ScopeScreen, 0,
+	"UnitInfo", VK_TAB, FALSE, 0, ScopeScreen, 0,
+	"PickUpDrop", 'B', FALSE, 0, ScopeScreen, 0,
+	"Training", 'T', FALSE, 0, ScopeScreen, 0,
+	"SpellLevel1", '1', FALSE, 0, ScopeScreen, 0,
+	"SpellLevel2", '2', FALSE, 0, ScopeScreen, 0,
+	"SpellLevel3", '3', FALSE, 0, ScopeScreen, 0,
+	"SpellLevel4", '4', FALSE, 0, ScopeScreen, 0,
+	"SpellLevel5", '5', FALSE, 0, ScopeScreen, 0,
+	"OtherParty", VK_TAB, FALSE, 0, ScopeBattle, 0
+};
+
+const KeyName keyNames[] = {
+	'A', "A", 'B', "B", 'C', "C", 'D', "D", 'E', "E", 'F', "F", 'G', "G", 'H', "H", 'I', "I",
+	'J', "J", 'K', "K", 'L', "L", 'M', "M", 'N', "N", 'O', "O", 'P', "P", 'Q', "Q", 'R', "R",
+	'S', "S", 'T', "T", 'U', "U", 'V', "V", 'W', "W", 'X', "X", 'Y', "Y", 'Z', "Z",
+	'0', "0", '1', "1", '2', "2", '3', "3", '4', "4", '5', "5", '6', "6", '7', "7", '8', "8", '9', "9",
+	VK_F1, "F1", VK_F2, "F2", VK_F3, "F3", VK_F4, "F4", VK_F5, "F5", VK_F6, "F6",
+	VK_F7, "F7", VK_F8, "F8", VK_F9, "F9", VK_F10, "F10", VK_F11, "F11", VK_F12, "F12",
+	VK_SPACE, "Space", VK_RETURN, "Enter", VK_ESCAPE, "Esc", VK_TAB, "Tab", VK_BACK, "Backspace",
+	VK_UP, "Up", VK_DOWN, "Down", VK_LEFT, "Left", VK_RIGHT, "Right",
+	VK_INSERT, "Insert", VK_DELETE, "Delete", VK_HOME, "Home", VK_END, "End", VK_PRIOR, "Page Up", VK_NEXT, "Page Down",
+	VK_NUMPAD0, "Num 0", VK_NUMPAD1, "Num 1", VK_NUMPAD2, "Num 2", VK_NUMPAD3, "Num 3", VK_NUMPAD4, "Num 4",
+	VK_NUMPAD5, "Num 5", VK_NUMPAD6, "Num 6", VK_NUMPAD7, "Num 7", VK_NUMPAD8, "Num 8", VK_NUMPAD9, "Num 9",
+	VK_MULTIPLY, "Num *", VK_DIVIDE, "Num /", VK_DECIMAL, "Num .",
+	VK_OEM_1, ";", VK_OEM_2, "/", VK_OEM_3, "`", VK_OEM_4, "[", VK_OEM_5, "\\", VK_OEM_6, "]", VK_OEM_7, "'",
+	VK_OEM_COMMA, ",", VK_OEM_PERIOD, "."
+};
+
+const DWORD keyNamesCount = sizeof(keyNames) / sizeof(KeyName);
+
 Adjustment activeColors;
 const Adjustment inactiveColors = {
 	0.5f,
@@ -382,7 +452,6 @@ namespace Config
 					ptr = Add(ptr, "FastAI", config.ai.fast, "Increases AI performance, but may cause an unexpected game crash (0 - no 'default'; 1 - yes)");
 					ptr = Add(ptr, "MouseScroll", config.scroll.buttons.left | (config.scroll.buttons.middle << 1), "Allows map scrolling by pressing mouse button (0 - no; 1 - left button; 2 - middle button; 3 - both buttons 'default')");
 					ptr = Add(ptr, "EdgeScroll", config.scroll.edge.active, "Allows map scrolling on window/screen edge detection (0 - no; 1 - yes 'default')");
-					ptr = Add(ptr, "WasdScroll", config.scroll.wasd, "Enables WASD scroll, Q/E remaps, and F5 shortcut (0 - no 'default'; 1 - yes)");
 					ptr = Add(ptr, "EasyScroll", config.scroll.easy.value, "Easy function timeout for map scrolling (150 - 'default')");
 					ptr = Add(ptr, "CloudsFactor", 1, "Defines clouds count multiplier (1 - min 'default')");
 					*ptr = NULL;
@@ -609,8 +678,6 @@ namespace Config
 
 				config.scroll.edge.active = (BOOL)Config::Get(CONFIG_WRAPPER, "EdgeScroll", TRUE);
 
-				config.scroll.wasd = (BOOL)Config::Get(CONFIG_WRAPPER, "WasdScroll", FALSE);
-
 				value = Config::Get(CONFIG_WRAPPER, "EasyScroll", 100);
 				if (value < 0)
 					value = 150;
@@ -682,6 +749,19 @@ namespace Config
 					config.keys.snapshot = LOBYTE(value);
 					if (config.keys.snapshot > 1 && config.keys.snapshot > 24)
 						config.keys.snapshot = 0;
+				}
+			}
+
+			{
+				BOOL wasd = (BOOL)Config::Get(CONFIG_WRAPPER, "WasdScroll", FALSE);
+
+				CHAR buffer[20];
+				for (DWORD i = 0; i < BindCount; ++i)
+				{
+					if (Config::Get(CONFIG_BINDS, bindsList[i].key, "", buffer, sizeof(buffer)))
+						config.binds[i] = LOBYTE(Config::Get(CONFIG_BINDS, bindsList[i].key, 0));
+					else
+						config.binds[i] = wasd ? bindsList[i].wasd : 0;
 				}
 			}
 
@@ -875,13 +955,6 @@ namespace Config
 		Config::CalcZoomed();
 		Config::GetSyncStep();
 
-		CHAR buffer[256];
-		MENUITEMINFO info = {};
-		info.cbSize = sizeof(MENUITEMINFO);
-		info.fMask = MIIM_TYPE;
-		info.fType = MFT_STRING;
-		info.dwTypeData = buffer;
-
 		if (EnumSystemLocales(EnumLocalesCount, LCID_INSTALLED))
 		{
 			MenuItemData mData;
@@ -913,57 +986,112 @@ namespace Config
 
 		UpdateLocale();
 
-		if (config.keys.windowedMode && (info.cch = sizeof(buffer), GetMenuItemInfo(config.menu, IDM_RES_FULL_SCREEN, FALSE, &info)))
-		{
-			StrPrint(buffer, "%sF%d", buffer, config.keys.windowedMode);
-			SetMenuItemInfo(config.menu, IDM_RES_FULL_SCREEN, FALSE, &info);
-		}
-
-		if (config.keys.aspectRatio && (info.cch = sizeof(buffer), GetMenuItemInfo(config.menu, IDM_ASPECT_RATIO, FALSE, &info)))
-		{
-			StrPrint(buffer, "%sF%d", buffer, config.keys.aspectRatio);
-			SetMenuItemInfo(config.menu, IDM_ASPECT_RATIO, FALSE, &info);
-		}
-
-		if (config.keys.vSync && (info.cch = sizeof(buffer), GetMenuItemInfo(config.menu, IDM_VSYNC, FALSE, &info)))
-		{
-			StrPrint(buffer, "%sF%d", buffer, config.keys.vSync);
-			SetMenuItemInfo(config.menu, IDM_VSYNC, FALSE, &info);
-		}
-
-		if (config.keys.zoomImage)
-		{
-			MenuItemData mData;
-			mData.childId = IDM_STRETCH_OFF;
-			if (Window::GetMenuByChildID(&mData) && (info.cch = sizeof(buffer), GetMenuItemInfo(mData.hParent, mData.index, TRUE, &info)))
-			{
-				StrPrint(buffer, "%sF%d", buffer, config.keys.zoomImage);
-				SetMenuItemInfo(mData.hParent, mData.index, TRUE, &info);
-			}
-		}
-
-		MenuItemData mData;
-		if (config.keys.imageFilter)
-		{
-			mData.childId = IDM_FILT_OFF;
-			if (Window::GetMenuByChildID(&mData) && (info.cch = sizeof(buffer), GetMenuItemInfo(mData.hParent, mData.index, TRUE, &info)))
-			{
-				StrPrint(buffer, "%sF%d", buffer, config.keys.imageFilter);
-				SetMenuItemInfo(mData.hParent, mData.index, TRUE, &info);
-			}
-		}
-
-		if (config.keys.speedToggle)
-		{
-			mData.childId = IDM_SPEED_1_0;
-			if (Window::GetMenuByChildID(&mData) && (info.cch = sizeof(buffer), GetMenuItemInfo(mData.hParent, mData.index, TRUE, &info)))
-			{
-				StrPrint(buffer, "%sF%d", buffer, config.keys.speedToggle);
-				SetMenuItemInfo(mData.hParent, mData.index, TRUE, &info);
-			}
-		}
+		UpdateKeyLabels();
 
 		return TRUE;
+	}
+
+	VOID SetKeyLabel(HMENU hMenu, UINT item, BOOL byPosition, BYTE key)
+	{
+		CHAR buffer[256];
+		MENUITEMINFO info = {};
+		info.cbSize = sizeof(MENUITEMINFO);
+		info.fMask = MIIM_TYPE;
+		info.fType = MFT_STRING;
+		info.dwTypeData = buffer;
+		info.cch = sizeof(buffer);
+		if (!GetMenuItemInfo(hMenu, item, byPosition, &info))
+			return;
+
+		CHAR* tab = StrChar(buffer, '\b');
+		if (tab)
+			tab[1] = NULL;
+
+		if (key)
+			StrPrint(buffer + StrLength(buffer), "F%d", key);
+
+		SetMenuItemInfo(hMenu, item, byPosition, &info);
+	}
+
+	VOID SetKeyLabel(DWORD childId, BYTE key)
+	{
+		MenuItemData mData;
+		mData.childId = childId;
+		if (Window::GetMenuByChildID(&mData))
+			SetKeyLabel(mData.hParent, mData.index, TRUE, key);
+	}
+
+	WPARAM GetMessageKey(UINT uMsg, WPARAM wParam)
+	{
+		if (uMsg != WM_CHAR)
+			return wParam;
+
+		SHORT vk = VkKeyScan((CHAR)wParam);
+		return vk == -1 ? 0 : LOBYTE(vk);
+	}
+
+	INT FindBind(UINT uMsg, WPARAM wParam)
+	{
+		wParam = GetMessageKey(uMsg, wParam);
+		if (!wParam)
+			return -1;
+
+		for (DWORD pass = 0; pass < 2; ++pass)
+		{
+			for (DWORD i = 0; i < BindCount; ++i)
+			{
+				if ((bindsList[i].scope == ScopeMap) == (pass != 0) && config.binds[i] == wParam && GetBindNative((BindAction)i) != wParam && IsBindActive((BindAction)i))
+					return i;
+			}
+		}
+
+		return -1;
+	}
+
+	BYTE GetBindNative(BindAction action)
+	{
+		return config.screen.full && bindsList[action].fullNative ? bindsList[action].fullNative : bindsList[action].native;
+	}
+
+	BOOL IsBindActive(BindAction action)
+	{
+		switch (bindsList[action].scope)
+		{
+		case ScopeAny:
+			return TRUE;
+		case ScopePopup:
+			return config.screen.popup || config.screen.menu || config.screen.full && bindsList[action].fullNative;
+		case ScopeBattle:
+			return config.battle.active;
+		case ScopeScreen:
+			return config.screen.full;
+		default:
+			return config.screen.map;
+		}
+	}
+
+	BOOL IsBindBlocked(UINT uMsg, WPARAM wParam)
+	{
+		if (!config.screen.map || !config.binds[BindClosePopup])
+			return FALSE;
+
+		wParam = GetMessageKey(uMsg, wParam);
+		return wParam == config.binds[BindClosePopup] && wParam != bindsList[BindClosePopup].native;
+	}
+
+	BOOL IsBindHeld(BindAction action)
+	{
+		return config.binds[action] && IsBindActive(action) && (GetAsyncKeyState(config.binds[action]) & 0x8000);
+	}
+
+	VOID UpdateKeyLabels()
+	{
+		SetKeyLabel(config.menu, IDM_RES_FULL_SCREEN, FALSE, config.keys.windowedMode);
+		SetKeyLabel(config.menu, IDM_ASPECT_RATIO, FALSE, config.keys.aspectRatio);
+		SetKeyLabel(config.menu, IDM_VSYNC, FALSE, config.keys.vSync);
+		SetKeyLabel(IDM_STRETCH_OFF, config.keys.zoomImage);
+		SetKeyLabel(IDM_FILT_OFF, config.keys.imageFilter);
+		SetKeyLabel(IDM_SPEED_1_0, config.keys.speedToggle);
 	}
 
 	INT Get(const CHAR* app, const CHAR* key, INT default)

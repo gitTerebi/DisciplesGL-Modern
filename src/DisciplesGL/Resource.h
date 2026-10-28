@@ -61,6 +61,10 @@
 #define IDC_TRK_OUT_LEFT 21
 #define IDC_LBL_OUT_RIGHT 22
 #define IDC_TRK_OUT_RIGHT 23
+
+#define IDC_BIND_FIRST 10
+#define IDC_FKEY_FIRST 60
+#define IDC_LBL_ZOOM 70
 #pragma endregion
 
 #pragma region Resources
@@ -129,6 +133,7 @@
 #define IDD_ABOUT_WRAPPER_OLD 23
 #define IDD_RESOLUTION 24
 #define IDD_COLOR_ADJUSTMENT 25
+#define IDD_KEYBINDS 26
 #pragma endregion
 
 #pragma region Menu
@@ -187,6 +192,7 @@
 
 #define IDM_MODE_WIDEBATTLE 95
 #define IDM_MAXIMIZED_WINDOW 96
+#define IDM_KEYBINDS 97
 
 #define IDM_SCENE_SORT_NAME 100
 #define IDM_SCENE_SORT_FILE 101
@@ -201,7 +207,6 @@
 #define IDM_MAP_LMB 110
 #define IDM_MAP_MMB 111
 #define IDM_MAP_EDGE 112
-#define IDM_MAP_WASD 113
 
 #define IDM_RES_CUSTOM 200
 #define IDM_RES_640_480 201

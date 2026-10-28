@@ -31,6 +31,7 @@
 #define CONFIG_SETTINGS "Settings"
 #define CONFIG_COLORS "Colors"
 #define CONFIG_KEYS "FunktionKeys"
+#define CONFIG_BINDS "Keybinds"
 
 #define BORDERLESS_OFFSET 1
 
@@ -48,6 +49,9 @@ extern FLOAT GAME_HEIGHT_FLOAT;
 extern ConfigItems config;
 extern DisplayMode modesList[4];
 extern const Resolution resolutionsList[28];
+extern const BindInfo bindsList[BindCount];
+extern const KeyName keyNames[];
+extern const DWORD keyNamesCount;
 
 extern Adjustment activeColors;
 extern const Adjustment inactiveColors;
@@ -67,4 +71,10 @@ namespace Config
 	VOID CalcScroll();
 	VOID UpdateLocale();
 	VOID GetSyncStep();
+	VOID UpdateKeyLabels();
+	INT FindBind(UINT, WPARAM);
+	BYTE GetBindNative(BindAction);
+	BOOL IsBindActive(BindAction);
+	BOOL IsBindBlocked(UINT, WPARAM);
+	BOOL IsBindHeld(BindAction);
 }

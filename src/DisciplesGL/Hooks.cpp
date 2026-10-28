@@ -3535,7 +3535,9 @@ namespace Hooks
 	VOID __stdcall CheckBordersV2(DWORD* object, BOOL isborder)
 	{
 		config.borders.active = isborder & 1;
-		if (*(object + 2) != 0xFFFFFFFF)
+		config.screen.popup = *(object + 2) == 0xFFFFFFFF;
+
+		if (!config.screen.popup)
 		{
 			BOOL battleActive = *object == battleAddress;
 			if (config.battle.active != battleActive)
@@ -3544,6 +3546,33 @@ namespace Hooks
 				SetAnimSpeed();
 			}
 		}
+
+		config.screen.map = !config.screen.popup && !config.borders.active && !config.battle.active;
+
+		static DWORD menuScreens[32];
+		static DWORD menuCount;
+		static BOOL mapSeen;
+
+		BOOL menu = FALSE;
+		for (DWORD i = 0; i < menuCount; ++i)
+		{
+			if (menuScreens[i] == *object)
+			{
+				menu = TRUE;
+				break;
+			}
+		}
+
+		if (config.screen.map)
+			mapSeen = TRUE;
+		else if (!mapSeen && !menu && !config.screen.popup && menuCount < sizeof(menuScreens) / sizeof(DWORD))
+		{
+			menuScreens[menuCount++] = *object;
+			menu = TRUE;
+		}
+
+		config.screen.menu = menu && !config.screen.popup;
+		config.screen.full = !config.screen.popup && config.borders.active && !config.battle.active && !config.screen.menu;
 	}
 
 	VOID __declspec(naked) hook_00538FEB()
@@ -3892,13 +3921,12 @@ namespace Hooks
 	DWORD __fastcall PreCheckScroll(ScrollDirection dir)
 	{
 		BOOL wasdScroll = FALSE;
-		if (config.scroll.wasd && (GetAsyncKeyState('W') | GetAsyncKeyState('A') | GetAsyncKeyState('S') | GetAsyncKeyState('D')) & 0x8000)
+		BOOL up = Config::IsBindHeld(BindScrollUp);
+		BOOL left = Config::IsBindHeld(BindScrollLeft);
+		BOOL down = Config::IsBindHeld(BindScrollDown);
+		BOOL right = Config::IsBindHeld(BindScrollRight);
+		if (up || left || down || right)
 		{
-			BOOL up = (GetAsyncKeyState('W') & 0x8000) != 0;
-			BOOL left = (GetAsyncKeyState('A') & 0x8000) != 0;
-			BOOL down = (GetAsyncKeyState('S') & 0x8000) != 0;
-			BOOL right = (GetAsyncKeyState('D') & 0x8000) != 0;
-
 			if (up && !down)
 				dir = left && !right ? ScrollTopLeft : right && !left ? ScrollTopRight : ScrollTop;
 			else if (down && !up)
@@ -4057,27 +4085,27 @@ namespace Hooks
 		switch (dir)
 		{
 		case ScrollTop:
-			if ((GetAsyncKeyState(VK_LEFT) | GetAsyncKeyState('A')) & 0x8000)
+			if (GetAsyncKeyState(VK_LEFT) & 0x8000 || Config::IsBindHeld(BindScrollLeft))
 				dir = ScrollTopLeft;
-			else if ((GetAsyncKeyState(VK_RIGHT) | GetAsyncKeyState('D')) & 0x8000)
+			else if (GetAsyncKeyState(VK_RIGHT) & 0x8000 || Config::IsBindHeld(BindScrollRight))
 				dir = ScrollTopRight;
 			break;
 		case ScrollRight:
-			if ((GetAsyncKeyState(VK_UP) | GetAsyncKeyState('W')) & 0x8000)
+			if (GetAsyncKeyState(VK_UP) & 0x8000 || Config::IsBindHeld(BindScrollUp))
 				dir = ScrollTopRight;
-			else if ((GetAsyncKeyState(VK_DOWN) | GetAsyncKeyState('S')) & 0x8000)
+			else if (GetAsyncKeyState(VK_DOWN) & 0x8000 || Config::IsBindHeld(BindScrollDown))
 				dir = ScrollBottomRight;
 			break;
 		case ScrollBottom:
-			if ((GetAsyncKeyState(VK_LEFT) | GetAsyncKeyState('A')) & 0x8000)
+			if (GetAsyncKeyState(VK_LEFT) & 0x8000 || Config::IsBindHeld(BindScrollLeft))
 				dir = ScrollBottomLeft;
-			else if ((GetAsyncKeyState(VK_RIGHT) | GetAsyncKeyState('D')) & 0x8000)
+			else if (GetAsyncKeyState(VK_RIGHT) & 0x8000 || Config::IsBindHeld(BindScrollRight))
 				dir = ScrollBottomRight;
 			break;
 		case ScrollLeft:
-			if ((GetAsyncKeyState(VK_UP) | GetAsyncKeyState('W')) & 0x8000)
+			if (GetAsyncKeyState(VK_UP) & 0x8000 || Config::IsBindHeld(BindScrollUp))
 				dir = ScrollTopLeft;
-			else if ((GetAsyncKeyState(VK_DOWN) | GetAsyncKeyState('S')) & 0x8000)
+			else if (GetAsyncKeyState(VK_DOWN) & 0x8000 || Config::IsBindHeld(BindScrollDown))
 				dir = ScrollBottomLeft;
 			break;
 		default:
@@ -5006,36 +5034,12 @@ namespace Hooks
 
 	SHORT WINAPI GetAsyncKeyStateHook(INT key)
 	{
-		SHORT state = GetAsyncKeyState(key);
+		SHORT state = Config::FindBind(WM_KEYDOWN, key) >= 0 || Config::IsBindBlocked(WM_KEYDOWN, key) ? 0 : GetAsyncKeyState(key);
 
-		switch (key)
+		for (DWORD i = 0; i < BindCount; ++i)
 		{
-		case 'Q':
-			if (GetAsyncKeyState(VK_F5) & 0x8000)
-				return 0x8000;
-			break;
-		case VK_CONTROL:
-			if (GetAsyncKeyState(VK_F5) & 0x8000)
-				return 0x8000;
-			break;
-		case 'A':
-			return GetAsyncKeyState('Q');
-		case 'S':
-			return GetAsyncKeyState('E');
-		case VK_UP:
-			state |= GetAsyncKeyState('W');
-			break;
-		case VK_LEFT:
-			state |= GetAsyncKeyState('A');
-			break;
-		case VK_DOWN:
-			state |= GetAsyncKeyState('S');
-			break;
-		case VK_RIGHT:
-			state |= GetAsyncKeyState('D');
-			break;
-		default:
-			break;
+			if (config.binds[i] && (Config::GetBindNative((BindAction)i) == key || bindsList[i].ctrl && key == VK_CONTROL) && Config::IsBindActive((BindAction)i))
+				state |= GetAsyncKeyState(config.binds[i]);
 		}
 
 		return state;
@@ -5379,6 +5383,7 @@ namespace Hooks
 					dlgAddress.game.stra01 = object[1][1];
 				else if (!StrCompare(name, "STRA02IX"))
 					dlgAddress.game.stra02 = object[1][1];
+
 			}
 			else
 			{

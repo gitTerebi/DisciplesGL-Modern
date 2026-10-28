@@ -709,11 +709,6 @@
 			break;
 		}
 
-		case MenuScrollWASD: {
-			CheckMenuItem(config.menu, IDM_MAP_WASD, MF_BYCOMMAND | (config.scroll.wasd ? MF_CHECKED : MF_UNCHECKED));
-			break;
-		}
-
 		default:
 			break;
 		}
@@ -750,7 +745,6 @@
 		CheckMenu(MenuScrollLMB);
 		CheckMenu(MenuScrollMMB);
 		CheckMenu(MenuScrollEdge);
-		CheckMenu(MenuScrollWASD);
 	}
 
 	VOID FilterChanged(HWND hWnd, const CHAR* name, INT value)
@@ -870,34 +864,26 @@
 		return TRUE;
 	}
 
-	WPARAM RemapShortcutKey(UINT uMsg, WPARAM wParam)
+	BOOL RemapBindKey(UINT uMsg, WPARAM* wParam)
 	{
-		if (uMsg == WM_KEYDOWN || uMsg == WM_KEYUP || uMsg == WM_SYSKEYDOWN || uMsg == WM_SYSKEYUP)
-		{
-			if (wParam == 'Q')
-				return 'A';
-			if (wParam == 'E')
-				return 'S';
-		}
-		else if (uMsg == WM_CHAR)
-		{
-			if (wParam == 'q')
-				return 'a';
-			if (wParam == 'Q')
-				return 'A';
-			if (wParam == 'e')
-				return 's';
-			if (wParam == 'E')
-				return 'S';
-		}
+		INT bind = Config::FindBind(uMsg, *wParam);
+		if (bind < 0)
+			return !Config::IsBindBlocked(uMsg, *wParam);
 
-		return wParam;
-	}
+		if (bind <= BindScrollRight)
+			return FALSE;
 
-	BOOL IsSmoothScrollKey(WPARAM wParam)
-	{
-		return wParam == 'W' || wParam == 'A' || wParam == 'S' || wParam == 'D' ||
-			wParam == 'w' || wParam == 'a' || wParam == 's' || wParam == 'd';
+		BYTE native = Config::GetBindNative((BindAction)bind);
+		if (uMsg != WM_CHAR)
+			*wParam = native;
+		else if (native >= 'A' && native <= 'Z' && !bindsList[bind].ctrl)
+			*wParam = *wParam >= 'A' && *wParam <= 'Z' ? native : native + 'a' - 'A';
+		else if (native == VK_SPACE || native == VK_ESCAPE || native == VK_RETURN)
+			*wParam = native;
+		else
+			return FALSE;
+
+		return TRUE;
 	}
 
 	LRESULT __stdcall KeysHook(INT nCode, WPARAM wParam, LPARAM lParam)
@@ -1170,6 +1156,148 @@
 			default:
 				break;
 			}
+			break;
+		}
+
+		default:
+			break;
+		}
+
+		return DefWindowProc(hDlg, uMsg, wParam, lParam);
+	}
+
+	BYTE* const fKeyValues[] = {
+		&config.keys.windowedMode,
+		&config.keys.imageFilter,
+		&config.keys.aspectRatio,
+		&config.keys.vSync,
+		&config.keys.zoomImage,
+		&config.keys.speedToggle,
+		&config.keys.snapshot
+	};
+
+	const CHAR* const fKeyNames[] = { "WindowedMode", "ImageFilter", "AspectRatio", "VSync", "ZoomImage", "SpeedToggle", "Screenshot" };
+
+	#define FKEY_COUNT (sizeof(fKeyNames) / sizeof(CHAR*))
+
+	VOID AddKeyItem(HWND hCombo, const CHAR* name, BYTE value, BYTE selected)
+	{
+		LRESULT index = SendMessage(hCombo, CB_ADDSTRING, NULL, (LPARAM)name);
+		SendMessage(hCombo, CB_SETITEMDATA, index, value);
+		if (value == selected)
+			SendMessage(hCombo, CB_SETCURSEL, index, NULL);
+	}
+
+	BYTE GetKeyItem(HWND hDlg, INT id)
+	{
+		LRESULT index = SendDlgItemMessage(hDlg, id, CB_GETCURSEL, NULL, NULL);
+		return index == CB_ERR ? 0 : (BYTE)SendDlgItemMessage(hDlg, id, CB_GETITEMDATA, index, NULL);
+	}
+
+	LRESULT __stdcall KeybindsProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
+	{
+		switch (uMsg)
+		{
+		case WM_INITDIALOG: {
+			EnumChildWindows(hDlg, EnumChildProc, NULL);
+
+			for (DWORD i = 0; i < BindCount; ++i)
+			{
+				HWND hCombo = GetDlgItem(hDlg, IDC_BIND_FIRST + i);
+				AddKeyItem(hCombo, "None", 0, config.binds[i]);
+				for (DWORD k = 0; k < keyNamesCount; ++k)
+					AddKeyItem(hCombo, keyNames[k].name, keyNames[k].vk, config.binds[i]);
+			}
+
+			for (DWORD i = 0; i < FKEY_COUNT; ++i)
+			{
+				HWND hCombo = GetDlgItem(hDlg, IDC_FKEY_FIRST + i);
+				AddKeyItem(hCombo, "None", 0, *fKeyValues[i]);
+				for (BYTE f = 2; f <= 24; ++f)
+				{
+					CHAR name[8];
+					StrPrint(name, "F%d", f);
+					AddKeyItem(hCombo, name, f, *fKeyValues[i]);
+				}
+			}
+
+			if (config.type.sacred)
+			{
+				ShowWindow(GetDlgItem(hDlg, IDC_LBL_ZOOM), SW_HIDE);
+				ShowWindow(GetDlgItem(hDlg, IDC_FKEY_FIRST + 4), SW_HIDE);
+			}
+
+			break;
+		}
+
+		case WM_COMMAND: {
+			switch (wParam)
+			{
+			case IDOK: {
+				INT ids[BindCount + FKEY_COUNT];
+				BYTE keys[BindCount + FKEY_COUNT];
+				BindScope scopes[BindCount + FKEY_COUNT];
+				DWORD count = 0;
+
+				for (DWORD i = 0; i < BindCount; ++i, ++count)
+				{
+					ids[count] = IDC_BIND_FIRST + i;
+					keys[count] = GetKeyItem(hDlg, ids[count]);
+					scopes[count] = bindsList[i].scope;
+				}
+
+				for (DWORD i = 0; i < FKEY_COUNT; ++i, ++count)
+				{
+					ids[count] = IDC_FKEY_FIRST + i;
+					BYTE f = GetKeyItem(hDlg, ids[count]);
+					keys[count] = f ? VK_F1 + f - 1 : 0;
+					scopes[count] = ScopeAny;
+				}
+
+				for (DWORD a = 0; a < count; ++a)
+				{
+					for (DWORD b = a + 1; b < count; ++b)
+					{
+						if (keys[a] && keys[a] == keys[b] && (scopes[a] == scopes[b] || scopes[a] == ScopeAny || scopes[b] == ScopeAny || scopes[a] == ScopePopup && scopes[b] == ScopeMap || scopes[a] == ScopeMap && scopes[b] == ScopePopup))
+						{
+							CHAR name[32];
+							GetDlgItemText(hDlg, ids[a], name, sizeof(name));
+
+							CHAR text[96];
+							StrPrint(text, "%s is assigned to more than one action.", name);
+							MessageBox(hDlg, text, "Keybinds", MB_OK | MB_ICONWARNING);
+							return NULL;
+						}
+					}
+				}
+
+				for (DWORD i = 0; i < BindCount; ++i)
+				{
+					config.binds[i] = keys[i];
+					Config::Set(CONFIG_BINDS, bindsList[i].key, config.binds[i]);
+				}
+
+				for (DWORD i = 0; i < FKEY_COUNT; ++i)
+				{
+					*fKeyValues[i] = GetKeyItem(hDlg, IDC_FKEY_FIRST + i);
+					Config::Set(CONFIG_KEYS, fKeyNames[i], *fKeyValues[i]);
+				}
+
+				Config::UpdateKeyLabels();
+			}
+
+			case IDCANCEL:
+				EndDialog(hDlg, wParam);
+				break;
+
+			default:
+				break;
+			}
+			break;
+		}
+
+		case WM_CLOSE: {
+			EndDialog(hDlg, IDCANCEL);
 			break;
 		}
 
@@ -2338,11 +2466,15 @@
 
 			if (!(HIWORD(lParam) & KF_ALTDOWN))
 			{
-				if (config.scroll.wasd && IsSmoothScrollKey(wParam))
+				WPARAM key = wParam;
+				if (!RemapBindKey(uMsg, &wParam))
 					return NULL;
 
-				if (config.scroll.wasd)
-					wParam = RemapShortcutKey(uMsg, wParam);
+				if (wParam != key)
+				{
+					config.scroll.isWheel = FALSE;
+					return CallWindowProc(OldWindowProc, hWnd, uMsg, wParam, lParam);
+				}
 
 				if (wParam == VK_OEM_PLUS || wParam == VK_OEM_MINUS || wParam == VK_ADD || wParam == VK_SUBTRACT)
 				{
@@ -2447,12 +2579,6 @@
 
 					return NULL;
 				}
-				else if (config.scroll.wasd && wParam == VK_F5)
-				{
-					CallWindowProc(OldWindowProc, hWnd, WM_KEYDOWN, 'Q', lParam);
-					CallWindowProc(OldWindowProc, hWnd, WM_KEYUP, 'Q', lParam);
-					return NULL;
-				}
 				else if (!config.type.sacred && wParam == VK_F12)
 					return NULL;
 			}
@@ -2477,11 +2603,9 @@
 		case WM_SYSKEYUP:
 		case WM_KEYUP:
 		case WM_CHAR: {
-			if (config.scroll.wasd && IsSmoothScrollKey(wParam))
+			if (!RemapBindKey(uMsg, &wParam))
 				return NULL;
 
-			if (config.scroll.wasd)
-				wParam = RemapShortcutKey(uMsg, wParam);
 			return CallWindowProc(OldWindowProc, hWnd, uMsg, wParam, lParam);
 		}
 
@@ -3053,10 +3177,13 @@
 				return NULL;
 			}
 
-			case IDM_MAP_WASD: {
-				config.scroll.wasd = !config.scroll.wasd;
-				Config::Set(CONFIG_WRAPPER, "WasdScroll", config.scroll.wasd);
-				CheckMenu(MenuScrollWASD);
+			case IDM_KEYBINDS: {
+				DialogParams params = { hWnd, FALSE, NULL };
+				BeginDialog(&params);
+				{
+					DialogBox(hDllModule, MAKEINTRESOURCE(IDD_KEYBINDS), hWnd, (DLGPROC)KeybindsProc);
+				}
+				EndDialog(&params);
 				return NULL;
 			}
 
@@ -3371,9 +3498,6 @@
 		case WM_CHAR: {
 			HWND hParent = GetParent(hWnd);
 			WNDPROC proc = (WNDPROC)GetWindowLong(hParent, GWL_WNDPROC);
-			if (config.scroll.wasd && IsSmoothScrollKey(wParam))
-				return NULL;
-
 			return CallWindowProc(proc, hParent, uMsg, wParam, lParam);
 		}
 
