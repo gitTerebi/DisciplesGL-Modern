@@ -268,6 +268,7 @@ BOOL NewRenderer::RenderInner(BOOL ready, BOOL force, StateBufferAligned** lpSta
 		if (this->pixelBuffer->Update(lpStateBuffer, ready, TRUE) || state.flags || stateChanged)
 		{
 			BOOL clearBackTransition = this->backStatus && !stateBuffer->isBack;
+			BOOL zoomChanged = this->zoomStatus != stateBuffer->isZoomed;
 
 			if (this->isVSync != config.image.vSync)
 			{
@@ -430,10 +431,8 @@ BOOL NewRenderer::RenderInner(BOOL ready, BOOL force, StateBufferAligned** lpSta
 				GLActiveTexture(GL_TEXTURE1);
 				GLBindTexFilter((&textureId.primary)[this->activeIndex], GL_LINEAR);
 
-				if (this->zoomStatus != stateBuffer->isZoomed || stateBuffer->isZoomed && (this->zoomSize.width != frameSize.width || this->zoomSize.height != frameSize.height))
+				if (zoomChanged || stateBuffer->isZoomed && (this->zoomSize.width != frameSize.width || this->zoomSize.height != frameSize.height))
 				{
-					this->zoomStatus = stateBuffer->isZoomed;
-
 					if (this->isTrueColor)
 					{
 						DWORD* ptr = (DWORD*)this->frameBuffer;
