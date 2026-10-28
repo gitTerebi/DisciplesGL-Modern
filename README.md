@@ -1,61 +1,43 @@
 # DisciplesGL Modern
 
-Modern maintenance build of DisciplesGL for Disciples II.
+A maintained build of the DisciplesGL OpenGL wrapper for Disciples II.
 
-## New Features
+## Features
 
-- Separate speed settings for map and battle (menu options).
-- WASD map scrolling, with a menu option to toggle it.
-- Window maximizes on game start.
-- Autosave archive: keeps the last 15 turns as rolling saves.
-- Filtered (smooth) background rendering in HD and wide modes.
-- Fixed filtered transition artifacts.
-- Fixed fullscreen and hotkey handling.
-- Fixed saving under the Rise of the Elves expansion.
+- **Keybinds** (Options > Keybinds): rebind any game hotkey on the map, town, army, spell and battle screens, plus the wrapper's F-key shortcuts. Each bind only works on its own screen, so one key can do different things on the map and in battle.
+- **Popup key**: one key (for example Space) accepts popups and menus, backs out of full screens such as the city screen, and does nothing on the bare map.
+- **Separate speeds** for the map and for battles.
+- **Maximized window** on start, sized to the game's shape.
+- **Autosave archive** that keeps the last 15 turns as rolling saves.
+- **Smooth (filtered) background** in HD and wide modes.
 
-## What We Fixed
+## Fixes
 
-- Restored the project so it builds cleanly with Visual Studio 2022.
-- Fixed include and library paths in the Visual Studio project.
-- Added the missing libpng and zlib headers required by the source tree.
-- Fixed the DLL base address so `C4dll-R.dll` does not collide with Disciples II runtime DLLs.
-- Added `build.bat` for one-command build and copy into the game folders.
-- Verified the bundled `CB63.LIB`, `SHW32.LIB`, and `hooker.lib` match the expected runtime DLL exports.
-- Added runtime debug logging to help trace future crashes.
-- Fixed guarded game-speed hook behavior that could crash during play.
-- Kept HD mode working with full hooks enabled.
-- Disabled only the unstable `trans_npc` transition-speed hook to prevent post-battle map crashes while keeping the rest of the deep hooks enabled.
-- Confirmed all other deep hooks can stay enabled.
+- Leaving a menu or battle with upscaling on no longer leaves part of it on the map.
+- The map redraws fully after a battle.
+- Saving works under the Rise of the Elves expansion.
+- Fullscreen switching and transition artifacts are fixed.
+- The unstable `trans_npc` transition-speed hook is disabled to stop post-battle map crashes. All other deep hooks stay on.
+- `C4dll-R.dll` uses a base address that doesn't collide with the game's runtime DLLs.
 
-## Included Folders
+## Install without building
 
-- `src` - DisciplesGL source.
-- `HookerLib` - matching HookerLib source and bundled hooker artifacts.
-- `dist` - ready-to-use runtime files (`C4dll-R.dll`, `CB63.dll`, `SHW32.dll`, `Imgs`, `Mods`).
+Copy the contents of `dist` into the Disciples II game folder. `C4dll-R.dll` is the wrapper; `Imgs` and `Mods` are optional. Keep `CB63.dll` and `SHW32.dll` in the game folder, since the game needs them.
 
 ## Build
 
-Run:
+Requires Visual Studio 2022. Run:
 
 ```bat
 build.bat
 ```
 
-The script builds `src\DisciplesGL\DisciplesGL.vcxproj` as Release Win32 and copies `C4dll-R.dll` to:
+It builds `src\DisciplesGL\DisciplesGL.vcxproj` (Release, Win32) and copies `C4dll-R.dll` to the game folders listed at the top of `build.bat`. Edit those paths for your install; the script stops without copying if any listed folder is missing.
 
-```text
-G:\games\Disciples 2
-G:\games\Disciples 2 - Rise of the Elves
-```
+## Repository layout
 
-Edit the paths at the top of `build.bat` for your install.
+- `src`: DisciplesGL source. Import libraries are in `src\lib`.
+- `HookerLib`: the matching HookerLib source and prebuilt hooker files.
+- `dist`: ready-to-use runtime files.
 
-## Notes
-
-- `CB63.dll` and `SHW32.dll` are game runtime dependencies and should stay in the game folder.
-- Import libraries are kept under `src\lib`.
-- The unstable `trans_npc` transition-speed hook is disabled to prevent post-battle map crashes; all other deep hooks remain enabled.
-
-## Install Without Building
-
-Copy the contents of `dist` into the Disciples II game folder. `C4dll-R.dll` is the wrapper; `Imgs` and `Mods` are optional extras.
+The wrapper writes a debug log, `DisciplesGL-debug.log`, next to the game executable.
