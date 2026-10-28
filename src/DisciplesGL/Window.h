@@ -33,6 +33,7 @@ namespace Window
 	VOID CheckMenu(MenuType);
 	VOID CheckMenu();
 
+	VOID MaximizeWindow(HWND);
 	VOID SetCaptureKeys(BOOL);
 	VOID SetCaptureWindow(HWND);
 	VOID SetCapturePanel(HWND);

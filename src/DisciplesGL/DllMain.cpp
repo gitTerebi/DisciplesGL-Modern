@@ -83,6 +83,7 @@ BOOL __stdcall DllMain(HMODULE hModule, DWORD fdwReason, LPVOID lpReserved)
 			}
 
 			LoadShcore();
+			LoadDwmapi();
 			if (SetProcessDpiAwarenessC)
 				SetProcessDpiAwarenessC(PROCESS_PER_MONITOR_DPI_AWARE);
 

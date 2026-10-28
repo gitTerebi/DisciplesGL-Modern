@@ -920,7 +920,7 @@ namespace Hooks
 			{
 				SetMenu(hWnd, config.menu);
 				if (config.maximizedWindow)
-					ShowWindow(hWnd, SW_MAXIMIZE);
+					Window::MaximizeWindow(hWnd);
 			}
 		}
 		else if (!StrCompare(lpClassName, "ThreadWindowClass"))

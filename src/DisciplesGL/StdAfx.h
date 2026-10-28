@@ -61,6 +61,10 @@ typedef HRESULT(__stdcall* SETPROCESSDPIAWARENESS)(PROCESS_DPI_AWARENESS);
 
 extern SETPROCESSDPIAWARENESS SetProcessDpiAwarenessC;
 
+typedef HRESULT(__stdcall* DWMGETWINDOWATTRIBUTE)(HWND, DWORD, LPVOID, DWORD);
+
+extern DWMGETWINDOWATTRIBUTE DwmGetWindowAttributeC;
+
 extern "C"
 {
 	_CRTIMP int __CRTDECL sprintf(char*, const char*, ...);
@@ -127,3 +131,4 @@ void DebugLog(const char* format, ...);
 
 VOID LoadKernel32();
 VOID LoadShcore();
+VOID LoadDwmapi();

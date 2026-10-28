@@ -64,6 +64,7 @@ ACTIVATEACTCTX ActivateActCtxC;
 DEACTIVATEACTCTX DeactivateActCtxC;
 
 SETPROCESSDPIAWARENESS SetProcessDpiAwarenessC;
+DWMGETWINDOWATTRIBUTE DwmGetWindowAttributeC;
 
 VOID __declspec(naked) __stdcall ex_l4linkSt()
 {
@@ -630,4 +631,11 @@ VOID LoadShcore()
 	HMODULE hLib = LoadLibrary("SHCORE.dll");
 	if (hLib)
 		SetProcessDpiAwarenessC = (SETPROCESSDPIAWARENESS)GetProcAddress(hLib, "SetProcessDpiAwareness");
+}
+
+VOID LoadDwmapi()
+{
+	HMODULE hLib = LoadLibrary("DWMAPI.dll");
+	if (hLib)
+		DwmGetWindowAttributeC = (DWMGETWINDOWATTRIBUTE)GetProcAddress(hLib, "DwmGetWindowAttribute");
 }

@@ -2094,6 +2094,57 @@
 		return DefWindowProc(hDlg, uMsg, wParam, lParam);
 	}
 
+	VOID MaximizeWindow(HWND hWnd)
+	{
+		if (config.background.allowed && config.background.enabled)
+		{
+			ShowWindow(hWnd, SW_MAXIMIZE);
+			return;
+		}
+
+		if (IsZoomed(hWnd))
+			ShowWindow(hWnd, SW_SHOWNORMAL);
+
+		MONITORINFO mi = { sizeof(MONITORINFO) };
+		if (!GetMonitorInfo(MonitorFromWindow(hWnd, MONITOR_DEFAULTTONEAREST), &mi))
+			return;
+
+		RECT window, client, visible;
+		GetWindowRect(hWnd, &window);
+		GetClientRect(hWnd, &client);
+		if (!DwmGetWindowAttributeC || DwmGetWindowAttributeC(hWnd, 9 /* DWMWA_EXTENDED_FRAME_BOUNDS */, &visible, sizeof(RECT)) != S_OK)
+			visible = window;
+
+		POINT origin = { 0, 0 };
+		ClientToScreen(hWnd, &origin);
+
+		LONG captionHeight = origin.y - visible.top;
+		LONG leftBorder = origin.x - visible.left;
+		LONG rightBorder = visible.right - origin.x - client.right;
+
+		const RECT* work = &mi.rcWork;
+		LONG availWidth = work->right - work->left - leftBorder - rightBorder;
+		LONG availHeight = work->bottom - work->top - captionHeight;
+		if (availWidth <= 0 || availHeight <= 0)
+			return;
+
+		LONG width = MulDiv(availHeight, config.mode->width, config.mode->height);
+		LONG height = availHeight;
+		if (width > availWidth)
+		{
+			width = availWidth;
+			height = MulDiv(availWidth, config.mode->height, config.mode->width);
+		}
+
+		LONG visibleLeft = work->left + ((availWidth - width) >> 1);
+		LONG x = visibleLeft - (visible.left - window.left);
+		LONG y = work->top - (visible.top - window.top);
+		LONG nWidth = width + (window.right - window.left - client.right);
+		LONG nHeight = height + (window.bottom - window.top - client.bottom);
+
+		SetWindowPos(hWnd, NULL, x, y, nWidth, nHeight, SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOOWNERZORDER);
+	}
+
 	VOID StartMaximizedWindowTimer(HWND hWnd)
 	{
 		if (config.windowedMode && config.maximizedWindow && !maximizedWindowTicks)
@@ -2116,7 +2167,7 @@
 			{
 				if (config.windowedMode && config.maximizedWindow && maximizedWindowTicks)
 				{
-					ShowWindow(hWnd, SW_MAXIMIZE);
+					MaximizeWindow(hWnd);
 					if (!--maximizedWindowTicks)
 						KillTimer(hWnd, TIMER_MAXIMIZED_WINDOW);
 				}
@@ -2540,7 +2591,7 @@
 							Hooks::PrintText(text);
 						}
 						else if (config.maximizedWindow)
-							ShowWindow(hWnd, SW_MAXIMIZE);
+							MaximizeWindow(hWnd);
 
 						CheckMenu(MenuWindowMode);
 						CheckMenu(MenuMaximizedWindow);
@@ -2566,6 +2617,13 @@
 						KillTimer(hWnd, TIMER_MAXIMIZED_WINDOW);
 						maximizedWindowTicks = 0;
 						ShowWindow(hWnd, SW_SHOWNORMAL);
+
+						RECT rect = { 0, 0, (LONG)config.mode->width, (LONG)config.mode->height };
+						AdjustWindowRect(&rect, GetWindowLong(hWnd, GWL_STYLE), TRUE);
+
+						LONG nWidth = rect.right - rect.left;
+						LONG nHeight = rect.bottom - rect.top;
+						SetWindowPos(hWnd, NULL, max(0, (GetSystemMetrics(SM_CXSCREEN) - nWidth) >> 1), max(0, (GetSystemMetrics(SM_CYSCREEN) - nHeight) >> 1), nWidth, nHeight, SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOOWNERZORDER);
 					}
 				}
 
@@ -2689,6 +2747,9 @@
 						StrPrint(text, "%s: %s", str1, str2);
 						Hooks::PrintText(text);
 					}
+
+					if (config.windowedMode && config.maximizedWindow)
+						MaximizeWindow(hWnd);
 
 					OpenDraw* ddraw = Main::FindOpenDrawByWindow(hWnd);
 					if (ddraw)
