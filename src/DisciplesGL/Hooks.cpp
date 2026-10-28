@@ -4211,12 +4211,18 @@ namespace Hooks
 		CURSOR_DYNLEVELINV = 30
 	};
 
+	DWORD cursorObjects[CURSOR_DYNLEVELINV + 1];
+	CursorType currentCursor;
+
 	DWORD sub_LoadCursorObject;
 	DWORD __stdcall LoadCursorObject(CursorType* cur)
 	{
 		DWORD res = ((DWORD(__stdcall*)(CursorType*))sub_LoadCursorObject)(cur);
 		if (*cur == CURSOR_WAIT)
 			waitObject = res;
+
+		if ((DWORD)*cur <= CURSOR_DYNLEVELINV)
+			cursorObjects[*cur] = res;
 
 		return res;
 	}
@@ -4225,6 +4231,20 @@ namespace Hooks
 	DWORD __fastcall ShowCursorObject(DWORD _this, DWORD /*edx*/, DWORD a2, DWORD a3)
 	{
 		config.ai.waiting = _this == waitObject;
+
+		currentCursor = CURSOR_DEFAULT;
+		if (_this)
+		{
+			for (DWORD i = 0; i <= CURSOR_DYNLEVELINV; ++i)
+			{
+				if (cursorObjects[i] == _this)
+				{
+					currentCursor = (CursorType)i;
+					break;
+				}
+			}
+		}
+
 		return ((DWORD(__thiscall*)(DWORD, DWORD, DWORD))sub_ShowCursorObject)(_this, a2, a3);
 	}
 #pragma endregion
@@ -6771,6 +6791,7 @@ namespace Hooks
 			} dialog;
 		} offset;
 		DWORD* radioObjects;
+		BOOL cityClick;
 	} mouseAction;
 
 	DWORD sub_CreateRadio;
@@ -6890,6 +6911,9 @@ namespace Hooks
 	{
 		if (*mouseAction.allow)
 		{
+			if (uMsg == WM_LBUTTONDOWN)
+				mouseAction.cityClick = currentCursor == CURSOR_SELECTCITY;
+
 			DWORD* obj = GetAreaObject(global);
 			if (config.scroll.buttons.left && uMsg == WM_LBUTTONDOWN || config.scroll.buttons.middle && uMsg == WM_MBUTTONDOWN)
 			{
@@ -6923,11 +6947,14 @@ namespace Hooks
 
 				if (uMsg != WM_LBUTTONUP || mouseAction.moved)
 				{
+					mouseAction.cityClick = FALSE;
+
 					DWORD* mapObject = (DWORD*)((DWORD*)obj[2])[1];
 					((VOID(__thiscall*)(DWORD*, POINT*, LONG, LONG))sub_SetMapCenter)(mapObject, &mouseAction.mapPos, mouseAction.dlgPos.x - pt->x, mouseAction.dlgPos.y - pt->y);
 				}
 				else
 				{
+					mouseAction.cityClick = currentCursor == CURSOR_SELECTCITY;
 					mouseAction.deleted = FALSE;
 					BOOL res = ((BOOL(__thiscall*)(DWORD*, UINT, POINT*))sub_MouseAction)(global, uMsg == WM_LBUTTONUP ? WM_LBUTTONDOWN : WM_MBUTTONDOWN, pt);
 					if (mouseAction.deleted)
@@ -6936,7 +6963,20 @@ namespace Hooks
 			}
 		}
 
-		return ((BOOL(__thiscall*)(DWORD*, UINT, POINT*))sub_MouseAction)(global, uMsg, pt);
+		if (uMsg != WM_LBUTTONUP || !mouseAction.cityClick || !*mouseAction.allow)
+			return ((BOOL(__thiscall*)(DWORD*, UINT, POINT*))sub_MouseAction)(global, uMsg, pt);
+
+		mouseAction.cityClick = FALSE;
+		mouseAction.deleted = FALSE;
+		BOOL res = ((BOOL(__thiscall*)(DWORD*, UINT, POINT*))sub_MouseAction)(global, WM_LBUTTONUP, pt);
+		if (!mouseAction.deleted)
+		{
+			((BOOL(__thiscall*)(DWORD*, UINT, POINT*))sub_MouseAction)(global, WM_LBUTTONDOWN, pt);
+			if (!mouseAction.deleted)
+				((BOOL(__thiscall*)(DWORD*, UINT, POINT*))sub_MouseAction)(global, WM_LBUTTONUP, pt);
+		}
+
+		return res;
 	}
 
 	DWORD sub_MouseActionMap;
