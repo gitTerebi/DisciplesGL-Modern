@@ -125,3 +125,8 @@ VOID ShaderGroup::Use(DWORD texSize, BOOL isBack)
 
 	this->current->Update(texSize, this->colors);
 }
+
+GLint ShaderGroup::GetLocation(const CHAR* name)
+{
+	return this->current->GetLocation(name);
+}

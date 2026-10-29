@@ -93,7 +93,8 @@ enum InterpolationFilter : BYTE
 	InterpolateLinear = 1,
 	InterpolateHermite = 2,
 	InterpolateCubic = 3,
-	InterpolateLanczos = 4
+	InterpolateLanczos = 4,
+	InterpolateFsr = 5
 };
 
 enum UpscalingFilter : BYTE
@@ -268,6 +269,8 @@ enum BindAction
 	BindSpellLevel4,
 	BindSpellLevel5,
 	BindOtherParty,
+	BindQuickLoad,
+	BindBattleClose,
 	BindCount
 };
 
@@ -287,6 +290,7 @@ struct BindInfo {
 	BYTE wasd;
 	BindScope scope;
 	BYTE fullNative;
+	BYTE def;
 };
 
 struct KeyName {
@@ -307,6 +311,7 @@ struct ConfigItems {
 
 	BOOL windowedMode;
 	BOOL maximizedWindow;
+	BOOL skipIntro;
 	DisplayMode* mode;
 	Resolution resolution;
 
@@ -397,6 +402,12 @@ struct ConfigItems {
 
 	struct {
 		BOOL allowed;
+		DWORD value;
+		FLOAT current;
+	} mapZoom;
+
+	struct {
+		BOOL allowed;
 		BordersType type;
 		BOOL active;
 	} borders;
@@ -415,12 +426,6 @@ struct ConfigItems {
 		BOOL hooked;
 		BOOL allowed;
 	} wide;
-
-	struct {
-		BOOL hooked;
-		DWORD time;
-		DWORD value;
-	} msgTimeScale;
 
 	struct {
 		struct {
@@ -453,6 +458,7 @@ struct ConfigItems {
 		InterpolationFilter interpolation;
 		UpscalingFilter upscaling;
 		BYTE value;
+		BYTE sharpness;
 	} image;
 
 	struct {
@@ -472,6 +478,8 @@ struct ConfigItems {
 		BOOL map;
 		BOOL full;
 		BOOL menu;
+		BOOL mainMenu;
+		BOOL strategic;
 	} screen;
 
 	struct {
@@ -558,13 +566,13 @@ enum MenuType
 	MenuStretch,
 	MenuWindowMode,
 	MenuMaximizedWindow,
+	MenuSkipIntro,
 	MenuWindowType,
 	MenuFastAI,
 	MenuActive,
 	MenuCpu,
 	MenuBattle,
 	MenuSnapshot,
-	MenuMsgTimeScale,
 	MenuRenderer,
 	MenuSceneSort,
 	MenuSceneAll,

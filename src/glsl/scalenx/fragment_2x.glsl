@@ -42,9 +42,6 @@ bool neq(vec4 A, vec4 B) {
 }
 
 void main() {
-	if (eq(texture(tex01, fTex), texture(tex02, fTex)))
-		discard;
-
 	vec2 texel = floor(fTex * texSize) + 0.5;
 
 	#define TEX(x, y) texture(tex01, (texel + vec2(x, y)) / texSize)

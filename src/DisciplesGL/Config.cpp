@@ -24,6 +24,7 @@
 
 #include "stdafx.h"
 #include "Config.h"
+#include "Mmsystem.h"
 #include "intrin.h"
 #include "Resource.h"
 #include "Window.h"
@@ -76,54 +77,56 @@ const Resolution resolutionsList[] = {
 };
 
 const BindInfo bindsList[] = {
-	"ScrollUp", VK_UP, FALSE, 'W', ScopeMap, 0,
-	"ScrollDown", VK_DOWN, FALSE, 'S', ScopeMap, 0,
-	"ScrollLeft", VK_LEFT, FALSE, 'A', ScopeMap, 0,
-	"ScrollRight", VK_RIGHT, FALSE, 'D', ScopeMap, 0,
-	"EndTurn", VK_SPACE, FALSE, 0, ScopeMap, 0,
-	"SpellBook", 'S', FALSE, 'E', ScopeMap, 0,
-	"Capital", 'A', FALSE, 'Q', ScopeMap, 0,
-	"QuickSave", 'Q', TRUE, VK_F5, ScopeMap, 0,
-	"ClosePopup", VK_RETURN, FALSE, 0, ScopePopup, VK_ESCAPE,
-	"AutoBattle", 'A', FALSE, 0, ScopeBattle, 0,
-	"Defend", 'D', FALSE, 0, ScopeBattle, 0,
-	"Retreat", 'R', FALSE, 0, ScopeBattle, 0,
-	"Wait", 'W', FALSE, 0, ScopeBattle, 0,
-	"BuildStructure", 'S', FALSE, 0, ScopeScreen, 0,
-	"ResearchSpells", 'R', FALSE, 0, ScopeScreen, 0,
-	"Party", 'P', FALSE, 0, ScopeScreen, 0,
-	"Diplomacy", 'P', FALSE, 0, ScopeMap, 0,
-	"Exchange", 'X', FALSE, 0, ScopeMap, 0,
-	"Guard", 'G', FALSE, 0, ScopeMap, 0,
-	"NextLeader", VK_TAB, FALSE, 0, ScopeMap, 0,
-	"WandScroll", 'U', FALSE, 0, ScopeMap, 0,
-	"DropRod", 'R', FALSE, 0, ScopeMap, 0,
-	"ContinueMove", 'M', FALSE, 0, ScopeMap, 0,
-	"Banners", 'B', FALSE, 0, ScopeMap, 0,
-	"CenterStack", 'C', FALSE, 0, ScopeMap, 0,
-	"CenterTarget", 'D', FALSE, 0, ScopeMap, 0,
-	"QuestLog", VK_F3, FALSE, 0, ScopeMap, 0,
-	"Report", VK_F1, FALSE, 0, ScopeMap, 0,
-	"Options", VK_F4, FALSE, 0, ScopeMap, 0,
-	"TopPalette", VK_F5, FALSE, 0, ScopeMap, 0,
-	"GrowCity", 'G', FALSE, 0, ScopeScreen, 0,
-	"NextCity", VK_RIGHT, FALSE, 0, ScopeScreen, 0,
-	"PrevCity", VK_LEFT, FALSE, 0, ScopeScreen, 0,
-	"KnownSpells", 'S', FALSE, 0, ScopeScreen, 0,
-	"ResourcePopup", VK_F6, FALSE, 0, ScopeMap, 0,
-	"Heal", 'H', FALSE, 0, ScopeScreen, 0,
-	"Revive", 'R', FALSE, 0, ScopeScreen, 0,
-	"Dismiss", 'D', FALSE, 0, ScopeScreen, 0,
-	"LevelToggle", 'L', FALSE, 0, ScopeScreen, 0,
-	"UnitInfo", VK_TAB, FALSE, 0, ScopeScreen, 0,
-	"PickUpDrop", 'B', FALSE, 0, ScopeScreen, 0,
-	"Training", 'T', FALSE, 0, ScopeScreen, 0,
-	"SpellLevel1", '1', FALSE, 0, ScopeScreen, 0,
-	"SpellLevel2", '2', FALSE, 0, ScopeScreen, 0,
-	"SpellLevel3", '3', FALSE, 0, ScopeScreen, 0,
-	"SpellLevel4", '4', FALSE, 0, ScopeScreen, 0,
-	"SpellLevel5", '5', FALSE, 0, ScopeScreen, 0,
-	"OtherParty", VK_TAB, FALSE, 0, ScopeBattle, 0
+	"ScrollUp", VK_UP, FALSE, 'W', ScopeMap, 0, 'W',
+	"ScrollDown", VK_DOWN, FALSE, 'S', ScopeMap, 0, 'S',
+	"ScrollLeft", VK_LEFT, FALSE, 'A', ScopeMap, 0, 'A',
+	"ScrollRight", VK_RIGHT, FALSE, 'D', ScopeMap, 0, 'D',
+	"EndTurn", VK_SPACE, FALSE, 0, ScopeMap, 0, 'E',
+	"SpellBook", 'S', FALSE, 'E', ScopeMap, 0, 'R',
+	"Capital", 'A', FALSE, 'Q', ScopeMap, 0, 'F',
+	"QuickSave", 'Q', TRUE, VK_F5, ScopeMap, 0, VK_F5,
+	"ClosePopup", VK_RETURN, FALSE, 0, ScopePopup, VK_ESCAPE, VK_SPACE,
+	"AutoBattle", 'A', FALSE, 0, ScopeBattle, 0, 'Q',
+	"Defend", 'D', FALSE, 0, ScopeBattle, 0, 0,
+	"Retreat", 'R', FALSE, 0, ScopeBattle, 0, 'R',
+	"Wait", 'W', FALSE, 0, ScopeBattle, 0, 0,
+	"BuildStructure", 'S', FALSE, 0, ScopeScreen, 0, 'F',
+	"ResearchSpells", 'R', FALSE, 0, ScopeScreen, 0, 'R',
+	"Party", 'P', FALSE, 0, ScopeScreen, 0, 0,
+	"Diplomacy", 'P', FALSE, 0, ScopeMap, 0, 0,
+	"Exchange", 'X', FALSE, 0, ScopeMap, 0, 0,
+	"Guard", 'G', FALSE, 0, ScopeMap, 0, 0,
+	"NextLeader", VK_TAB, FALSE, 0, ScopeMap, 0, 0,
+	"WandScroll", 'U', FALSE, 0, ScopeMap, 0, 0,
+	"DropRod", 'R', FALSE, 0, ScopeMap, 0, 0,
+	"ContinueMove", 'M', FALSE, 0, ScopeMap, 0, 0,
+	"Banners", 'B', FALSE, 0, ScopeMap, 0, 0,
+	"CenterStack", 'C', FALSE, 0, ScopeMap, 0, 0,
+	"CenterTarget", 'D', FALSE, 0, ScopeMap, 0, 0,
+	"QuestLog", VK_F3, FALSE, 0, ScopeMap, 0, 0,
+	"Report", VK_F1, FALSE, 0, ScopeMap, 0, 0,
+	"Options", VK_F4, FALSE, 0, ScopeMap, 0, 0,
+	"TopPalette", VK_F5, FALSE, 0, ScopeMap, 0, 0,
+	"GrowCity", 'G', FALSE, 0, ScopeScreen, 0, 0,
+	"NextCity", VK_RIGHT, FALSE, 0, ScopeScreen, 0, 0,
+	"PrevCity", VK_LEFT, FALSE, 0, ScopeScreen, 0, 0,
+	"KnownSpells", 'S', FALSE, 0, ScopeScreen, 0, 0,
+	"ResourcePopup", VK_F6, FALSE, 0, ScopeMap, 0, 0,
+	"Heal", 'H', FALSE, 0, ScopeScreen, 0, 0,
+	"Revive", 'R', FALSE, 0, ScopeScreen, 0, 0,
+	"Dismiss", 'D', FALSE, 0, ScopeScreen, 0, 0,
+	"LevelToggle", 'L', FALSE, 0, ScopeScreen, 0, 0,
+	"UnitInfo", VK_TAB, FALSE, 0, ScopeScreen, 0, 0,
+	"PickUpDrop", 'B', FALSE, 0, ScopeScreen, 0, 0,
+	"Training", 'T', FALSE, 0, ScopeScreen, 0, 0,
+	"SpellLevel1", '1', FALSE, 0, ScopeScreen, 0, 0,
+	"SpellLevel2", '2', FALSE, 0, ScopeScreen, 0, 0,
+	"SpellLevel3", '3', FALSE, 0, ScopeScreen, 0, 0,
+	"SpellLevel4", '4', FALSE, 0, ScopeScreen, 0, 0,
+	"SpellLevel5", '5', FALSE, 0, ScopeScreen, 0, 0,
+	"OtherParty", VK_TAB, FALSE, 0, ScopeBattle, 0, 0,
+	"QuickLoad", 'L', TRUE, VK_F9, ScopeMap, 0, VK_F9,
+	"BattleClose", VK_ESCAPE, FALSE, 0, ScopeBattle, 0, 0
 };
 
 const KeyName keyNames[] = {
@@ -361,6 +364,7 @@ namespace Config
 
 				config.image.upscaling = UpscaleNone;
 				config.image.value = 0;
+				config.image.sharpness = FSR_SHARP_DEFAULT;
 
 				if (!config.type.sacred)
 				{
@@ -376,16 +380,15 @@ namespace Config
 
 				config.zoom.enabled = TRUE;
 				config.zoom.value = 100;
+				config.mapZoom.value = 100;
 
 				config.speed.index = 5;
 				config.speed.value = config.speed.index + 10;
-				config.speed.enabled = TRUE;
+				config.speed.enabled = FALSE;
 
 				config.snapshot.type = ImagePNG;
 				config.snapshot.level = 9;
 				config.locales.current.id = GetUserDefaultLCID();
-				config.msgTimeScale.time = 15;
-				config.msgTimeScale.value = 100 / config.msgTimeScale.time;
 				config.updateMode = UpdateSSE;
 				config.cpu.sse2 = TRUE;
 				config.scroll.buttons.left = config.scroll.buttons.middle = TRUE;
@@ -418,8 +421,9 @@ namespace Config
 
 					ptr = Add(ptr, "ImageAspect", config.image.aspect, "Keep image aspect ratio (0 - no; 1 - yes 'default')");
 					ptr = Add(ptr, "ImageVSync", config.image.vSync, "Enables vertical synchronization (0 - no; 1 - yes 'default')");
-					ptr = Add(ptr, "Interpolation", (INT)config.image.interpolation, "Image interpolation filter (0 - none; 1 - linear; 2 - hermite; 3 - cubic; 4 - lanczos)");
+					ptr = Add(ptr, "Interpolation", (INT)config.image.interpolation, "Image interpolation filter (0 - none; 1 - linear; 2 - hermite; 3 - cubic; 4 - lanczos; 5 - fsr)");
 					ptr = Add(ptr, "Upscaling", MAKELONG(config.image.upscaling, config.image.value), "Image upscaling filter (low word: 0 - none 'default'; 1 - xbrz; 2 - scalehq; 3 - xsal; 4 - eagle; 5 - scalenx; high word - value)");
+					ptr = Add(ptr, "FsrSharpness", config.image.sharpness, "FSR sharpening strength (0 - off; 1 - low; 2 - medium 'default'; 3 - high; 4 - maximum)");
 
 					if (!config.type.sacred)
 					{
@@ -429,10 +433,11 @@ namespace Config
 
 					ptr = Add(ptr, "EnableZoom", config.zoom.enabled, "Enables in-game windows zoom (0 - no; 1 - yes 'default')");
 					ptr = Add(ptr, "ZoomFactor", *(INT*)&config.zoom.value, "Zoom factor for in-game windows (0 - 100 'default')");
+					ptr = Add(ptr, "MapZoom", *(INT*)&config.mapZoom.value, "Strategic map zoom in percent (100 'default' - 300), changed with Ctrl + mouse wheel");
 					ptr = Add(ptr, "FullScreenMode", config.borderless.mode, "Full screen window mode (0 - exclusive 'default'; 1 - borderless)");
 					ptr = Add(ptr, "MaximizedWindow", config.maximizedWindow, "Starts windowed mode maximized (0 - no 'default'; 1 - yes)");
 					ptr = Add(ptr, "GameSpeed", config.speed.index, "Animation speed (1 - ..., 5 - 1.5x 'deafult'");
-					ptr = Add(ptr, "SpeedEnabled", config.speed.enabled, "Enables animation speed (0 - no; 1 - yes 'default')");
+					ptr = Add(ptr, "SpeedEnabled", config.speed.enabled, "Enables animation speed (0 - no 'default'; 1 - yes)");
 					ptr = Add(ptr, "BattleSpeed", config.battle.speedIndex, "Battle animation speed (0 - 1.0x, 10 - 2.0x, 20 - 3.0x 'default')");
 					ptr = Add(ptr, "AlwaysActive", config.alwaysActive, "Game window is always active (0 - no 'default'; 1 - yes)");
 					ptr = Add(ptr, "ColdCPU", config.cpu.cold, "Decrease CPU usage for OpenGL renderer (0 - no 'default'; 1 - yes)");
@@ -446,7 +451,6 @@ namespace Config
 					ptr = Add(ptr, "ScreenshotType", *(INT*)&config.snapshot.type, "Screenshots type (0 - bmp; 1 - png 'default')");
 					ptr = Add(ptr, "ScreenshotLevel", *(INT*)&config.snapshot.level, "Compression level for PNG screenshots (0 - 9, 5 - 'default')");
 					ptr = Add(ptr, "Locale", *(INT*)&config.locales.current.id, "Locale id (by default is determined by system locale)");
-					ptr = Add(ptr, "MessageTimeout", config.msgTimeScale.time, "In-game messages timeout in seconds (15 'default')");
 					ptr = Add(ptr, "NoSSE2", !config.cpu.sse2, "Disables using of SSE2 instruction set, even if it's available (0 - no 'default'; 1 - yes)");
 					ptr = Add(ptr, "UpdateMode", (INT)config.updateMode, "Image comparison. Affects on rendering performance (0 - none; 1 - SSE2 'default'; 2 - classic; 3 - alternative)");
 					ptr = Add(ptr, "FastAI", config.ai.fast, "Increases AI performance, but may cause an unexpected game crash (0 - no 'default'; 1 - yes)");
@@ -480,6 +484,9 @@ namespace Config
 				config.keys.snapshot = 12;
 				Config::Set(CONFIG_KEYS, "Screenshot", config.keys.snapshot);
 			}
+
+			for (DWORD i = 0; i < BindCount; ++i)
+				Config::Set(CONFIG_BINDS, bindsList[i].key, bindsList[i].def);
 
 			{
 				config.colors.active.satHue.hueShift = 0.5f;
@@ -539,6 +546,7 @@ namespace Config
 			config.windowedMode = (BOOL)Config::Get(CONFIG_DISCIPLE, config.type.sacred ? "InWindow" : "DisplayMode", TRUE);
 
 			config.scene.all = (BOOL)Config::Get(CONFIG_DISCIPLE, "IncludeCampaign", FALSE);
+			config.skipIntro = !(BOOL)Config::Get(CONFIG_DISCIPLE, "Intro", TRUE);
 			config.editorCamp = (BOOL)Config::Get(CONFIG_DISCIPLE, "ScenEditDatabase", FALSE);
 
 			{
@@ -564,7 +572,7 @@ namespace Config
 
 				value = Config::Get(CONFIG_WRAPPER, "Interpolation", InterpolateHermite);
 				config.image.interpolation = *(InterpolationFilter*)&value;
-				if (config.image.interpolation < InterpolateNearest || config.image.interpolation > InterpolateLanczos)
+				if (config.image.interpolation < InterpolateNearest || config.image.interpolation > InterpolateFsr)
 					config.image.interpolation = InterpolateHermite;
 
 				value = Config::Get(CONFIG_WRAPPER, "Upscaling", UpscaleNone);
@@ -598,6 +606,10 @@ namespace Config
 					break;
 				}
 
+				config.image.sharpness = (BYTE)Config::Get(CONFIG_WRAPPER, "FsrSharpness", FSR_SHARP_DEFAULT);
+				if (config.image.sharpness > FSR_SHARP_MAX)
+					config.image.sharpness = FSR_SHARP_DEFAULT;
+
 				if (!config.type.sacred)
 				{
 					BOOL value = Config::Get(CONFIG_DISCIPLE, "ShowInterfBorder", TRUE);
@@ -617,7 +629,7 @@ namespace Config
 				config.speed.index = *(DWORD*)&value;
 				config.speed.value = config.speed.index + 10;
 
-				config.speed.enabled = (BOOL)Config::Get(CONFIG_WRAPPER, "SpeedEnabled", TRUE);
+				config.speed.enabled = (BOOL)Config::Get(CONFIG_WRAPPER, "SpeedEnabled", FALSE);
 
 				value = Config::Get(CONFIG_WRAPPER, "BattleSpeed", 20);
 				if (value < 0)
@@ -651,14 +663,11 @@ namespace Config
 				if (!config.zoom.value || config.zoom.value > 100)
 					config.zoom.value = 100;
 
+				value = Config::Get(CONFIG_WRAPPER, "MapZoom", 100);
+				config.mapZoom.value = value < MAP_ZOOM_MIN ? MAP_ZOOM_MIN : value > MAP_ZOOM_MAX ? MAP_ZOOM_MAX : *(DWORD*)&value;
+				config.mapZoom.current = 1.0f;
+
 				config.locales.current.id = (LCID)Config::Get(CONFIG_WRAPPER, "Locale", (INT)GetUserDefaultLCID());
-
-				value = Config::Get(CONFIG_WRAPPER, "MessageTimeout", 15);
-				if (value < 1)
-					value = 1;
-
-				config.msgTimeScale.time = *(DWORD*)&value;
-				config.msgTimeScale.value = 100 / config.msgTimeScale.time;
 
 				config.cpu.sse2 = !(BOOL)Config::Get(CONFIG_WRAPPER, "NoSSE2", FALSE);
 
@@ -1139,6 +1148,84 @@ namespace Config
 	BOOL IsZoomed()
 	{
 		return config.zoom.glallow && config.zoom.enabled && config.borders.active && (!config.battle.active || !config.battle.wide || config.battle.zoomable);
+	}
+
+	VOID GetMapZoomRect(RECT* rect)
+	{
+		*rect = { 0, 0, *(LONG*)&config.mode->width - MAP_ZOOM_PANEL_WIDTH, *(LONG*)&config.mode->height - MAP_ZOOM_BAR_HEIGHT };
+	}
+
+	BOOL IsMapZoomed()
+	{
+		return config.mapZoom.allowed && config.mapZoom.current > 1.001f;
+	}
+
+	FLOAT GetMapZoomTarget()
+	{
+		return config.mapZoom.allowed && config.screen.strategic && !config.screen.popup ? config.mapZoom.value * 0.01f : 1.0f;
+	}
+
+	BOOL IsMapZoomPending()
+	{
+		return config.mapZoom.allowed && config.mapZoom.current != GetMapZoomTarget();
+	}
+
+	BOOL StepMapZoom()
+	{
+		static DWORD lastTime;
+		static BOOL animating;
+		DWORD now = timeGetTime();
+		DWORD delta = animating ? now - lastTime : 16;
+		lastTime = now;
+		if (delta > 50)
+			delta = 50;
+
+		FLOAT target = GetMapZoomTarget();
+		FLOAT current = config.mapZoom.current;
+		animating = current != target;
+		if (!animating)
+			return FALSE;
+
+		FLOAT k = delta * 0.012f;
+		current += (target - current) * (k > 1.0f ? 1.0f : k);
+		FLOAT diff = target - current;
+		if (diff < 0.002f && diff > -0.002f)
+			current = target;
+
+		config.mapZoom.current = current;
+		return TRUE;
+	}
+
+	VOID MapZoomPoint(LPPOINT p)
+	{
+		RECT rect;
+		GetMapZoomRect(&rect);
+		FLOAT zoom = config.mapZoom.current;
+		if (!config.mapZoom.allowed || zoom <= 1.001f || p->x >= rect.right || p->y >= rect.bottom)
+			return;
+
+		FLOAT cx = rect.right * 0.5f;
+		FLOAT cy = rect.bottom * 0.5f;
+		if (p->x > MAP_ZOOM_EDGE)
+			p->x = LONG(cx + (p->x - cx) / zoom);
+		if (p->y > MAP_ZOOM_EDGE)
+			p->y = LONG(cy + (p->y - cy) / zoom);
+	}
+
+	VOID MapUnzoomPoint(LPPOINT p)
+	{
+		RECT rect;
+		GetMapZoomRect(&rect);
+		FLOAT zoom = config.mapZoom.current;
+		if (!config.mapZoom.allowed || zoom <= 1.001f || p->x >= rect.right || p->y >= rect.bottom)
+			return;
+
+		FLOAT cx = rect.right * 0.5f;
+		FLOAT cy = rect.bottom * 0.5f;
+		LONG x = LONG(cx + (p->x - cx) * zoom);
+		LONG y = LONG(cy + (p->y - cy) * zoom);
+		p->x = x < 0 ? 0 : x >= rect.right ? rect.right - 1 : x;
+		p->y = y < 0 ? 0 : y >= rect.bottom ? rect.bottom - 1 : y;
 	}
 
 	VOID CalcZoomed(Size* dst, Size* src, DWORD scale)

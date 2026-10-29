@@ -41,6 +41,7 @@ namespace Hooks
 	//======================================================================= 
 
 	#define BINKCOPYALL           0x80000000L
+	#define BINKFILEHANDLE        0x00800000L
  
 	#define BINKSURFACEP8 0
 	#define BINKSURFACE24 1
@@ -286,6 +287,14 @@ namespace Hooks
 		DWORD clouds_hook;
 		DWORD clouds_init;
 		DWORD clouds_check;
+
+		DWORD battle_save;
+		DWORD battle_save_app;
+		DWORD battle_save_app_net;
+		DWORD battle_save_app_host;
+		DWORD battle_save_phase;
+		DWORD battle_save_phase_ready;
+		DWORD battle_save_move;
 	};
 
 	struct BlendData {
@@ -316,6 +325,7 @@ namespace Hooks
 	INT __stdcall MessageBoxHook(HWND, LPCSTR, LPCSTR, UINT);
 	VOID PrintText(CHAR* str);
 	VOID SetGameSpeed();
+	BOOL ContinueGame(HWND hWnd);
 
 	VOID Load();
 }

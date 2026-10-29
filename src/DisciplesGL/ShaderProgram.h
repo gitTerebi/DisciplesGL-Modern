@@ -91,5 +91,6 @@ public:
 
 	VOID Use();
 	VOID Update(DWORD, Adjustment*);
+	GLint GetLocation(const CHAR*);
 	static DWORD CompareAdjustments(const Adjustment*, const Adjustment*);
 };

@@ -72,9 +72,6 @@ bool IsBlendingNeeded(const ivec4 blend) {
 
 void main() {
 	vec4 check = texture(tex01, fTex);
-	if (check == texture(tex02, fTex))
-		discard;
-
 #ifdef ALPHA
 	if (check.a != 0.0) {
 #endif

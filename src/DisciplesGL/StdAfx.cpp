@@ -38,9 +38,23 @@ void DebugLog(const char* format, ...)
 		--length;
 	StrCopy(path + length, "DisciplesGL-debug.log");
 
-	HANDLE file = CreateFile(path, FILE_APPEND_DATA, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+	HANDLE file = CreateFile(path, FILE_APPEND_DATA | FILE_READ_ATTRIBUTES, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 	if (file == INVALID_HANDLE_VALUE)
 		return;
+
+	if (GetFileSize(file, NULL) >= 2 * 1024 * 1024)
+	{
+		CloseHandle(file);
+
+		CHAR oldPath[MAX_PATH];
+		StrCopy(oldPath, path);
+		StrCat(oldPath, ".old");
+		MoveFileEx(path, oldPath, MOVEFILE_REPLACE_EXISTING);
+
+		file = CreateFile(path, FILE_APPEND_DATA | FILE_READ_ATTRIBUTES, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+		if (file == INVALID_HANDLE_VALUE)
+			return;
+	}
 
 	CHAR text[512];
 	SYSTEMTIME time;

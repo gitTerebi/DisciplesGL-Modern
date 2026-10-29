@@ -42,9 +42,6 @@ out vec4 fragColor;
 const vec4 dt = vec4(1.0);
 
 void main() {
-	if (texture(tex01, fTex) == texture(tex02, fTex))
-		discard;
-
 	vec4 c11 = texture(tex01, (floor(fTex * texSize) + 0.5) / texSize); 
 
 	vec2 texel;

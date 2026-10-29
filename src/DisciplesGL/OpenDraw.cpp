@@ -570,6 +570,8 @@ VOID OpenDraw::ScaleMouse(LPPOINT p)
 		p->y = 0;
 	else if (p->y >= sz->cy)
 		p->y = sz->cy - 1;
+
+	Config::MapZoomPoint(p);
 }
 
 OpenDraw::OpenDraw(IDrawUnknown** list)

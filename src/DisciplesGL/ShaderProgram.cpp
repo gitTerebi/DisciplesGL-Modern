@@ -189,6 +189,11 @@ VOID ShaderProgram::Use()
 	GLUseProgram(this->id);
 }
 
+GLint ShaderProgram::GetLocation(const CHAR* name)
+{
+	return GLGetUniformLocation(this->id, name);
+}
+
 DWORD ShaderProgram::CompareAdjustments(const Adjustment* cmp1, const Adjustment* cmp2)
 {
 	DWORD res = 0;

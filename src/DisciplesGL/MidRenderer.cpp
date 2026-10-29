@@ -37,7 +37,12 @@ MidRenderer::MidRenderer(OpenDraw* ddraw)
 VOID MidRenderer::Begin()
 {
 	config.zoom.glallow = TRUE;
+	config.mapZoom.allowed = FALSE;
+	config.mapZoom.current = 1.0f;
 	PostMessage(this->ddraw->hWnd, config.msgMenu, NULL, NULL);
+
+	if (this->ddraw->filterState.interpolation > InterpolateLanczos)
+		this->ddraw->filterState.interpolation = InterpolateLanczos;
 
 	this->isTrueColor = config.mode->bpp != 16 || config.bpp32Hooked;
 	this->maxTexSize = GetPow2(config.mode->width > config.mode->height ? config.mode->width : config.mode->height);

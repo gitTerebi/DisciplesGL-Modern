@@ -54,6 +54,8 @@ VOID OldRenderer::Begin()
 	this->frameCount = framePerWidth * framePerHeight;
 
 	config.zoom.glallow = this->frameCount == 1;
+	config.mapZoom.allowed = FALSE;
+	config.mapZoom.current = 1.0f;
 	PostMessage(this->ddraw->hWnd, config.msgMenu, NULL, NULL);
 
 	this->frames = (Frame*)MemoryAlloc(this->frameCount * sizeof(Frame));

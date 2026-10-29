@@ -44,4 +44,5 @@ public:
 
 	BOOL Check();
 	VOID Use(DWORD, BOOL);
+	GLint GetLocation(const CHAR*);
 };

@@ -116,7 +116,7 @@ VOID Renderer::Render()
 
 	Size* frameSize = &stateBuffer->size;
 	BOOL ready = stateBuffer->isReady;
-	BOOL force = (this->program && this->program->Check() || this->ddraw->viewport.refresh) && frameSize->width && frameSize->height;
+	BOOL force = (this->program && this->program->Check() || this->ddraw->viewport.refresh || Config::IsMapZoomPending()) && frameSize->width && frameSize->height;
 	if (ready || force)
 	{
 		if (ready)

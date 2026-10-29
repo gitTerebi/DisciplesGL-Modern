@@ -4,12 +4,18 @@ A maintained build of the DisciplesGL OpenGL wrapper for Disciples II.
 
 ## Features
 
-- **Keybinds** (Options > Keybinds): rebind any game hotkey on the map, town, army, spell and battle screens, plus the wrapper's F-key shortcuts. Each bind only works on its own screen, so one key can do different things on the map and in battle.
+- **Keybinds** (Options > Keybinds): rebind any game hotkey on the map, town, army, spell and battle screens, plus the wrapper's F-key shortcuts. Each bind only works on its own screen, so one key can do different things on the map and in battle. Picking a key that is already used on the same screen clears the old bind. A new config starts with left-hand defaults: W/A/S/D scroll, E ends the turn, R opens the spell book, F goes to the capital, Space accepts popups and Q starts auto battle.
+- **Quick load** (F9 by default): quick-loads on the map, and on the main menu it loads the newest save straight away.
+- **Battle close** key for battles, unbound by default.
+- **Battle save** (v2.02b): the game writes a `BattleSave` save just before a stack moves to attack, so a lost battle can be replayed.
+- **FSR filter** (Interpolation > FSR, OpenGL 3): AMD FidelityFX Super Resolution upscaling, with a sharpness setting from Off to Maximum (Interpolation > FSR Sharpness).
+- **Skip intro videos** (Options > Skip Intro Videos): the startup videos are replaced with a blank clip.
 - **Popup key**: one key (for example Space) accepts popups and menus, backs out of full screens such as the city screen, and does nothing on the bare map.
 - **Separate speeds** for the map and for battles.
 - **Maximized window** on start, sized to the game's shape.
-- **Autosave archive** that keeps the last 15 turns as rolling saves.
+- **Autosave archive** that keeps the last 10 turns as rolling saves.
 - **Smooth (filtered) background** in HD and wide modes.
+- Animation speed is off by default. In-game messages stay for 10 seconds, and the Message Timeout, Fast AI, Cold CPU and Always Active menu items are gone (the ini settings still work for the last three).
 
 ## Fixes
 
@@ -40,4 +46,4 @@ It builds `src\DisciplesGL\DisciplesGL.vcxproj` (Release, Win32) and copies `C4d
 - `HookerLib`: the matching HookerLib source and prebuilt hooker files.
 - `dist`: ready-to-use runtime files.
 
-The wrapper writes a debug log, `DisciplesGL-debug.log`, next to the game executable.
+The wrapper writes a debug log, `DisciplesGL-debug.log`, next to the game executable. When it reaches 2 MB it is renamed to `DisciplesGL-debug.log.old` and a new log starts.

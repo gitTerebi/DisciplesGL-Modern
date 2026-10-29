@@ -161,6 +161,8 @@ namespace Hooks
 		0x00534E63, 0x0052F05C, 0x004E6F0F, 0x004E60C2, 0x00000000, 0x0040406E, 0x0051C4D8, // str_print
 
 		0x004012C1, 0x005C3E70, 0x005BA60E, 0x005BA8C9, // clouds_check
+
+		0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000,
 #pragma endregion
 
 #pragma region v2_01
@@ -208,6 +210,8 @@ namespace Hooks
 		0x00534C77, 0x0052EC27, 0x004E69E7, 0x004E5B9A, 0x00000000, 0x004041B0, 0x0051C0A8,
 
 		0x004012C1, 0x005C3B26, 0x005BA204, 0x005BA4BF,
+
+		0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000,
 #pragma endregion
 
 #pragma region v2_01 - Steam
@@ -255,6 +259,8 @@ namespace Hooks
 		0x0053533C, 0x0052F3E8, 0x004E69DE, 0x004E5BA0, 0x00000000, 0x00403DFF, 0x0051C6FA,
 
 		0x00000000, 0x005C3ECC, 0x005BA707, 0x005BA9C2,
+
+		0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000,
 #pragma endregion
 
 #pragma region v2_02a
@@ -302,6 +308,8 @@ namespace Hooks
 		0x00535147, 0x0052F1E1, 0x004E6F78, 0x004E612B, 0x00000000, 0x004041C6, 0x0051C5C1,
 
 		0x004012D7, 0x005C3E98, 0x005BA6AA, 0x005BA965,
+
+		0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000,
 #pragma endregion
 
 #pragma region v2_02b
@@ -349,6 +357,8 @@ namespace Hooks
 		0x005339EE, 0x0052DB6A, 0x004E66AF, 0x004E584B, 0x00000000, 0x00403C7D, 0x0051B292,
 
 		0x00000000, 0x005C277F, 0x005B8F00, 0x005B91BB,
+
+		0x0048D06B, 0x00401A1A, 0x00402586, 0x00402594, 0x004C90C0, 0x00406112, 0x004062A9, // battle_save
 #pragma endregion
 
 #pragma region v3_00
@@ -396,6 +406,8 @@ namespace Hooks
 		0x00537C14, 0x00531D04, 0x004EA19F, 0x004E9352, 0x00000000, 0x00403FA0, 0x0051EE45,
 
 		0x004012D4, 0x005C7162, 0x005BD8EA, 0x005BDBA5,
+
+		0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000,
 #pragma endregion
 
 #pragma region v3_00 - Steam
@@ -443,6 +455,8 @@ namespace Hooks
 		0x0053842D, 0x005325B2, 0x004EA2D3, 0x004E9495, 0x00000000, 0x00403CB9, 0x0051F84D,
 
 		0x00000000, 0x005C7C18, 0x005BE1F5, 0x005BE4B0,
+
+		0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000,
 #pragma endregion
 
 #pragma region v3_01a
@@ -490,6 +504,8 @@ namespace Hooks
 		0x005384C4, 0x0053260D, 0x004EAA85, 0x004E9C47, 0x00000000, 0x00403F62, 0x0051F785,
 
 		0x0040127A, 0x005C818B, 0x005BE762, 0x005BEA1D,
+
+		0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000,
 #pragma endregion
 
 #pragma region v3_01b
@@ -537,6 +553,8 @@ namespace Hooks
 		0x00537ACC, 0x00531B25, 0x004E9F37, 0x004E90E2, 0x00000000, 0x00403C8B, 0x0051EB96,
 
 		0x00000000, 0x005C7174, 0x005BD7EA, 0x005BDAA5,
+
+		0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000,
 #pragma endregion
 
 #pragma region v2_00 Editor - Steam
@@ -584,6 +602,8 @@ namespace Hooks
 		0x004903E5, 0x00495435, 0x004F066C, 0x004166BC, 0x00415D6B, 0x00403156, 0x004B65A9,
 
 		0x00000000, 0x00000000, 0x00000000, 0x00000000,
+
+		0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000,
 #pragma endregion
 
 #pragma region v2_01 Editor
@@ -631,6 +651,8 @@ namespace Hooks
 		0x0048FADD, 0x00494AED, 0x004EFD1B, 0x0041683E, 0x00415ED5, 0x004030B3, 0x004B5C57,
 
 		0x00000000, 0x00000000, 0x00000000, 0x00000000,
+
+		0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000,
 #pragma endregion
 
 #pragma region v2_02a Editor
@@ -678,6 +700,8 @@ namespace Hooks
 		0x0048FADD, 0x00494AED, 0x004EFD1B, 0x0041683E, 0x00415ED5, 0x004030B3, 0x004B5C57,
 
 		0x00000000, 0x00000000, 0x00000000, 0x00000000,
+
+		0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000,
 #pragma endregion
 
 #pragma region v2_02b Editor
@@ -725,6 +749,8 @@ namespace Hooks
 		0x0048F771, 0x004947D4, 0x004EFBAC, 0x0041675B, 0x00415DE8, 0x004030A1, 0x004B59E9,
 
 		0x00000000, 0x00000000, 0x00000000, 0x00000000,
+
+		0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000,
 #pragma endregion
 
 #pragma region v3_00 Editor - Steam
@@ -772,6 +798,8 @@ namespace Hooks
 		0x00493001, 0x004980CE, 0x004F48C9, 0x004169C0, 0x0041606F, 0x00403195, 0x004B91B6,
 
 		0x00000000, 0x00000000, 0x00000000, 0x00000000,
+
+		0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000,
 #pragma endregion
 
 #pragma region v3_01 Editor
@@ -818,7 +846,9 @@ namespace Hooks
 		0x00000000, 0x00000000, 0x00000000, 0x00666484, 0x00563C2D, 0x00000000, 0x0044EBD5,
 		0x0049209B, 0x004970EC, 0x004F3C0C, 0x0041670E, 0x00415DBD, 0x00403079, 0x004B816B,
 
-		0x00000000, 0x00000000, 0x00000000, 0x00000000
+		0x00000000, 0x00000000, 0x00000000, 0x00000000,
+
+		0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000
 #pragma endregion
 	};
 
@@ -833,6 +863,7 @@ namespace Hooks
 
 	struct {
 		UINT AIMESSAGE;
+		UINT MID_STARTMENU;
 	} msgs;
 
 	DWORD aiTime;
@@ -886,6 +917,8 @@ namespace Hooks
 		UINT id = RegisterWindowMessage(lpString);
 		if (!StrCompare(lpString, "AIMESSAGE"))
 			msgs.AIMESSAGE = id;
+		else if (!StrCompare(lpString, "MID_STARTMENU"))
+			msgs.MID_STARTMENU = id;
 
 		return id;
 	}
@@ -1179,6 +1212,11 @@ namespace Hooks
 						lpPoint->y = LONG(fy * kx * (FLOAT(lpPoint->y - rect.top) - offset.y) + ((FLOAT)config.mode->height - config.zoom.sizeFloat.height) * 0.5f) + rect.top;
 					}
 
+					POINT p = { lpPoint->x - rect.left, lpPoint->y - rect.top };
+					Config::MapZoomPoint(&p);
+					lpPoint->x = p.x + rect.left;
+					lpPoint->y = p.y + rect.top;
+
 					last = *lpPoint;
 				}
 
@@ -1235,6 +1273,11 @@ namespace Hooks
 		RECT rect;
 		if (GetClientRect(hWndMain, &rect) && ClientToScreen(hWndMain, (LPPOINT)&rect))
 		{
+			POINT p = { X - rect.left, Y - rect.top };
+			Config::MapUnzoomPoint(&p);
+			X = p.x + rect.left;
+			Y = p.y + rect.top;
+
 			if (!config.windowedMode && config.borderless.mode)
 				rect.bottom -= BORDERLESS_OFFSET;
 
@@ -1297,6 +1340,44 @@ namespace Hooks
 			return Main::DrawCreateEx(NULL, ppv, riid, NULL);
 
 		return CoCreateInstance(rclsid, pUnkOuter, dwClsContext, riid, ppv);
+	}
+
+	DWORD pBinkOpen;
+	CHAR blankBikPath[MAX_PATH];
+	VOID* __stdcall BinkOpenHook(const CHAR* name, DWORD flags)
+	{
+		if (config.skipIntro && name && !(flags & BINKFILEHANDLE))
+		{
+			const CHAR* file = StrLastChar(name, '\\');
+			file = file ? file + 1 : name;
+			if (!StrCompareInsensitive(file, "sf.bik") || !StrCompareInsensitive(file, "intro.bik"))
+			{
+				if (!*blankBikPath)
+				{
+					Stream stream;
+					if (Main::LoadResource(MAKEINTRESOURCE(IDR_BLANK_BIK), &stream) && GetTempPath(MAX_PATH - 32, blankBikPath))
+					{
+						StrCat(blankBikPath, "DisciplesGL-blank.bik");
+						HANDLE hFile = CreateFile(blankBikPath, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+						DWORD written = 0;
+						if (hFile == INVALID_HANDLE_VALUE || !WriteFile(hFile, stream.data, stream.size, &written, NULL) || written != stream.size)
+							*blankBikPath = NULL;
+						if (hFile != INVALID_HANDLE_VALUE)
+							CloseHandle(hFile);
+					}
+				}
+
+				if (*blankBikPath)
+				{
+					VOID* hBnk = ((VOID*(__stdcall*)(const CHAR*, DWORD))pBinkOpen)(blankBikPath, flags);
+					DebugLog("BinkOpen %s replaced with blank %s", name, hBnk ? "ok" : "failed");
+					if (hBnk)
+						return hBnk;
+				}
+			}
+		}
+
+		return ((VOID*(__stdcall*)(const CHAR*, DWORD))pBinkOpen)(name, flags);
 	}
 
 #pragma region 32 BPP
@@ -3530,16 +3611,45 @@ namespace Hooks
 		}
 	}
 
+	const CHAR* GetRttiName(DWORD* object)
+	{
+		DWORD* vTable = (DWORD*)*object;
+		if (!vTable)
+			return NULL;
+
+		DWORD* locator = (DWORD*)vTable[-1];
+		if (!locator || locator[0])
+			return NULL;
+
+		DWORD typeDescriptor = locator[3];
+		return typeDescriptor ? (const CHAR*)(typeDescriptor + 8) : NULL;
+	}
+
 	DWORD battleAddress;
+	BOOL bordersDetect;
 	VOID __stdcall SetAnimSpeed();
 	VOID __stdcall CheckBordersV2(DWORD* object, BOOL isborder)
 	{
-		config.borders.active = isborder & 1;
+		BOOL bordered = isborder & 1;
+		if (bordersDetect)
+			config.borders.active = bordered;
 		config.screen.popup = *(object + 2) == 0xFFFFFFFF;
+
+		static DWORD lastVTable;
+		static BOOL battleClass;
+		if (*object != lastVTable)
+		{
+			lastVTable = *object;
+			const CHAR* name = GetRttiName(object);
+			config.screen.mainMenu = name && !StrCompare(name, ".?AVCMenuMain@@");
+			battleClass = name && !StrCompare(name, ".?AVCBattleViewerInterf@@");
+			config.screen.strategic = name && !StrCompare(name, ".?AVCStratInterf@@");
+			DebugLog("Screen %s popup=%d", name ? name : "(unknown)", config.screen.popup);
+		}
 
 		if (!config.screen.popup)
 		{
-			BOOL battleActive = *object == battleAddress;
+			BOOL battleActive = battleAddress ? *object == battleAddress : battleClass;
 			if (config.battle.active != battleActive)
 			{
 				config.battle.active = battleActive;
@@ -3547,7 +3657,7 @@ namespace Hooks
 			}
 		}
 
-		config.screen.map = !config.screen.popup && !config.borders.active && !config.battle.active;
+		config.screen.map = !config.screen.popup && !bordered && !config.battle.active;
 
 		static DWORD menuScreens[32];
 		static DWORD menuCount;
@@ -3572,7 +3682,7 @@ namespace Hooks
 		}
 
 		config.screen.menu = menu && !config.screen.popup;
-		config.screen.full = !config.screen.popup && config.borders.active && !config.battle.active && !config.screen.menu;
+		config.screen.full = !config.screen.popup && bordered && !config.battle.active && !config.screen.menu;
 	}
 
 	VOID __declspec(naked) hook_00538FEB()
@@ -3585,6 +3695,22 @@ namespace Hooks
 			call CheckBordersV2
 
 			xor eax, eax
+			retn
+		}
+	}
+
+	VOID __declspec(naked) hook_00538FEB_keep()
+	{
+		__asm {
+			call [eax+0x24]
+
+			push eax
+			push eax
+			push edi
+			call CheckBordersV2
+
+			pop eax
+			test al, al
 			retn
 		}
 	}
@@ -3691,6 +3817,61 @@ namespace Hooks
 	{
 		SetAnimSpeed();
 		SetMapSpeed();
+	}
+
+	BOOL ContinueGame(HWND hWnd)
+	{
+		if (!msgs.MID_STARTMENU)
+			return FALSE;
+
+		CHAR dir[MAX_PATH];
+		Config::Get("Installation", "savegame", "", dir, sizeof(dir));
+		if (!*dir || !StrCompareInsensitive(dir, "Installed"))
+		{
+			GetModuleFileName(NULL, dir, sizeof(dir));
+			CHAR* slash = StrLastChar(dir, '\\');
+			if (!slash)
+				return FALSE;
+			StrCopy(slash + 1, "SaveGame");
+		}
+
+		DWORD dirLen = StrLength(dir);
+		if (dir[dirLen - 1] != '\\')
+			dir[dirLen++] = '\\';
+		if (dirLen >= MAX_PATH - 8)
+			return FALSE;
+
+		CHAR path[MAX_PATH];
+		StrCopy(dir + dirLen, "*.sg");
+		path[0] = NULL;
+		FILETIME newest = {};
+		WIN32_FIND_DATA find;
+		HANDLE hFind = FindFirstFile(dir, &find);
+		if (hFind != INVALID_HANDLE_VALUE)
+		{
+			do
+			{
+				if (!(find.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) && CompareFileTime(&find.ftLastWriteTime, &newest) > 0 && dirLen + StrLength(find.cFileName) < MAX_PATH)
+				{
+					newest = find.ftLastWriteTime;
+					MemoryCopy(path, dir, dirLen);
+					StrCopy(path + dirLen, find.cFileName);
+				}
+			} while (FindNextFile(hFind, &find));
+			FindClose(hFind);
+		}
+
+		if (!path[0])
+			return FALSE;
+
+		CHAR*(__cdecl* gameStrDup)(const CHAR*) = (CHAR*(__cdecl*)(const CHAR*))GetProcAddress(GetModuleHandle("MSVCRT.dll"), "_strdup");
+		CHAR* file = gameStrDup ? gameStrDup(path) : NULL;
+		if (!file)
+			return FALSE;
+
+		DebugLog("Continue game %s", path);
+		PostMessage(hWnd, msgs.MID_STARTMENU, 0, (LPARAM)file);
+		return TRUE;
 	}
 
 	DWORD sub_CreateAnimation;
@@ -5037,7 +5218,7 @@ namespace Hooks
 	DWORD __stdcall MessageTimeout()
 	{
 		static TimeScale time;
-		return GetTimeSpeed(&time, config.msgTimeScale.value);
+		return GetTimeSpeed(&time, 10);
 	}
 
 	VOID __declspec(naked) hook_00484CD0()
@@ -6014,7 +6195,7 @@ namespace Hooks
 	HANDLE hAutoSave = NULL;
 	CHAR autoSaveFile[MAX_PATH];
 	DWORD autoSaveCount = 0;
-	const DWORD AUTO_SAVE_ARCHIVE_LIMIT = 15;
+	const DWORD AUTO_SAVE_ARCHIVE_LIMIT = 10;
 
 	struct AutoSaveArchive
 	{
@@ -6906,8 +7087,50 @@ namespace Hooks
 			return ((DWORD**)global)[50];
 	}
 
+#pragma region Battle Save
+	DWORD* battleSaveView;
+	DWORD isoViewVTable;
+	DWORD sub_BattleSave;
+	DWORD sub_BattleSaveApp;
+	DWORD sub_BattleSaveAppNet;
+	DWORD sub_BattleSaveAppHost;
+	DWORD sub_BattleSavePhase;
+	DWORD sub_BattleSavePhaseReady;
+	DWORD sub_SendStackMove;
+
+	VOID SaveBeforeBattle(DWORD* view)
+	{
+		if (*(LONG*)((BYTE*)view + 0xF0) > 0)
+			return;
+
+		DWORD phase = ((DWORD(__thiscall*)(DWORD*))sub_BattleSavePhase)(view);
+		if (!((BYTE(__thiscall*)(DWORD))sub_BattleSavePhaseReady)(phase))
+			return;
+
+		DWORD app = ((DWORD(*)())sub_BattleSaveApp)();
+		if (((BYTE(__thiscall*)(DWORD))sub_BattleSaveAppNet)(app) && !((BYTE(__thiscall*)(DWORD))sub_BattleSaveAppHost)(app))
+			return;
+
+		((VOID(__thiscall*)(BYTE*, const CHAR*))sub_BattleSave)((BYTE*)view - 4, "BattleSave");
+		DebugLog("Battle save before stack move");
+	}
+
+	// The save goes to the game server on the same queue as the move, so sending it first saves the state before the move
+	VOID __fastcall SendStackMove(DWORD phase, DWORD /*edx*/, DWORD a1, DWORD a2, DWORD a3, DWORD a4)
+	{
+		DWORD* view = battleSaveView;
+		if (view)
+		{
+			battleSaveView = NULL;
+			SaveBeforeBattle(view);
+		}
+
+		((VOID(__thiscall*)(DWORD, DWORD, DWORD, DWORD, DWORD))sub_SendStackMove)(phase, a1, a2, a3, a4);
+	}
+#pragma endregion
+
 	DWORD sub_MouseAction;
-	BOOL __fastcall MouseAction(DWORD* global, DWORD /*edx*/, UINT uMsg, POINT* pt)
+	BOOL MouseActionInner(DWORD* global, UINT uMsg, POINT* pt)
 	{
 		if (*mouseAction.allow)
 		{
@@ -6976,6 +7199,17 @@ namespace Hooks
 				((BOOL(__thiscall*)(DWORD*, UINT, POINT*))sub_MouseAction)(global, WM_LBUTTONUP, pt);
 		}
 
+		return res;
+	}
+
+	BOOL __fastcall MouseAction(DWORD* global, DWORD /*edx*/, UINT uMsg, POINT* pt)
+	{
+		DWORD* view = battleSaveView;
+		if ((uMsg == WM_LBUTTONDOWN || uMsg == WM_LBUTTONUP) && sub_SendStackMove && *global == isoViewVTable && currentCursor == CURSOR_BATTLE)
+			battleSaveView = global;
+
+		BOOL res = MouseActionInner(global, uMsg, pt);
+		battleSaveView = view;
 		return res;
 	}
 
@@ -7653,7 +7887,6 @@ namespace Hooks
 
 		// Messages real time
 		PatchCall(hooker, hookSpace->msgTimeHook, hook_00484CD0);
-		config.msgTimeScale.hooked = TRUE;
 		if (deepHooksStage == 16)
 		{
 			DebugLog("DeepHooksStage 16 stop after message time");
@@ -7798,6 +8031,20 @@ namespace Hooks
 			mouseAction.allow = (BYTE*)f(hookSpace->mouse_allow_flag);
 			sub_GetMapCenter = f(hookSpace->map_center_get);
 			sub_SetMapCenter = f(hookSpace->map_center_set);
+
+			if (hookSpace->battle_save && hookSpace->waitShowCursor)
+			{
+				RedirectAllCalls(hooker, hookSpace->battle_save_move, SendStackMove, IMAGE_SCN_MEM_EXECUTE);
+				sub_SendStackMove = f(hookSpace->battle_save_move);
+
+				isoViewVTable = f(hookSpace->iso_view_interface);
+				sub_BattleSave = f(hookSpace->battle_save);
+				sub_BattleSaveApp = f(hookSpace->battle_save_app);
+				sub_BattleSaveAppNet = f(hookSpace->battle_save_app_net);
+				sub_BattleSaveAppHost = f(hookSpace->battle_save_app_host);
+				sub_BattleSavePhase = f(hookSpace->battle_save_phase);
+				sub_BattleSavePhaseReady = f(hookSpace->battle_save_phase_ready);
+			}
 		}
 
 		// AI turn
@@ -8040,8 +8287,8 @@ namespace Hooks
 					if (!config.zoom.allowed)
 						config.zoom.enabled = FALSE;
 
-					if (!hookSpace->border_nop || config.mode->width > *(DWORD*)&GAME_WIDTH || config.mode->height > *(DWORD*)&GAME_HEIGHT)
-						PatchCall(hooker, hookSpace->border_hook - 3, hook_00538FEB); // detect border
+					bordersDetect = !hookSpace->border_nop || config.mode->width > *(DWORD*)&GAME_WIDTH || config.mode->height > *(DWORD*)&GAME_HEIGHT;
+					PatchCall(hooker, hookSpace->border_hook - 3, bordersDetect ? hook_00538FEB : hook_00538FEB_keep); // detect border
 				}
 
 				// Blit count
@@ -8222,6 +8469,8 @@ namespace Hooks
 				PatchImportByName(hooker, "SetWindowLongA", SetWindowLongHook);
 
 				PatchImportByName(hooker, "MessageBoxA", MessageBoxHook);
+
+				PatchImportByName(hooker, "_BinkOpen@8", BinkOpenHook, &pBinkOpen);
 
 				if (!PatchImportByName(hooker, "RegisterWindowMessageA", RegisterWindowMessageHook))
 					PatchImportByName(hooker, "RegisterClipboardFormatA", RegisterWindowMessageHook); // for cracks

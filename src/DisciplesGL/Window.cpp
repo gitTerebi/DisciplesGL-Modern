@@ -204,6 +204,7 @@
 			EnableMenuItem(config.menu, IDM_FILT_HERMITE, MF_BYCOMMAND | (config.gl.version.value >= GL_VER_2_0 ? MF_ENABLED : (MF_DISABLED | MF_GRAYED)));
 			EnableMenuItem(config.menu, IDM_FILT_CUBIC, MF_BYCOMMAND | (config.gl.version.value >= GL_VER_2_0 ? MF_ENABLED : (MF_DISABLED | MF_GRAYED)));
 			EnableMenuItem(config.menu, IDM_FILT_LANCZOS, MF_BYCOMMAND | (config.gl.version.value >= GL_VER_2_0 ? MF_ENABLED : (MF_DISABLED | MF_GRAYED)));
+			EnableMenuItem(config.menu, IDM_FILT_FSR, MF_BYCOMMAND | (config.gl.version.value >= GL_VER_3_0 ? MF_ENABLED : (MF_DISABLED | MF_GRAYED)));
 
 			DWORD menuId;
 			switch (config.image.interpolation)
@@ -220,6 +221,9 @@
 			case InterpolateLanczos:
 				menuId = config.gl.version.value >= GL_VER_2_0 ? IDM_FILT_LANCZOS : (config.gl.version.value ? IDM_FILT_LINEAR : IDM_FILT_OFF);
 				break;
+			case InterpolateFsr:
+				menuId = config.gl.version.value >= GL_VER_3_0 ? IDM_FILT_FSR : (config.gl.version.value >= GL_VER_2_0 ? IDM_FILT_LANCZOS : (config.gl.version.value ? IDM_FILT_LINEAR : IDM_FILT_OFF));
+				break;
 			default:
 				menuId = IDM_FILT_OFF;
 				break;
@@ -230,11 +234,19 @@
 			CheckMenuItem(config.menu, IDM_FILT_HERMITE, MF_BYCOMMAND | (menuId == IDM_FILT_HERMITE ? MF_CHECKED : MF_UNCHECKED));
 			CheckMenuItem(config.menu, IDM_FILT_CUBIC, MF_BYCOMMAND | (menuId == IDM_FILT_CUBIC ? MF_CHECKED : MF_UNCHECKED));
 			CheckMenuItem(config.menu, IDM_FILT_LANCZOS, MF_BYCOMMAND | (menuId == IDM_FILT_LANCZOS ? MF_CHECKED : MF_UNCHECKED));
+			CheckMenuItem(config.menu, IDM_FILT_FSR, MF_BYCOMMAND | (menuId == IDM_FILT_FSR ? MF_CHECKED : MF_UNCHECKED));
 
 			MenuItemData mData;
 			mData.childId = IDM_FILT_OFF;
 			if (GetMenuByChildID(&mData))
 				CheckMenuItem(mData.hParent, mData.index, MF_BYPOSITION | (menuId != IDM_FILT_OFF ? MF_CHECKED : MF_UNCHECKED));
+
+			mData.childId = IDM_FSR_SHARP_OFF;
+			if (GetMenuByChildID(&mData))
+				EnableMenuItem(mData.hParent, mData.index, MF_BYPOSITION | (config.gl.version.value >= GL_VER_3_0 ? MF_ENABLED : (MF_DISABLED | MF_GRAYED)));
+
+			for (DWORD id = IDM_FSR_SHARP_OFF; id <= IDM_FSR_SHARP_MAX; ++id)
+				CheckMenuItem(config.menu, id, MF_BYCOMMAND | (id == IDM_FSR_SHARP_OFF + config.image.sharpness ? MF_CHECKED : MF_UNCHECKED));
 		}
 		break;
 
@@ -510,6 +522,12 @@
 		}
 		break;
 
+		case MenuSkipIntro: {
+			EnableMenuItem(config.menu, IDM_SKIP_INTRO, MF_BYCOMMAND | (!config.type.sacred && !config.type.editor ? MF_ENABLED : (MF_DISABLED | MF_GRAYED)));
+			CheckMenuItem(config.menu, IDM_SKIP_INTRO, MF_BYCOMMAND | (config.skipIntro ? MF_CHECKED : MF_UNCHECKED));
+		}
+		break;
+
 		case MenuWindowType: {
 			MenuItemData mData;
 			mData.childId = IDM_MODE_BORDERLESS;
@@ -568,25 +586,6 @@
 					--count;
 					CheckMenuItem(config.menu, id, MF_BYCOMMAND | (pnglib_create_write_struct && id - IDM_SCR_PNG == config.snapshot.level ? MF_CHECKED : MF_UNCHECKED));
 					++id;
-				}
-			}
-		}
-		break;
-
-		case MenuMsgTimeScale: {
-			MenuItemData mData;
-			mData.childId = IDM_MSG_5;
-			if (GetMenuByChildID(&mData))
-			{
-				EnableMenuItem(mData.hParent, mData.index, MF_BYPOSITION | (config.msgTimeScale.hooked ? MF_ENABLED : (MF_DISABLED | MF_GRAYED)));
-				if (config.msgTimeScale.hooked)
-				{
-					UINT count = (UINT)GetMenuItemCount(mData.hMenu);
-					for (UINT i = 0; i < count; ++i)
-					{
-						UINT id = GetMenuItemID(mData.hMenu, i);
-						CheckMenuItem(mData.hMenu, i, MF_BYPOSITION | (id - IDM_MSG_0 == config.msgTimeScale.time ? MF_CHECKED : MF_UNCHECKED));
-					}
 				}
 			}
 		}
@@ -730,13 +729,13 @@
 		CheckMenu(MenuStretch);
 		CheckMenu(MenuWindowMode);
 		CheckMenu(MenuMaximizedWindow);
+		CheckMenu(MenuSkipIntro);
 		CheckMenu(MenuWindowType);
 		CheckMenu(MenuFastAI);
 		CheckMenu(MenuActive);
 		CheckMenu(MenuCpu);
 		CheckMenu(MenuBattle);
 		CheckMenu(MenuSnapshot);
-		CheckMenu(MenuMsgTimeScale);
 		CheckMenu(MenuRenderer);
 		CheckMenu(MenuSceneSort);
 		CheckMenu(MenuSceneAll);
@@ -784,6 +783,9 @@
 				case InterpolateLanczos:
 					id = IDS_TEXT_FILT_LANCZOS;
 					break;
+				case InterpolateFsr:
+					id = IDS_TEXT_FILT_FSR;
+					break;
 				default:
 					id = IDS_TEXT_FILT_OFF;
 					break;
@@ -798,6 +800,29 @@
 			}
 
 			FilterChanged(hWnd, "Interpolation", (INT)config.image.interpolation);
+			CheckMenu(MenuInterpolate);
+		}
+	}
+
+	VOID FsrSharpnessChanged(HWND hWnd, BYTE sharpness)
+	{
+		if (config.image.sharpness != sharpness)
+		{
+			config.image.sharpness = sharpness;
+
+			{
+				CHAR format[32];
+				LoadString(hDllModule, IDS_TEXT_FSR_SHARPNESS, format, sizeof(format));
+
+				CHAR str[32];
+				LoadString(hDllModule, sharpness ? IDS_FSR_SHARP_LOW + sharpness - 1 : IDS_OFF, str, sizeof(str));
+
+				CHAR text[64];
+				StrPrint(text, "%s: %s", format, str);
+				Hooks::PrintText(text);
+			}
+
+			FilterChanged(hWnd, "FsrSharpness", config.image.sharpness);
 			CheckMenu(MenuInterpolate);
 		}
 	}
@@ -1194,6 +1219,81 @@
 		return index == CB_ERR ? 0 : (BYTE)SendDlgItemMessage(hDlg, id, CB_GETITEMDATA, index, NULL);
 	}
 
+	BOOL IsFKeyItem(INT id)
+	{
+		return id >= IDC_FKEY_FIRST && id < IDC_FKEY_FIRST + FKEY_COUNT;
+	}
+
+	VOID FillKeyItems(HWND hCombo, BOOL fKey, BYTE selected, BOOL full)
+	{
+		SendMessage(hCombo, CB_RESETCONTENT, NULL, NULL);
+		AddKeyItem(hCombo, "None", 0, selected);
+
+		if (fKey)
+		{
+			for (BYTE f = 2; f <= 24; ++f)
+			{
+				if (full || f == selected)
+				{
+					CHAR name[8];
+					StrPrint(name, "F%d", f);
+					AddKeyItem(hCombo, name, f, selected);
+				}
+			}
+		}
+		else
+		{
+			for (DWORD k = 0; k < keyNamesCount; ++k)
+			{
+				if (full || keyNames[k].vk == selected)
+					AddKeyItem(hCombo, keyNames[k].name, keyNames[k].vk, selected);
+			}
+		}
+	}
+
+	INT GetBindItemId(DWORD index)
+	{
+		return index < BindCount ? IDC_BIND_FIRST + index : IDC_FKEY_FIRST + index - BindCount;
+	}
+
+	BYTE GetBindItem(HWND hDlg, DWORD index, BindScope* scope)
+	{
+		BYTE key = GetKeyItem(hDlg, GetBindItemId(index));
+		if (index < BindCount)
+		{
+			*scope = bindsList[index].scope;
+			return key;
+		}
+
+		*scope = ScopeAny;
+		return key ? VK_F1 + key - 1 : 0;
+	}
+
+	VOID UnbindOtherItems(HWND hDlg, INT id)
+	{
+		DWORD changed = BindCount + FKEY_COUNT;
+		for (DWORD i = 0; i < BindCount + FKEY_COUNT; ++i)
+		{
+			if (GetBindItemId(i) == id)
+				changed = i;
+		}
+
+		if (changed == BindCount + FKEY_COUNT)
+			return;
+
+		BindScope scope;
+		BYTE key = GetBindItem(hDlg, changed, &scope);
+		if (!key)
+			return;
+
+		for (DWORD i = 0; i < BindCount + FKEY_COUNT; ++i)
+		{
+			BindScope other;
+			if (i != changed && GetBindItem(hDlg, i, &other) == key && (scope == other || scope == ScopeAny || other == ScopeAny || scope == ScopePopup && other == ScopeMap || scope == ScopeMap && other == ScopePopup))
+				SendDlgItemMessage(hDlg, GetBindItemId(i), CB_SETCURSEL, 0, NULL);
+		}
+	}
+
 	LRESULT __stdcall KeybindsProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
 	{
 		switch (uMsg)
@@ -1202,24 +1302,10 @@
 			EnumChildWindows(hDlg, EnumChildProc, NULL);
 
 			for (DWORD i = 0; i < BindCount; ++i)
-			{
-				HWND hCombo = GetDlgItem(hDlg, IDC_BIND_FIRST + i);
-				AddKeyItem(hCombo, "None", 0, config.binds[i]);
-				for (DWORD k = 0; k < keyNamesCount; ++k)
-					AddKeyItem(hCombo, keyNames[k].name, keyNames[k].vk, config.binds[i]);
-			}
+				FillKeyItems(GetDlgItem(hDlg, IDC_BIND_FIRST + i), FALSE, config.binds[i], FALSE);
 
 			for (DWORD i = 0; i < FKEY_COUNT; ++i)
-			{
-				HWND hCombo = GetDlgItem(hDlg, IDC_FKEY_FIRST + i);
-				AddKeyItem(hCombo, "None", 0, *fKeyValues[i]);
-				for (BYTE f = 2; f <= 24; ++f)
-				{
-					CHAR name[8];
-					StrPrint(name, "F%d", f);
-					AddKeyItem(hCombo, name, f, *fKeyValues[i]);
-				}
-			}
+				FillKeyItems(GetDlgItem(hDlg, IDC_FKEY_FIRST + i), TRUE, *fKeyValues[i], FALSE);
 
 			if (config.type.sacred)
 			{
@@ -1231,49 +1317,26 @@
 		}
 
 		case WM_COMMAND: {
+			if (HIWORD(wParam) == CBN_DROPDOWN)
+			{
+				HWND hCombo = (HWND)lParam;
+				if (SendMessage(hCombo, CB_GETCOUNT, NULL, NULL) <= 2)
+					FillKeyItems(hCombo, IsFKeyItem(LOWORD(wParam)), GetKeyItem(hDlg, LOWORD(wParam)), TRUE);
+				break;
+			}
+
+			if (HIWORD(wParam) == CBN_SELCHANGE)
+			{
+				UnbindOtherItems(hDlg, LOWORD(wParam));
+				break;
+			}
+
 			switch (wParam)
 			{
 			case IDOK: {
-				INT ids[BindCount + FKEY_COUNT];
-				BYTE keys[BindCount + FKEY_COUNT];
-				BindScope scopes[BindCount + FKEY_COUNT];
-				DWORD count = 0;
-
-				for (DWORD i = 0; i < BindCount; ++i, ++count)
-				{
-					ids[count] = IDC_BIND_FIRST + i;
-					keys[count] = GetKeyItem(hDlg, ids[count]);
-					scopes[count] = bindsList[i].scope;
-				}
-
-				for (DWORD i = 0; i < FKEY_COUNT; ++i, ++count)
-				{
-					ids[count] = IDC_FKEY_FIRST + i;
-					BYTE f = GetKeyItem(hDlg, ids[count]);
-					keys[count] = f ? VK_F1 + f - 1 : 0;
-					scopes[count] = ScopeAny;
-				}
-
-				for (DWORD a = 0; a < count; ++a)
-				{
-					for (DWORD b = a + 1; b < count; ++b)
-					{
-						if (keys[a] && keys[a] == keys[b] && (scopes[a] == scopes[b] || scopes[a] == ScopeAny || scopes[b] == ScopeAny || scopes[a] == ScopePopup && scopes[b] == ScopeMap || scopes[a] == ScopeMap && scopes[b] == ScopePopup))
-						{
-							CHAR name[32];
-							GetDlgItemText(hDlg, ids[a], name, sizeof(name));
-
-							CHAR text[96];
-							StrPrint(text, "%s is assigned to more than one action.", name);
-							MessageBox(hDlg, text, "Keybinds", MB_OK | MB_ICONWARNING);
-							return NULL;
-						}
-					}
-				}
-
 				for (DWORD i = 0; i < BindCount; ++i)
 				{
-					config.binds[i] = keys[i];
+					config.binds[i] = GetKeyItem(hDlg, IDC_BIND_FIRST + i);
 					Config::Set(CONFIG_BINDS, bindsList[i].key, config.binds[i]);
 				}
 
@@ -2466,6 +2529,9 @@
 
 			if (!(HIWORD(lParam) & KF_ALTDOWN))
 			{
+				if (config.screen.mainMenu && !config.screen.popup && config.binds[BindQuickLoad] == wParam && !(HIWORD(lParam) & KF_REPEAT) && Hooks::ContinueGame(hWnd))
+					return NULL;
+
 				WPARAM key = wParam;
 				if (!RemapBindKey(uMsg, &wParam))
 					return NULL;
@@ -2526,6 +2592,10 @@
 
 					case InterpolateCubic:
 						InterpolationChanged(hWnd, config.gl.version.value >= GL_VER_2_0 ? InterpolateLanczos : InterpolateNearest);
+						break;
+
+					case InterpolateLanczos:
+						InterpolationChanged(hWnd, config.gl.version.value >= GL_VER_3_0 ? InterpolateFsr : InterpolateNearest);
 						break;
 
 					default:
@@ -2610,6 +2680,19 @@
 		}
 
 		case WM_MOUSEWHEEL: {
+			if ((GET_KEYSTATE_WPARAM(wParam) & MK_CONTROL) && config.mapZoom.allowed && config.screen.strategic && !config.screen.popup)
+			{
+				INT value = (INT)config.mapZoom.value + (GET_WHEEL_DELTA_WPARAM(wParam) > 0 ? MAP_ZOOM_STEP : -MAP_ZOOM_STEP);
+				value = value < MAP_ZOOM_MIN ? MAP_ZOOM_MIN : value > MAP_ZOOM_MAX ? MAP_ZOOM_MAX : value;
+				if ((DWORD)value != config.mapZoom.value)
+				{
+					config.mapZoom.value = value;
+					Config::Set(CONFIG_WRAPPER, "MapZoom", value);
+				}
+
+				return NULL;
+			}
+
 			config.scroll.isWheel = TRUE;
 			return CallWindowProc(OldWindowProc, hWnd, WM_KEYDOWN, GET_WHEEL_DELTA_WPARAM(wParam) < 0 ? VK_DOWN : VK_UP, 1);
 		}
@@ -2812,8 +2895,18 @@
 			case IDM_FILT_LINEAR:
 			case IDM_FILT_HERMITE:
 			case IDM_FILT_CUBIC:
-			case IDM_FILT_LANCZOS: {
+			case IDM_FILT_LANCZOS:
+			case IDM_FILT_FSR: {
 				InterpolationChanged(hWnd, InterpolationFilter(wParam - IDM_FILT_OFF));
+				return NULL;
+			}
+
+			case IDM_FSR_SHARP_OFF:
+			case IDM_FSR_SHARP_LOW:
+			case IDM_FSR_SHARP_MEDIUM:
+			case IDM_FSR_SHARP_HIGH:
+			case IDM_FSR_SHARP_MAX: {
+				FsrSharpnessChanged(hWnd, BYTE(wParam - IDM_FSR_SHARP_OFF));
 				return NULL;
 			}
 
@@ -2974,6 +3067,13 @@
 				Main::ShowInfo(IDS_INFO_NEXT_BATTLE);
 
 				CheckMenu(MenuBattle);
+				return NULL;
+			}
+
+			case IDM_SKIP_INTRO: {
+				config.skipIntro = !config.skipIntro;
+				Config::Set(CONFIG_DISCIPLE, "Intro", !config.skipIntro);
+				CheckMenu(MenuSkipIntro);
 				return NULL;
 			}
 
@@ -3395,33 +3495,6 @@
 						}
 
 						CheckMenu(MenuLocale);
-					}
-
-					return NULL;
-				}
-				else if (wParam > IDM_MSG_0 && wParam <= IDM_MSG_30)
-				{
-					DWORD time = wParam - IDM_MSG_0;
-					if (config.msgTimeScale.time != time)
-					{
-						config.msgTimeScale.time = time;
-						config.msgTimeScale.value = 100 / config.msgTimeScale.time;
-
-						Config::Set(CONFIG_WRAPPER, "MessageTimeout", *(INT*)&config.msgTimeScale.time);
-
-						{
-							CHAR str1[32];
-							LoadString(hDllModule, IDS_MSG, str1, sizeof(str1));
-
-							CHAR str2[32];
-							LoadString(hDllModule, IDS_MSG_SECONDS, str2, sizeof(str2));
-
-							CHAR text[64];
-							StrPrint(text, "%s: %d %s", str1, config.msgTimeScale.time, str2);
-							Hooks::PrintText(text);
-						}
-
-						CheckMenu(MenuMsgTimeScale);
 					}
 
 					return NULL;

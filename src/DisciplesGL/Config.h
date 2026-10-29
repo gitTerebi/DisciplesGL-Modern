@@ -40,6 +40,17 @@
 
 #define MAX_SPEED_INDEX 21
 
+#define FSR_SHARP_DEFAULT 2
+#define FSR_SHARP_MAX 4
+
+#define MAP_ZOOM_ENABLED FALSE
+#define MAP_ZOOM_MIN 100
+#define MAP_ZOOM_MAX 300
+#define MAP_ZOOM_STEP 25
+#define MAP_ZOOM_EDGE 2
+#define MAP_ZOOM_PANEL_WIDTH 177
+#define MAP_ZOOM_BAR_HEIGHT 35
+
 extern LONG GAME_WIDTH;
 extern LONG GAME_HEIGHT;
 
@@ -66,6 +77,12 @@ namespace Config
 	BOOL Set(const CHAR*, const CHAR*, CHAR*);
 	CHAR* Add(CHAR*, const CHAR*, INT, const CHAR* = NULL);
 	BOOL IsZoomed();
+	VOID GetMapZoomRect(RECT*);
+	BOOL IsMapZoomed();
+	BOOL StepMapZoom();
+	BOOL IsMapZoomPending();
+	VOID MapZoomPoint(LPPOINT);
+	VOID MapUnzoomPoint(LPPOINT);
 	VOID CalcZoomed(Size* dst, Size* src, DWORD scale);
 	VOID CalcZoomed();
 	VOID CalcScroll();

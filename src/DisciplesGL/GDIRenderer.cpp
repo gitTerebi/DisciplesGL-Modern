@@ -90,6 +90,8 @@ BOOL GDIRenderer::Start()
 	}
 
 	config.zoom.glallow = TRUE;
+	config.mapZoom.allowed = FALSE;
+	config.mapZoom.current = 1.0f;
 	PostMessage(this->ddraw->hWnd, config.msgMenu, NULL, NULL);
 
 	return TRUE;

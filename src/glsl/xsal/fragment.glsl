@@ -36,9 +36,6 @@ out vec4 fragColor;
 const vec4 dt = vec4(1.0, 1.0, 1.0, 1.0);
 
 void main() {
-	if (texture(tex01, fTex) == texture(tex02, fTex))
-		discard;
-
 	vec2 cTex = fTex * texSize * 1.00001;
 
 	#define TEX(x, y) texture(tex01, (floor(cTex + vec2(x, y)) + 0.5) / texSize)

@@ -37,6 +37,8 @@ NewRenderer::NewRenderer(OpenDraw* ddraw)
 VOID NewRenderer::Begin()
 {
 	config.zoom.glallow = TRUE;
+	config.mapZoom.allowed = MAP_ZOOM_ENABLED;
+	this->mapZoomDrawn = 1.0f;
 	PostMessage(this->ddraw->hWnd, config.msgMenu, NULL, NULL);
 
 	this->isTrueColor = config.mode->bpp != 16 || config.bpp32Hooked;
@@ -63,8 +65,11 @@ VOID NewRenderer::Begin()
 		new ShaderGroup(GLSL_VER_1_30, IDR_XSAL_VERTEX, IDR_XSAL_FRAGMENT, SHADER_TEXSIZE),
 		new ShaderGroup(GLSL_VER_1_30, IDR_EAGLE_VERTEX, IDR_EAGLE_FRAGMENT, SHADER_TEXSIZE),
 		new ShaderGroup(GLSL_VER_1_30, IDR_SCALENX_VERTEX_2X, IDR_SCALENX_FRAGMENT_2X, SHADER_TEXSIZE),
-		new ShaderGroup(GLSL_VER_1_30, IDR_SCALENX_VERTEX_3X, IDR_SCALENX_FRAGMENT_3X, SHADER_TEXSIZE)
+		new ShaderGroup(GLSL_VER_1_30, IDR_SCALENX_VERTEX_3X, IDR_SCALENX_FRAGMENT_3X, SHADER_TEXSIZE),
+		new ShaderGroup(GLSL_VER_1_30, IDR_FSR_VERTEX, IDR_FSR_EASU_FRAGMENT, SHADER_TEXSIZE | SHADER_DOUBLE),
+		new ShaderGroup(GLSL_VER_1_30, IDR_FSR_VERTEX, IDR_FSR_RCAS_FRAGMENT, SHADER_TEXSIZE | SHADER_LEVELS)
 	};
+	this->fsr = { 0, 0, 0 };
 
 	{
 		GLGenVertexArrays(1, &this->arrayName);
@@ -109,7 +114,7 @@ VOID NewRenderer::Begin()
 								}
 							}
 
-							GLBufferData(GL_ARRAY_BUFFER, sizeof(this->buffer) << 1, NULL, GL_STATIC_DRAW);
+							GLBufferData(GL_ARRAY_BUFFER, (sizeof(this->buffer) << 1) + (sizeof(this->buffer) >> 1), NULL, GL_STATIC_DRAW);
 							GLBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(this->buffer) >> 1, this->buffer);
 							GLBufferSubData(GL_ARRAY_BUFFER, sizeof(this->buffer) >> 1, sizeof(this->buffer) >> 1, this->buffer);
 							GLBufferSubData(GL_ARRAY_BUFFER, sizeof(this->buffer), sizeof(this->buffer) >> 1, &this->buffer[4]);
@@ -188,6 +193,12 @@ VOID NewRenderer::Begin()
 
 VOID NewRenderer::End()
 {
+	if (this->fsr.fboId)
+	{
+		GLDeleteTextures(1, &this->fsr.textureId);
+		GLDeleteFramebuffers(1, &this->fsr.fboId);
+	}
+
 	{
 		{
 			{
@@ -227,9 +238,117 @@ VOID NewRenderer::End()
 	while (--count);
 }
 
+VOID NewRenderer::DrawFsr(GLuint frontId, DWORD texSize, GLint first, FLOAT fracWidth, FLOAT fracHeight, FLOAT backWidth, FLOAT backHeight, BOOL isBack)
+{
+	Rect* rect = &this->ddraw->viewport.rectangle;
+	DWORD size = MAKELONG(rect->width, rect->height);
+	if (this->fsr.size != size)
+	{
+		if (!this->fsr.fboId)
+		{
+			GLGenFramebuffers(1, &this->fsr.fboId);
+			GLGenTextures(1, &this->fsr.textureId);
+		}
+
+		this->fsr.size = size;
+		GLBindTexParameter(this->fsr.textureId, GL_NEAREST);
+		GLTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, rect->width, rect->height, GL_NONE, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+
+		GLBindFramebuffer(GL_DRAW_FRAMEBUFFER, this->fsr.fboId);
+		GLFramebufferTexture2D(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, this->fsr.textureId, 0);
+
+		GLBindTexFilter(frontId, GL_NEAREST);
+	}
+	else
+		GLBindFramebuffer(GL_DRAW_FRAMEBUFFER, this->fsr.fboId);
+
+	GLViewport(0, 0, rect->width, rect->height);
+
+	this->shaders.fsrEasu->Use(texSize, isBack);
+	GLUniform2f(this->shaders.fsrEasu->GetLocation("dstSize"), rect->width / fracWidth, rect->height / fracHeight);
+	if (isBack)
+		GLUniform2f(this->shaders.fsrEasu->GetLocation("backScale"), backWidth / fracWidth, backHeight / fracHeight);
+
+	GLDrawArrays(GL_TRIANGLE_FAN, first, 4);
+
+	GLBindFramebuffer(GL_DRAW_FRAMEBUFFER, NULL);
+	GLViewport(rect->x, rect->y + this->ddraw->viewport.offset, rect->width, rect->height);
+
+	this->shaders.fsrRcas->Check();
+	this->shaders.fsrRcas->Use(size, FALSE);
+	// RCAS sharpness is in stops: 0 is the strongest and each +1 halves it
+	static const FLOAT sharpStops[] = { 16.0f, 1.5f, 0.7f, 0.3f, 0.0f };
+	GLUniform2f(this->shaders.fsrRcas->GetLocation("coefs"), sharpStops[config.image.sharpness], 0.0f);
+
+	GLBindTexFilter(this->fsr.textureId, GL_NEAREST);
+	GLDrawArrays(GL_TRIANGLE_FAN, 8, 4);
+
+	GLBindTexFilter(frontId, GL_NEAREST);
+}
+
+VOID NewRenderer::DrawMapZoom(GLuint textureId, DWORD texSize, BOOL isFbo, BOOL isFsr)
+{
+	this->mapZoomDrawn = config.mapZoom.current;
+	if (!Config::IsMapZoomed())
+		return;
+
+	RECT rect;
+	Config::GetMapZoomRect(&rect);
+
+	FLOAT width = (FLOAT)config.mode->width;
+	FLOAT height = (FLOAT)config.mode->height;
+	FLOAT zoom = config.mapZoom.current;
+	FLOAT cx = rect.right * 0.5f;
+	FLOAT cy = rect.bottom * 0.5f;
+
+	FLOAT sx0 = cx - cx / zoom;
+	FLOAT sx1 = cx + (rect.right - cx) / zoom;
+	FLOAT sy0 = cy - cy / zoom;
+	FLOAT sy1 = cy + (rect.bottom - cy) / zoom;
+
+	FLOAT u0, u1, v0, v1;
+	if (isFbo)
+	{
+		u0 = sx0 / width;
+		u1 = sx1 / width;
+		v0 = 1.0f - sy0 / height;
+		v1 = 1.0f - sy1 / height;
+	}
+	else
+	{
+		u0 = sx0 / this->maxTexSize;
+		u1 = sx1 / this->maxTexSize;
+		v0 = sy0 / this->maxTexSize;
+		v1 = sy1 / this->maxTexSize;
+	}
+
+	FLOAT x1 = 2.0f * rect.right / width - 1.0f;
+	FLOAT y1 = 1.0f - 2.0f * rect.bottom / height;
+
+	FLOAT quad[4][8] = {
+		{ -1.0f, 1.0f, -1.0f, 1.0f, u0, v0, u0, v0 },
+		{ x1, 1.0f, -1.0f, 1.0f, u1, v0, u1, v0 },
+		{ x1, y1, -1.0f, 1.0f, u1, v1, u1, v1 },
+		{ -1.0f, y1, -1.0f, 1.0f, u0, v1, u0, v1 }
+	};
+	GLBufferSubData(GL_ARRAY_BUFFER, 16 * 8 * sizeof(FLOAT), sizeof(quad), quad);
+
+	if (isFsr)
+	{
+		this->shaders.linear->Use(texSize, FALSE);
+		GLBindTexFilter(textureId, GL_LINEAR);
+	}
+
+	GLDrawArrays(GL_TRIANGLE_FAN, 16, 4);
+
+	if (isFsr)
+		GLBindTexFilter(textureId, GL_NEAREST);
+}
+
 BOOL NewRenderer::RenderInner(BOOL ready, BOOL force, StateBufferAligned** lpStateBuffer)
 {
 	StateBufferAligned* stateBuffer = *lpStateBuffer;
+	BOOL mapZoomChanged = Config::StepMapZoom() || this->mapZoomDrawn != config.mapZoom.current;
 	Size frameSize = stateBuffer->size;
 	BOOL stateChanged = this->borderStatus != stateBuffer->borders || this->backStatus != stateBuffer->isBack || this->zoomStatus != stateBuffer->isZoomed;
 	BOOL viewState = FALSE;
@@ -265,7 +384,7 @@ BOOL NewRenderer::RenderInner(BOOL ready, BOOL force, StateBufferAligned** lpSta
 			this->frameBuffer = AlignedAlloc(config.mode->width * config.mode->height * (this->isTrueColor ? sizeof(DWORD) : sizeof(WORD)));
 		}
 
-		if (this->pixelBuffer->Update(lpStateBuffer, ready, TRUE) || state.flags || stateChanged)
+		if (this->pixelBuffer->Update(lpStateBuffer, ready, TRUE) || state.flags || stateChanged || mapZoomChanged)
 		{
 			BOOL clearBackTransition = this->backStatus && !stateBuffer->isBack;
 			BOOL zoomChanged = this->zoomStatus != stateBuffer->isZoomed;
@@ -544,10 +663,18 @@ BOOL NewRenderer::RenderInner(BOOL ready, BOOL force, StateBufferAligned** lpSta
 						GLBufferSubData(GL_ARRAY_BUFFER, 12 * 8 * sizeof(FLOAT), 3 * 8 * sizeof(FLOAT), &this->buffer[4]);
 					}
 
-					GLDrawArrays(GL_TRIANGLE_FAN, 12, 4);
+					if (state.interpolation == InterpolateFsr)
+						this->DrawFsr(textureId.primaryBO, this->viewSize, 12, kw, kh, 1.0f, 1.0f, stateBuffer->isBack);
+					else
+						GLDrawArrays(GL_TRIANGLE_FAN, 12, 4);
 				}
+				else if (state.interpolation == InterpolateFsr)
+					this->DrawFsr(textureId.primaryBO, this->viewSize, 8, 1.0f, 1.0f, 1.0f, 1.0f, stateBuffer->isBack);
 				else
 					GLDrawArrays(GL_TRIANGLE_FAN, 8, 4);
+
+				if (!stateBuffer->isZoomed && !stateBuffer->isBack)
+					this->DrawMapZoom(textureId.primaryBO, this->viewSize, TRUE, state.interpolation == InterpolateFsr);
 			}
 			isSwap = TRUE;
 		}
@@ -582,7 +709,7 @@ BOOL NewRenderer::RenderInner(BOOL ready, BOOL force, StateBufferAligned** lpSta
 		}
 
 		lbl_noup:;
-		if (this->pixelBuffer->Update(lpStateBuffer, ready) || state.flags || stateChanged)
+		if (this->pixelBuffer->Update(lpStateBuffer, ready) || state.flags || stateChanged || mapZoomChanged)
 		{
 			if (this->isVSync != config.image.vSync)
 			{
@@ -680,10 +807,24 @@ BOOL NewRenderer::RenderInner(BOOL ready, BOOL force, StateBufferAligned** lpSta
 					GLBufferSubData(GL_ARRAY_BUFFER, 5 * 8 * sizeof(FLOAT), 3 * 8 * sizeof(FLOAT), &this->buffer[1]);
 				}
 
-				GLDrawArrays(GL_TRIANGLE_FAN, 4, 4);
+				if (state.interpolation == InterpolateFsr)
+					this->DrawFsr(textureId.primary, this->texSize, 4,
+						(FLOAT)frameSize.width / this->maxTexSize, (FLOAT)frameSize.height / this->maxTexSize,
+						(FLOAT)config.mode->width / this->maxTexSize, (FLOAT)config.mode->height / this->maxTexSize, stateBuffer->isBack);
+				else
+					GLDrawArrays(GL_TRIANGLE_FAN, 4, 4);
+			}
+			else if (state.interpolation == InterpolateFsr)
+			{
+				FLOAT texWidth = (FLOAT)config.mode->width / this->maxTexSize;
+				FLOAT texHeight = (FLOAT)config.mode->height / this->maxTexSize;
+				this->DrawFsr(textureId.primary, this->texSize, 0, texWidth, texHeight, texWidth, texHeight, stateBuffer->isBack);
 			}
 			else
 				GLDrawArrays(GL_TRIANGLE_FAN, 0, 4);
+
+			if (!stateBuffer->isZoomed && !stateBuffer->isBack)
+				this->DrawMapZoom(textureId.primary, this->texSize, FALSE, state.interpolation == InterpolateFsr);
 
 			isSwap = TRUE;
 		}

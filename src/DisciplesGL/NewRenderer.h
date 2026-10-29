@@ -44,6 +44,7 @@ private:
 		BYTE status;
 	} upscale;
 	FLOAT buffer[8][8];
+	FLOAT mapZoomDrawn;
 	GLuint bufferName;
 	GLuint arrayName;
 	
@@ -63,7 +64,15 @@ private:
 		ShaderGroup* eagle_2x;
 		ShaderGroup* scaleNx_2x;
 		ShaderGroup* scaleNx_3x;
+		ShaderGroup* fsrEasu;
+		ShaderGroup* fsrRcas;
 	} shaders;
+
+	struct {
+		GLuint fboId;
+		GLuint textureId;
+		DWORD size;
+	} fsr;
 
 	struct {
 		GLuint back;
@@ -75,6 +84,8 @@ private:
 
 	VOID Begin();
 	VOID End();
+	VOID DrawFsr(GLuint, DWORD, GLint, FLOAT, FLOAT, FLOAT, FLOAT, BOOL);
+	VOID DrawMapZoom(GLuint, DWORD, BOOL, BOOL);
 	BOOL RenderInner(BOOL, BOOL, StateBufferAligned**);
 
 public:
