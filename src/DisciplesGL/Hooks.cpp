@@ -163,6 +163,12 @@ namespace Hooks
 		0x004012C1, 0x005C3E70, 0x005BA60E, 0x005BA8C9, // clouds_check
 
 		0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000,
+
+		0x00000000, 0x00000000,
+
+		0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000,
+
+		0x00000000, 0x00000000, 0x00000000,
 #pragma endregion
 
 #pragma region v2_01
@@ -212,6 +218,12 @@ namespace Hooks
 		0x004012C1, 0x005C3B26, 0x005BA204, 0x005BA4BF,
 
 		0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000,
+
+		0x00000000, 0x00000000,
+
+		0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000,
+
+		0x00000000, 0x00000000, 0x00000000,
 #pragma endregion
 
 #pragma region v2_01 - Steam
@@ -261,6 +273,12 @@ namespace Hooks
 		0x00000000, 0x005C3ECC, 0x005BA707, 0x005BA9C2,
 
 		0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000,
+
+		0x00000000, 0x00000000,
+
+		0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000,
+
+		0x00000000, 0x00000000, 0x00000000,
 #pragma endregion
 
 #pragma region v2_02a
@@ -310,6 +328,12 @@ namespace Hooks
 		0x004012D7, 0x005C3E98, 0x005BA6AA, 0x005BA965,
 
 		0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000,
+
+		0x00000000, 0x00000000,
+
+		0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000,
+
+		0x00000000, 0x00000000, 0x00000000,
 #pragma endregion
 
 #pragma region v2_02b
@@ -359,6 +383,12 @@ namespace Hooks
 		0x00000000, 0x005C277F, 0x005B8F00, 0x005B91BB,
 
 		0x0048D06B, 0x00401A1A, 0x00402586, 0x00402594, 0x004C90C0, 0x00406112, 0x004062A9, // battle_save
+
+		0x005FD0D2, 0x0050325B, // save_list_sort
+
+		0x00568F90, 0x00569339, 0x006D43A4, 0x0082EBF4, 0x0078E948, // item_click
+
+		0x0050290B, 0x00502940, 0x005F990C, // shift_move
 #pragma endregion
 
 #pragma region v3_00
@@ -408,6 +438,12 @@ namespace Hooks
 		0x004012D4, 0x005C7162, 0x005BD8EA, 0x005BDBA5,
 
 		0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000,
+
+		0x00000000, 0x00000000,
+
+		0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000,
+
+		0x00000000, 0x00000000, 0x00000000,
 #pragma endregion
 
 #pragma region v3_00 - Steam
@@ -457,6 +493,12 @@ namespace Hooks
 		0x00000000, 0x005C7C18, 0x005BE1F5, 0x005BE4B0,
 
 		0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000,
+
+		0x00000000, 0x00000000,
+
+		0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000,
+
+		0x00000000, 0x00000000, 0x00000000,
 #pragma endregion
 
 #pragma region v3_01a
@@ -506,6 +548,12 @@ namespace Hooks
 		0x0040127A, 0x005C818B, 0x005BE762, 0x005BEA1D,
 
 		0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000,
+
+		0x00000000, 0x00000000,
+
+		0x0056CE88, 0x0056D231, 0x006E08FC, 0x00839344, 0x0079CEB0, // item_click
+
+		0x00000000, 0x00000000, 0x00000000,
 #pragma endregion
 
 #pragma region v3_01b
@@ -555,6 +603,12 @@ namespace Hooks
 		0x00000000, 0x005C7174, 0x005BD7EA, 0x005BDAA5,
 
 		0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000,
+
+		0x00000000, 0x00000000,
+
+		0x0056C532, 0x0056C8DB, 0x006DE8A4, 0x008372F4, 0x0079AE58, // item_click
+
+		0x00000000, 0x00000000, 0x00000000,
 #pragma endregion
 
 #pragma region v2_00 Editor - Steam
@@ -604,6 +658,12 @@ namespace Hooks
 		0x00000000, 0x00000000, 0x00000000, 0x00000000,
 
 		0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000,
+
+		0x00000000, 0x00000000,
+
+		0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000,
+
+		0x00000000, 0x00000000, 0x00000000,
 #pragma endregion
 
 #pragma region v2_01 Editor
@@ -653,6 +713,12 @@ namespace Hooks
 		0x00000000, 0x00000000, 0x00000000, 0x00000000,
 
 		0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000,
+
+		0x00000000, 0x00000000,
+
+		0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000,
+
+		0x00000000, 0x00000000, 0x00000000,
 #pragma endregion
 
 #pragma region v2_02a Editor
@@ -702,6 +768,12 @@ namespace Hooks
 		0x00000000, 0x00000000, 0x00000000, 0x00000000,
 
 		0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000,
+
+		0x00000000, 0x00000000,
+
+		0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000,
+
+		0x00000000, 0x00000000, 0x00000000,
 #pragma endregion
 
 #pragma region v2_02b Editor
@@ -751,6 +823,12 @@ namespace Hooks
 		0x00000000, 0x00000000, 0x00000000, 0x00000000,
 
 		0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000,
+
+		0x00000000, 0x00000000,
+
+		0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000,
+
+		0x00000000, 0x00000000, 0x00000000,
 #pragma endregion
 
 #pragma region v3_00 Editor - Steam
@@ -800,6 +878,12 @@ namespace Hooks
 		0x00000000, 0x00000000, 0x00000000, 0x00000000,
 
 		0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000,
+
+		0x00000000, 0x00000000,
+
+		0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000,
+
+		0x00000000, 0x00000000, 0x00000000,
 #pragma endregion
 
 #pragma region v3_01 Editor
@@ -848,7 +932,13 @@ namespace Hooks
 
 		0x00000000, 0x00000000, 0x00000000, 0x00000000,
 
-		0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000
+		0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000,
+
+		0x00000000, 0x00000000,
+
+		0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000,
+
+		0x00000000, 0x00000000, 0x00000000
 #pragma endregion
 	};
 
@@ -3637,12 +3727,15 @@ namespace Hooks
 
 		static DWORD lastVTable;
 		static BOOL battleClass;
+		static BOOL townClass;
 		if (*object != lastVTable)
 		{
 			lastVTable = *object;
 			const CHAR* name = GetRttiName(object);
 			config.screen.mainMenu = name && !StrCompare(name, ".?AVCMenuMain@@");
 			battleClass = name && !StrCompare(name, ".?AVCBattleViewerInterf@@");
+			config.screen.buildStruct = name && !StrCompare(name, ".?AVCBuildStructInterf@@");
+			townClass = config.screen.buildStruct || name && !StrCompare(name, ".?AVCCapitalInterf@@");
 			config.screen.strategic = name && !StrCompare(name, ".?AVCStratInterf@@");
 			DebugLog("Screen %s popup=%d", name ? name : "(unknown)", config.screen.popup);
 		}
@@ -3657,7 +3750,7 @@ namespace Hooks
 			}
 		}
 
-		config.screen.map = !config.screen.popup && !bordered && !config.battle.active;
+		config.screen.map = !config.screen.popup && !bordered && !townClass && !config.battle.active;
 
 		static DWORD menuScreens[32];
 		static DWORD menuCount;
@@ -3682,7 +3775,7 @@ namespace Hooks
 		}
 
 		config.screen.menu = menu && !config.screen.popup;
-		config.screen.full = !config.screen.popup && bordered && !config.battle.active && !config.screen.menu;
+		config.screen.full = !config.screen.popup && (bordered || townClass) && !config.battle.active && !config.screen.menu;
 	}
 
 	VOID __declspec(naked) hook_00538FEB()
@@ -7129,6 +7222,276 @@ namespace Hooks
 	}
 #pragma endregion
 
+#pragma region Save list order
+#define SAVE_ENTRY_SIZE 0x80
+#define LOAD_ENTRY_SIZE 0x64
+
+	BOOL IsPinnedSave(const CHAR* path)
+	{
+		const CHAR* name = StrLastChar(path, '\\');
+		name = name ? name + 1 : path;
+		return !StrCompareInsensitive(name, "AutoSave.sg") || !StrCompareInsensitive(name, "BattleSave.sg") || !StrCompareInsensitive(name, "QuickSave.sg");
+	}
+
+	// Entries from Discipl2.exe 0x005FD786 and 0x0050326E start with the path string, text pointer per c_str at 0x00403AFE
+	VOID PinSaves(BYTE* front, BYTE* end, DWORD size)
+	{
+		for (BYTE* item = front; item < end; item += size)
+		{
+			const CHAR* path = *(const CHAR**)(item + 8);
+			if (path && IsPinnedSave(path))
+			{
+				if (item != front)
+				{
+					BYTE entry[SAVE_ENTRY_SIZE];
+					MemoryCopy(entry, item, size);
+					memmove(front + size, front, item - front);
+					MemoryCopy(front, entry, size);
+				}
+
+				front += size;
+			}
+		}
+	}
+
+	VOID __fastcall PinSaveList(BYTE* list)
+	{
+		PinSaves(*(BYTE**)(list + 4), *(BYTE**)(list + 8), SAVE_ENTRY_SIZE);
+	}
+
+	VOID __fastcall PinLoadList(BYTE** list)
+	{
+		if (list)
+			PinSaves(list[0], list[1], LOAD_ENTRY_SIZE);
+	}
+
+	DWORD back_005FD0D7;
+	VOID __declspec(naked) hook_005FD0D2()
+	{
+		__asm {
+			cmp byte ptr [esi], 0
+			je skip
+			mov ecx, esi
+			call PinSaveList
+
+			skip:
+			mov ecx, [ebp-0xC]
+			mov eax, esi
+			jmp back_005FD0D7
+		}
+	}
+
+	DWORD back_00503260;
+	VOID __declspec(naked) hook_0050325B()
+	{
+		__asm {
+			mov ecx, [esi+0x4]
+			call PinLoadList
+
+			mov ecx, [ebp-0xC]
+			mov eax, esi
+			jmp back_00503260
+		}
+	}
+#pragma endregion
+
+#pragma region Item click
+	struct {
+		DWORD* emptyId;
+		DWORD extType;
+		DWORD sellHandler;
+		BOOL selling;
+		DWORD* sold;
+		DWORD* phase;
+		DWORD getInventory;
+	} itemClick;
+
+	BOOL IsClass(DWORD* object, const CHAR* name)
+	{
+		const CHAR* rtti = GetRttiName(object);
+		return rtti && !StrCompare(rtti, name);
+	}
+
+	BOOL IsInventory(DWORD* source)
+	{
+		return IsClass(source, ".?AVCDDStackInventoryDisplay@@") || IsClass(source, ".?AVCDDStackInventoryForMerc@@")
+			|| IsClass(source, ".?AVCDDFortInventoryDisplay@@") || IsClass(source, ".?AVCDDBagInventoryDisplay@@")
+			|| IsClass(source, ".?AVCDDFoldedInvDisplay@@");
+	}
+
+	DWORD* GetItemExt(DWORD* source)
+	{
+		return ((DWORD * (__thiscall*)(DWORD*, DWORD))((DWORD*)*source)[8])(source, itemClick.extType);
+	}
+
+	DWORD GetItemExtId(DWORD* ext, DWORD index)
+	{
+		return *((DWORD * (__thiscall*)(DWORD*))((DWORD*)*ext)[index])(ext);
+	}
+
+	// Inventory and equipment drop targets sit at +4 of their drop source (Discipl2.exe RTTI)
+	BOOL IsSlotEmpty(DWORD* target)
+	{
+		DWORD* ext = GetItemExt(target - 1);
+		return ext && GetItemExtId(ext, 1) == *itemClick.emptyId;
+	}
+
+	BOOL IsSameOwner(DWORD* source, DWORD* target)
+	{
+		DWORD* ext = GetItemExt(source);
+		DWORD* targetExt = GetItemExt(target - 1);
+		return ext && targetExt && GetItemExtId(ext, 2) == GetItemExtId(targetExt, 2);
+	}
+
+	// Mirrors the drop loop at Discipl2.exe 3.01b 0x0056C2A9, with the target picked by class instead of by cursor
+	DWORD sub_ItemDrop;
+	bool __fastcall ItemDrop(DWORD* dragDrop, DWORD /*edx*/, UINT uMsg, POINT* pt)
+	{
+		BOOL ctrl = GetKeyState(VK_CONTROL) & 0x8000;
+		BOOL shift = !ctrl && GetKeyState(VK_SHIFT) & 0x8000;
+		if (uMsg == WM_LBUTTONUP && (ctrl || shift))
+		{
+			DWORD* manager = dragDrop + 4;
+			DWORD* source = ((DWORD * (__thiscall*)(DWORD*))((DWORD*)*manager)[1])(manager);
+			BOOL equipped = ctrl && source && IsClass(source, ".?AVCDDEquipment@@");
+			if (equipped || source && IsInventory(source))
+			{
+				DWORD* merchant = NULL;
+				DWORD* freeSlot = NULL;
+				DWORD* anySlot = NULL;
+				DWORD* inventory = NULL;
+
+				DWORD* head = *(DWORD**)(dragDrop[5] + 0x28);
+				for (DWORD* node = (DWORD*)*head; node != head && !merchant && !inventory; node = (DWORD*)*node)
+				{
+					DWORD* target = (DWORD*)node[2];
+					BOOL isMerchant = ctrl && !equipped && IsClass(target, ".?AVCDDMerchantInvDisplay@@");
+					BOOL isSlot = ctrl && !equipped && IsClass(target, ".?AVCDDEquipment@@");
+					BOOL isInventory = (equipped || shift) && IsInventory(target);
+					if ((isMerchant || isSlot || isInventory) && ((bool(__thiscall*)(DWORD*, DWORD*, POINT*))((DWORD*)*target)[1])(target, source, pt))
+					{
+						if (isMerchant)
+							merchant = target;
+						else if (isInventory)
+						{
+							if (equipped ? IsSameOwner(source, target) : !IsSameOwner(source, target))
+								inventory = target;
+						}
+						else
+						{
+							if (!anySlot)
+								anySlot = target;
+
+							if (!freeSlot && IsSlotEmpty(target))
+								freeSlot = target;
+						}
+					}
+				}
+
+				DWORD* target = inventory ? inventory : merchant ? merchant : freeSlot ? freeSlot : anySlot;
+				if (target)
+				{
+					itemClick.selling = merchant != NULL;
+					DWORD* action = ((DWORD * (__thiscall*)(DWORD*, DWORD*, POINT*))((DWORD*)*target)[2])(target, source, pt);
+					itemClick.selling = FALSE;
+
+					if (action)
+						((VOID(__thiscall*)(DWORD*, DWORD))((DWORD*)*action)[5])(action, 0);
+
+					DWORD* handler = itemClick.sold;
+					if (handler)
+					{
+						itemClick.sold = NULL;
+						DWORD* vTable = (DWORD*)*handler;
+						((VOID(__thiscall*)(DWORD*, DWORD*, BOOL))vTable[1])(handler, NULL, TRUE);
+						((VOID(__thiscall*)(DWORD*, BOOL))vTable[0])(handler, TRUE);
+					}
+
+					return action != NULL;
+				}
+			}
+		}
+
+		return ((bool(__thiscall*)(DWORD*, UINT, POINT*))sub_ItemDrop)(dragDrop, uMsg, pt);
+	}
+
+	BOOL __stdcall ConfirmSell(DWORD* handler)
+	{
+		if (!itemClick.selling || itemClick.sold || !handler || *handler != itemClick.sellHandler)
+			return FALSE;
+
+		itemClick.sold = handler;
+		return TRUE;
+	}
+
+	DWORD msgBoxProlog;
+	DWORD back_ItemMsgBox;
+	VOID __declspec(naked) hook_ItemMsgBox()
+	{
+		__asm {
+			push ecx
+			push [esp+0x10]
+			call ConfirmSell
+			pop ecx
+			test eax, eax
+			jz show
+			retn 0xC
+
+			show:
+			mov eax, msgBoxProlog
+			jmp back_ItemMsgBox
+		}
+	}
+
+	DWORD sub_SendExchange;
+	VOID __fastcall SendExchange(DWORD* phase, DWORD /*edx*/, DWORD* from, DWORD* to, DWORD* item)
+	{
+		itemClick.phase = phase;
+		((VOID(__thiscall*)(DWORD*, DWORD*, DWORD*, DWORD*))sub_SendExchange)(phase, from, to, item);
+	}
+
+	DWORD* FindObject(DWORD* objectMap, DWORD* id)
+	{
+		return ((DWORD * (__thiscall*)(DWORD*, DWORD*))((DWORD*)*objectMap)[5])(objectMap, id);
+	}
+
+	// Ports the shift branch of Discipl2.exe 3.01b 0x00505801: items with the same CMidItem::globalItemId move too
+	DWORD sub_ExchangeItem;
+	VOID __stdcall ExchangeItem(DWORD* from, DWORD* to, DWORD* item, DWORD* objectMap, DWORD flag)
+	{
+		DWORD* phase = itemClick.phase;
+		itemClick.phase = NULL;
+
+		DWORD items[256];
+		DWORD count = 0;
+		if (phase && GetKeyState(VK_SHIFT) & 0x8000)
+		{
+			DWORD* inventory = ((DWORD * (__stdcall*)(DWORD*, DWORD*))itemClick.getInventory)(from, objectMap);
+			DWORD* dragged = FindObject(objectMap, item);
+			if (inventory && dragged)
+			{
+				DWORD* vTable = (DWORD*)*inventory;
+				INT total = ((INT(__thiscall*)(DWORD*))vTable[5])(inventory);
+				for (INT i = 0; i < total && count < sizeof(items) / sizeof(DWORD); ++i)
+				{
+					DWORD* id = ((DWORD * (__thiscall*)(DWORD*, INT))vTable[6])(inventory, i);
+					DWORD* other = *id != *item ? FindObject(objectMap, id) : NULL;
+					if (other && other[2] == dragged[2])
+						items[count++] = *id;
+				}
+			}
+		}
+
+		((VOID(__stdcall*)(DWORD*, DWORD*, DWORD*, DWORD*, DWORD))sub_ExchangeItem)(from, to, item, objectMap, flag);
+
+		for (DWORD i = 0; i < count; ++i)
+		{
+			((VOID(__thiscall*)(DWORD*, DWORD*, DWORD*, DWORD*))sub_SendExchange)(phase, from, to, &items[i]);
+			((VOID(__stdcall*)(DWORD*, DWORD*, DWORD*, DWORD*, DWORD))sub_ExchangeItem)(from, to, &items[i], objectMap, flag);
+		}
+	}
+#pragma endregion
+
 	DWORD sub_MouseAction;
 	BOOL MouseActionInner(DWORD* global, UINT uMsg, POINT* pt)
 	{
@@ -8045,6 +8408,35 @@ namespace Hooks
 				sub_BattleSavePhase = f(hookSpace->battle_save_phase);
 				sub_BattleSavePhaseReady = f(hookSpace->battle_save_phase_ready);
 			}
+		}
+
+		if (hookSpace->save_list_sort)
+		{
+			PatchHook(hooker, hookSpace->save_list_sort, hook_005FD0D2);
+			back_005FD0D7 = f(hookSpace->save_list_sort + 5);
+		}
+
+		if (hookSpace->load_list_sort)
+		{
+			PatchHook(hooker, hookSpace->load_list_sort, hook_0050325B);
+			back_00503260 = f(hookSpace->load_list_sort + 5);
+		}
+
+		if (hookSpace->item_drop && ReadDWord(hooker, hookSpace->item_msgbox + 1, &msgBoxProlog))
+		{
+			sub_ItemDrop = RedirectCall(hooker, hookSpace->item_drop, ItemDrop);
+			PatchHook(hooker, hookSpace->item_msgbox, hook_ItemMsgBox);
+			back_ItemMsgBox = f(hookSpace->item_msgbox + 5);
+			itemClick.sellHandler = f(hookSpace->item_sell_handler);
+			itemClick.emptyId = (DWORD*)f(hookSpace->item_empty_id);
+			itemClick.extType = f(hookSpace->item_ext_type);
+		}
+
+		if (hookSpace->shift_send)
+		{
+			sub_SendExchange = RedirectCall(hooker, hookSpace->shift_send, SendExchange);
+			sub_ExchangeItem = RedirectCall(hooker, hookSpace->shift_exchange, ExchangeItem);
+			itemClick.getInventory = f(hookSpace->shift_inventory);
 		}
 
 		// AI turn

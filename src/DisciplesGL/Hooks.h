@@ -295,6 +295,19 @@ namespace Hooks
 		DWORD battle_save_phase;
 		DWORD battle_save_phase_ready;
 		DWORD battle_save_move;
+
+		DWORD save_list_sort;
+		DWORD load_list_sort;
+
+		DWORD item_drop;
+		DWORD item_msgbox;
+		DWORD item_sell_handler;
+		DWORD item_empty_id;
+		DWORD item_ext_type;
+
+		DWORD shift_send;
+		DWORD shift_exchange;
+		DWORD shift_inventory;
 	};
 
 	struct BlendData {

@@ -1059,6 +1059,9 @@ namespace Config
 
 	BYTE GetBindNative(BindAction action)
 	{
+		if (action == BindBuildStructure && config.screen.buildStruct)
+			return VK_RETURN;
+
 		return config.screen.full && bindsList[action].fullNative ? bindsList[action].fullNative : bindsList[action].native;
 	}
 

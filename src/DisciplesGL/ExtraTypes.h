@@ -480,6 +480,7 @@ struct ConfigItems {
 		BOOL menu;
 		BOOL mainMenu;
 		BOOL strategic;
+		BOOL buildStruct;
 	} screen;
 
 	struct {
