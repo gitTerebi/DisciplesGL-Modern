@@ -528,6 +528,18 @@
 		}
 		break;
 
+		case MenuSkipTransitions: {
+			EnableMenuItem(config.menu, IDM_SKIP_TRANSITIONS, MF_BYCOMMAND | (config.skipTransitions.hooked ? MF_ENABLED : (MF_DISABLED | MF_GRAYED)));
+			CheckMenuItem(config.menu, IDM_SKIP_TRANSITIONS, MF_BYCOMMAND | (config.skipTransitions.hooked && config.skipTransitions.enabled ? MF_CHECKED : MF_UNCHECKED));
+		}
+		break;
+
+		case MenuFasterEndTurn: {
+			EnableMenuItem(config.menu, IDM_FASTER_END_TURN, MF_BYCOMMAND | (config.fasterEndTurn.hooked ? MF_ENABLED : (MF_DISABLED | MF_GRAYED)));
+			CheckMenuItem(config.menu, IDM_FASTER_END_TURN, MF_BYCOMMAND | (config.fasterEndTurn.hooked && config.fasterEndTurn.enabled ? MF_CHECKED : MF_UNCHECKED));
+		}
+		break;
+
 		case MenuWindowType: {
 			MenuItemData mData;
 			mData.childId = IDM_MODE_BORDERLESS;
@@ -730,6 +742,8 @@
 		CheckMenu(MenuWindowMode);
 		CheckMenu(MenuMaximizedWindow);
 		CheckMenu(MenuSkipIntro);
+		CheckMenu(MenuSkipTransitions);
+		CheckMenu(MenuFasterEndTurn);
 		CheckMenu(MenuWindowType);
 		CheckMenu(MenuFastAI);
 		CheckMenu(MenuActive);
@@ -3074,6 +3088,20 @@
 				config.skipIntro = !config.skipIntro;
 				Config::Set(CONFIG_DISCIPLE, "Intro", !config.skipIntro);
 				CheckMenu(MenuSkipIntro);
+				return NULL;
+			}
+
+			case IDM_SKIP_TRANSITIONS: {
+				config.skipTransitions.enabled = !config.skipTransitions.enabled;
+				Config::Set(CONFIG_WRAPPER, "SkipTransitions", config.skipTransitions.enabled);
+				CheckMenu(MenuSkipTransitions);
+				return NULL;
+			}
+
+			case IDM_FASTER_END_TURN: {
+				config.fasterEndTurn.enabled = !config.fasterEndTurn.enabled;
+				Config::Set(CONFIG_WRAPPER, "FasterEndTurn", config.fasterEndTurn.enabled);
+				CheckMenu(MenuFasterEndTurn);
 				return NULL;
 			}
 

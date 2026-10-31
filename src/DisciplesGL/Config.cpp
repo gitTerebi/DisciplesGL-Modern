@@ -82,7 +82,7 @@ const BindInfo bindsList[] = {
 	"ScrollLeft", VK_LEFT, FALSE, 'A', ScopeMap, 0, 'A',
 	"ScrollRight", VK_RIGHT, FALSE, 'D', ScopeMap, 0, 'D',
 	"EndTurn", VK_SPACE, FALSE, 0, ScopeMap, 0, 'E',
-	"SpellBook", 'S', FALSE, 'E', ScopeMap, 0, 'R',
+	"SpellBook", 'S', FALSE, 'E', ScopeMap, 0, 0,
 	"Capital", 'A', FALSE, 'Q', ScopeMap, 0, 'F',
 	"QuickSave", 'Q', TRUE, VK_F5, ScopeMap, 0, VK_F5,
 	"ClosePopup", VK_RETURN, FALSE, 0, ScopePopup, VK_ESCAPE, VK_SPACE,
@@ -98,7 +98,7 @@ const BindInfo bindsList[] = {
 	"Guard", 'G', FALSE, 0, ScopeMap, 0, 0,
 	"NextLeader", VK_TAB, FALSE, 0, ScopeMap, 0, 0,
 	"WandScroll", 'U', FALSE, 0, ScopeMap, 0, 0,
-	"DropRod", 'R', FALSE, 0, ScopeMap, 0, 0,
+	"DropRod", 'R', FALSE, 0, ScopeMap, 0, 'Q',
 	"ContinueMove", 'M', FALSE, 0, ScopeMap, 0, 0,
 	"Banners", 'B', FALSE, 0, ScopeMap, 0, 0,
 	"CenterStack", 'C', FALSE, 0, ScopeMap, 0, 0,
@@ -126,7 +126,7 @@ const BindInfo bindsList[] = {
 	"SpellLevel5", '5', FALSE, 0, ScopeScreen, 0, 0,
 	"OtherParty", VK_TAB, FALSE, 0, ScopeBattle, 0, 0,
 	"QuickLoad", 'L', TRUE, VK_F9, ScopeMap, 0, VK_F9,
-	"BattleClose", VK_ESCAPE, FALSE, 0, ScopeBattle, 0, 0
+	"BattleClose", VK_ESCAPE, FALSE, 0, ScopeBattle, 0, VK_SPACE
 };
 
 const KeyName keyNames[] = {
@@ -341,10 +341,13 @@ namespace Config
 				Config::Set(CONFIG_DISCIPLE, "DisplayMode", config.windowedMode);
 			}
 
+			config.skipIntro = TRUE;
+			Config::Set(CONFIG_DISCIPLE, "Intro", FALSE);
+
 			{
 				config.hd = TRUE;
 				config.image.aspect = TRUE;
-				config.image.vSync = TRUE;
+				config.image.vSync = FALSE;
 
 				switch (quality)
 				{
@@ -358,7 +361,7 @@ namespace Config
 					config.image.interpolation = InterpolateLanczos;
 					break;
 				default:
-					config.image.interpolation = InterpolateHermite;
+					config.image.interpolation = InterpolateFsr;
 					break;
 				}
 
@@ -368,13 +371,19 @@ namespace Config
 
 				if (!config.type.sacred)
 				{
-					Config::Set(CONFIG_DISCIPLE, "ShowInterfBorder", TRUE);
+					Config::Set(CONFIG_DISCIPLE, "ShowInterfBorder", FALSE);
 					Config::Set(CONFIG_DISCIPLE, "EnableZoom", TRUE);
 
-					config.borders.type = BordersClassic;
-					config.background.enabled = TRUE;
+					config.borders.type = BordersNone;
+					config.background.enabled = FALSE;
 					config.battle.mirror = TRUE;
+					config.wide.allowed = TRUE;
 				}
+
+				config.toogle.banners = TRUE;
+				config.maximizedWindow = TRUE;
+				config.skipTransitions.enabled = TRUE;
+				config.fasterEndTurn.enabled = TRUE;
 				config.battle.speedIndex = 20;
 				config.battle.speedValue = config.battle.speedIndex + 10;
 
@@ -402,7 +411,7 @@ namespace Config
 					CHAR* ptr = buffer;
 					ptr = Add(ptr, "ReInit", FALSE, "Reset all wrapper configurations (0 - no; 1 - yes)");
 
-					ptr = Add(ptr, "ShowBanners", config.toogle.banners, "Show in-game banners for troops (0 - no 'default'; 1 - yes)");
+					ptr = Add(ptr, "ShowBanners", config.toogle.banners, "Show in-game banners for troops (0 - no; 1 - yes 'default')");
 					ptr = Add(ptr, "ShowResources", config.toogle.resources, "Show resources panel (0 - no 'default'; 1 - yes)");
 					ptr = Add(ptr, "SceneSort", *(INT*)&config.scene.sort.real, "Sort scenarios (0 - by title 'default'; 1 - by file name; 2 - by map size 'ascending'; 3 - by map size 'descending')");
 					ptr = Add(ptr, "Renderer", *(INT*)&config.renderer, "Image renderer (0 - auto 'default'; 1 - opengl 1.1; 2 - opengl 2.0; 3 - opengl 3.0; 4 - windows gdi)");
@@ -420,22 +429,24 @@ namespace Config
 					}
 
 					ptr = Add(ptr, "ImageAspect", config.image.aspect, "Keep image aspect ratio (0 - no; 1 - yes 'default')");
-					ptr = Add(ptr, "ImageVSync", config.image.vSync, "Enables vertical synchronization (0 - no; 1 - yes 'default')");
-					ptr = Add(ptr, "Interpolation", (INT)config.image.interpolation, "Image interpolation filter (0 - none; 1 - linear; 2 - hermite; 3 - cubic; 4 - lanczos; 5 - fsr)");
+					ptr = Add(ptr, "ImageVSync", config.image.vSync, "Enables vertical synchronization (0 - no 'default'; 1 - yes)");
+					ptr = Add(ptr, "Interpolation", (INT)config.image.interpolation, "Image interpolation filter (0 - none; 1 - linear; 2 - hermite; 3 - cubic; 4 - lanczos; 5 - fsr 'default')");
 					ptr = Add(ptr, "Upscaling", MAKELONG(config.image.upscaling, config.image.value), "Image upscaling filter (low word: 0 - none 'default'; 1 - xbrz; 2 - scalehq; 3 - xsal; 4 - eagle; 5 - scalenx; high word - value)");
 					ptr = Add(ptr, "FsrSharpness", config.image.sharpness, "FSR sharpening strength (0 - off; 1 - low; 2 - medium 'default'; 3 - high; 4 - maximum)");
 
 					if (!config.type.sacred)
 					{
-						ptr = Add(ptr, "Borders", *(INT*)&config.borders.type, "Enables borders for in-game windows (0 - no; 1 - classic style 'default', 2 - alternative style)");
-						ptr = Add(ptr, "Background", config.background.enabled, "Enables background for in-game windows (0 - no; 1 - yes 'default')");
+						ptr = Add(ptr, "Borders", *(INT*)&config.borders.type, "Enables borders for in-game windows (0 - no 'default'; 1 - classic style, 2 - alternative style)");
+						ptr = Add(ptr, "Background", config.background.enabled, "Enables background for in-game windows (0 - no 'default'; 1 - yes)");
 					}
 
 					ptr = Add(ptr, "EnableZoom", config.zoom.enabled, "Enables in-game windows zoom (0 - no; 1 - yes 'default')");
 					ptr = Add(ptr, "ZoomFactor", *(INT*)&config.zoom.value, "Zoom factor for in-game windows (0 - 100 'default')");
 					ptr = Add(ptr, "MapZoom", *(INT*)&config.mapZoom.value, "Strategic map zoom in percent (100 'default' - 300), changed with Ctrl + mouse wheel");
 					ptr = Add(ptr, "FullScreenMode", config.borderless.mode, "Full screen window mode (0 - exclusive 'default'; 1 - borderless)");
-					ptr = Add(ptr, "MaximizedWindow", config.maximizedWindow, "Starts windowed mode maximized (0 - no 'default'; 1 - yes)");
+					ptr = Add(ptr, "MaximizedWindow", config.maximizedWindow, "Starts windowed mode maximized (0 - no; 1 - yes 'default')");
+					ptr = Add(ptr, "SkipTransitions", config.skipTransitions.enabled, "Skips the full screen animations between menus (0 - no; 1 - yes 'default')");
+					ptr = Add(ptr, "FasterEndTurn", config.fasterEndTurn.enabled, "Keeps the camera still after End Turn and at turn start, and skips the terrain spread animation around your towns (0 - no; 1 - yes 'default')");
 					ptr = Add(ptr, "GameSpeed", config.speed.index, "Animation speed (1 - ..., 5 - 1.5x 'deafult'");
 					ptr = Add(ptr, "SpeedEnabled", config.speed.enabled, "Enables animation speed (0 - no 'default'; 1 - yes)");
 					ptr = Add(ptr, "BattleSpeed", config.battle.speedIndex, "Battle animation speed (0 - 1.0x, 10 - 2.0x, 20 - 3.0x 'default')");
@@ -444,7 +455,7 @@ namespace Config
 
 					if (!config.type.sacred)
 					{
-						ptr = Add(ptr, "WideBattle", config.wide.allowed, "Makes window battle wider. Depends on image aspect ratio (0 - no; 1 - yes)");
+						ptr = Add(ptr, "WideBattle", config.wide.allowed, "Makes window battle wider. Depends on image aspect ratio (0 - no; 1 - yes 'default')");
 						ptr = Add(ptr, "MirrorBattle", config.battle.mirror, "Allows mirrored bacgrounds for battles (0 - no; 1 - yes 'default')");
 					}
 
@@ -566,6 +577,8 @@ namespace Config
 
 				config.hd = (BOOL)Config::Get(CONFIG_WRAPPER, "HD", TRUE);
 				config.maximizedWindow = (BOOL)Config::Get(CONFIG_WRAPPER, "MaximizedWindow", FALSE);
+				config.skipTransitions.enabled = (BOOL)Config::Get(CONFIG_WRAPPER, "SkipTransitions", FALSE);
+				config.fasterEndTurn.enabled = (BOOL)Config::Get(CONFIG_WRAPPER, "FasterEndTurn", FALSE);
 
 				config.image.aspect = (BOOL)Config::Get(CONFIG_WRAPPER, "ImageAspect", TRUE);
 				config.image.vSync = (BOOL)Config::Get(CONFIG_WRAPPER, "ImageVSync", TRUE);

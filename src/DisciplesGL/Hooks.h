@@ -295,6 +295,7 @@ namespace Hooks
 		DWORD battle_save_phase;
 		DWORD battle_save_phase_ready;
 		DWORD battle_save_move;
+		DWORD save_notice_jump;
 
 		DWORD save_list_sort;
 		DWORD load_list_sort;
@@ -302,12 +303,35 @@ namespace Hooks
 		DWORD item_drop;
 		DWORD item_msgbox;
 		DWORD item_sell_handler;
+		DWORD item_buy_handler;
 		DWORD item_empty_id;
 		DWORD item_ext_type;
 
 		DWORD shift_send;
 		DWORD shift_exchange;
 		DWORD shift_inventory;
+
+		DWORD trans_menu;
+		DWORD trans_race_next;
+		DWORD trans_race_prev;
+
+		DWORD turn_center_capital;
+		DWORD turn_center_stack;
+		DWORD turn_center_object;
+		DWORD turn_terrain_scroll;
+
+		DWORD item_press;
+		DWORD item_find_toggle;
+		DWORD item_press_toggle;
+		DWORD item_object_map;
+		DWORD item_inventory;
+		DWORD item_sell_name;
+		DWORD item_sell_gold;
+
+		DWORD sound_get;
+		DWORD sound_play;
+		DWORD sound_holder_free;
+		DWORD sound_result_free;
 	};
 
 	struct BlendData {

@@ -312,6 +312,16 @@ struct ConfigItems {
 	BOOL windowedMode;
 	BOOL maximizedWindow;
 	BOOL skipIntro;
+
+	struct {
+		BOOL enabled;
+		BOOL hooked;
+	} skipTransitions;
+
+	struct {
+		BOOL enabled;
+		BOOL hooked;
+	} fasterEndTurn;
 	DisplayMode* mode;
 	Resolution resolution;
 
@@ -568,6 +578,8 @@ enum MenuType
 	MenuWindowMode,
 	MenuMaximizedWindow,
 	MenuSkipIntro,
+	MenuSkipTransitions,
+	MenuFasterEndTurn,
 	MenuWindowType,
 	MenuFastAI,
 	MenuActive,
