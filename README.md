@@ -6,6 +6,7 @@ A maintained build of the DisciplesGL OpenGL wrapper for Disciples II.
 
 - **Keybinds** (Options > Keybinds): rebind any game hotkey on the map, town, army, spell and battle screens, plus the wrapper's F-key shortcuts. Each bind only works on its own screen, so one key can do different things on the map and in battle. Picking a key that is already used on the same screen clears the old bind. A new config starts with left-hand defaults: W/A/S/D scroll, E ends the turn, R opens the spell book, F goes to the capital, Space accepts popups and Q starts auto battle.
 - **Quick load** (F9 by default): quick-loads on the map, and on the main menu it loads the newest save straight away.
+- **Battle load** (F10 by default): loads the `BattleSave` save on the map and on the main menu, so a lost battle can be replayed at once.
 - **Battle close** key for battles, unbound by default.
 - **Battle save** (v2.02b): the game writes a `BattleSave` save just before a stack moves to attack, so a lost battle can be replayed.
 - **FSR filter** (Interpolation > FSR, OpenGL 3): AMD FidelityFX Super Resolution upscaling, with a sharpness setting from Off to Maximum (Interpolation > FSR Sharpness).

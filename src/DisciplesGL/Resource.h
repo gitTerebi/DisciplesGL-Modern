@@ -63,7 +63,7 @@
 #define IDC_TRK_OUT_RIGHT 23
 
 #define IDC_BIND_FIRST 10
-#define IDC_FKEY_FIRST 60
+#define IDC_FKEY_FIRST 61
 #define IDC_LBL_ZOOM 70
 #pragma endregion
 

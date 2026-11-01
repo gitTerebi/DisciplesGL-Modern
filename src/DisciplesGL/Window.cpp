@@ -2543,17 +2543,21 @@
 
 			if (!(HIWORD(lParam) & KF_ALTDOWN))
 			{
-				if (config.screen.mainMenu && !config.screen.popup && config.binds[BindQuickLoad] == wParam && !(HIWORD(lParam) & KF_REPEAT) && Hooks::ContinueGame(hWnd))
-					return NULL;
+				if (config.screen.mainMenu && !config.screen.popup && !(HIWORD(lParam) & KF_REPEAT))
+				{
+					if (config.binds[BindQuickLoad] == wParam && Hooks::ContinueGame(hWnd, "*.sg") || config.binds[BindBattleLoad] == wParam && Hooks::ContinueGame(hWnd, "BattleSave.sg"))
+						return NULL;
+				}
 
 				WPARAM key = wParam;
 				if (!RemapBindKey(uMsg, &wParam))
 					return NULL;
 
+				// Windows sends F10 as a system key without Alt, and the game reads bound keys only from plain key messages
 				if (wParam != key)
 				{
 					config.scroll.isWheel = FALSE;
-					return CallWindowProc(OldWindowProc, hWnd, uMsg, wParam, lParam);
+					return CallWindowProc(OldWindowProc, hWnd, WM_KEYDOWN, wParam, lParam);
 				}
 
 				if (wParam == VK_OEM_PLUS || wParam == VK_OEM_MINUS || wParam == VK_ADD || wParam == VK_SUBTRACT)
@@ -2687,8 +2691,12 @@
 		case WM_SYSKEYUP:
 		case WM_KEYUP:
 		case WM_CHAR: {
+			WPARAM key = wParam;
 			if (!RemapBindKey(uMsg, &wParam))
 				return NULL;
+
+			if (wParam != key && uMsg == WM_SYSKEYUP)
+				uMsg = WM_KEYUP;
 
 			return CallWindowProc(OldWindowProc, hWnd, uMsg, wParam, lParam);
 		}

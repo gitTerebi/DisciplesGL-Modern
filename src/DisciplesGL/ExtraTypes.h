@@ -271,6 +271,7 @@ enum BindAction
 	BindOtherParty,
 	BindQuickLoad,
 	BindBattleClose,
+	BindBattleLoad,
 	BindCount
 };
 

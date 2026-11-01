@@ -126,7 +126,8 @@ const BindInfo bindsList[] = {
 	"SpellLevel5", '5', FALSE, 0, ScopeScreen, 0, 0,
 	"OtherParty", VK_TAB, FALSE, 0, ScopeBattle, 0, 0,
 	"QuickLoad", 'L', TRUE, VK_F9, ScopeMap, 0, VK_F9,
-	"BattleClose", VK_ESCAPE, FALSE, 0, ScopeBattle, 0, VK_SPACE
+	"BattleClose", VK_ESCAPE, FALSE, 0, ScopeBattle, 0, VK_SPACE,
+	"BattleLoad", 'L', TRUE, VK_F10, ScopeMap, 0, VK_F10
 };
 
 const KeyName keyNames[] = {
@@ -477,23 +478,16 @@ namespace Config
 			}
 
 			{
-				config.keys.imageFilter = 3;
-				Config::Set(CONFIG_KEYS, "ImageFilter", config.keys.imageFilter);
-
-				config.keys.windowedMode = 4;
-				Config::Set(CONFIG_KEYS, "WindowedMode", config.keys.windowedMode);
-
+				Config::Set(CONFIG_KEYS, "ImageFilter", "");
+				Config::Set(CONFIG_KEYS, "WindowedMode", "");
 				Config::Set(CONFIG_KEYS, "AspectRatio", "");
 				Config::Set(CONFIG_KEYS, "VSync", "");
 
 				if (!config.type.sacred)
 					Config::Set(CONFIG_KEYS, "ZoomImage", "");
 
-				config.keys.speedToggle = 7;
-				Config::Set(CONFIG_KEYS, "SpeedToggle", config.keys.speedToggle);
-
-				config.keys.snapshot = 12;
-				Config::Set(CONFIG_KEYS, "Screenshot", config.keys.snapshot);
+				Config::Set(CONFIG_KEYS, "SpeedToggle", "");
+				Config::Set(CONFIG_KEYS, "Screenshot", "");
 			}
 
 			for (DWORD i = 0; i < BindCount; ++i)

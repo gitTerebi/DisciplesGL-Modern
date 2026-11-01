@@ -332,6 +332,17 @@ namespace Hooks
 		DWORD sound_play;
 		DWORD sound_holder_free;
 		DWORD sound_result_free;
+
+		DWORD battle_load;
+		DWORD battle_save_continue;
+
+		DWORD volume_resize_fx;
+		DWORD volume_resize_music;
+		DWORD volume_resize_ackno;
+		DWORD volume_items_fx;
+		DWORD volume_items_music;
+		DWORD volume_items_ackno;
+		DWORD volume_range;
 	};
 
 	struct BlendData {
@@ -362,7 +373,7 @@ namespace Hooks
 	INT __stdcall MessageBoxHook(HWND, LPCSTR, LPCSTR, UINT);
 	VOID PrintText(CHAR* str);
 	VOID SetGameSpeed();
-	BOOL ContinueGame(HWND hWnd);
+	BOOL ContinueGame(HWND hWnd, const CHAR* pattern);
 
 	VOID Load();
 }
