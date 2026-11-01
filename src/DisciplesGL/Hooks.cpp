@@ -461,7 +461,7 @@ namespace Hooks
 
 			0x0050290B, 0x00502940, 0x005F990C, // shift_move
 
-			0x004E6A23, 0x00000000, 0x00000000, // trans_menu
+			0x004E6A23, 0x004EA9EE, 0x004EAB9C, // trans_menu
 
 			0x0048E98F, 0x0048E9AD, 0x0048E9CC, 0x004EFEF3, // turn_center
 
@@ -472,6 +472,12 @@ namespace Hooks
 			0x0048C030, 0x0048D415, // battle_load
 
 			0x004BC198, 0x004BC248, 0x004BC2FC, 0x004BD2A6, 0x004BD2FB, 0x004BD4A7, 0x006E6D50, // volume_steps
+
+			0x004EA369, // trans_race_done
+
+			0x004F26B7, // ai_move_anim
+
+			0x004F4D93, 0x004F2939, // ai_move_scroll
 		},
 #pragma endregion
 
@@ -675,6 +681,12 @@ namespace Hooks
 			0x0048EE9C, 0x00490281, // battle_load
 
 			0x004BFA33, 0x004BFAE3, 0x004BFB97, 0x004C0BD1, 0x004C0C26, 0x004C0DD2, 0x006F35C8, // volume_steps
+
+			0x00000000, // trans_race_done
+
+			0x004F652C, // ai_move_anim
+
+			0x004F8C08, 0x004F67AE, // ai_move_scroll
 		},
 #pragma endregion
 
@@ -744,6 +756,12 @@ namespace Hooks
 			0x0048E9D6, 0x0048FD85, // battle_load
 
 			0x004BF07C, 0x004BF12C, 0x004BF1E0, 0x004C021A, 0x004C026F, 0x004C041B, 0x006F14F0, // volume_steps
+
+			0x00000000, // trans_race_done
+
+			0x004F58BF, // ai_move_anim
+
+			0x004F7F9B, 0x004F5B41, // ai_move_scroll
 		},
 #pragma endregion
 
@@ -8017,9 +8035,45 @@ namespace Hooks
 	{
 		return ((DWORD*(__thiscall*)(DWORD, DWORD*, const CHAR*))sub_LoadTransition)(phase, video, config.skipTransitions.enabled ? NULL : name);
 	}
+
+	// Discipl2.exe v2.02b 0x004EA380: no null video check, unlike v3.01b 0x004EDBAA
+	DWORD sub_RaceTransitionDone;
+	BOOL __stdcall RaceTransitionDone(DWORD* video)
+	{
+		return !video[1] || ((BOOL(__stdcall*)(DWORD*))sub_RaceTransitionDone)(video);
+	}
 #pragma endregion
 
 #pragma region Faster end turn
+	// Discipl2.exe v3.01b 0x004F5851: an empty frame list is the stock path for a stack moving unseen
+	DWORD sub_StackMoveFrames;
+	VOID __stdcall StackMoveFrames(DWORD* frames, DWORD path, DWORD isPlayer, DWORD fast)
+	{
+		if ((BYTE)isPlayer || !config.instantAiMove.enabled)
+			((VOID(__stdcall*)(DWORD*, DWORD, DWORD, DWORD))sub_StackMoveFrames)(frames, path, isPlayer, fast);
+	}
+
+	DWORD sub_StackMoveScroll, sub_StackIsPlayer;
+	BOOL __stdcall IsAiStackMove(BYTE* move, DWORD objectMap)
+	{
+		return config.instantAiMove.enabled && !(BYTE)((DWORD(__stdcall*)(BYTE*, DWORD))sub_StackIsPlayer)(move + 0x14, objectMap);
+	}
+
+	// Discipl2.exe v3.01b 0x004F7DBC: the stack move handler keeps the move object at [ebp+0x14] and the object map at [ebp+0x18]
+	VOID __declspec(naked) StackMoveScroll()
+	{
+		__asm {
+			push [ebp+0x18]
+			push [ebp+0x14]
+			call IsAiStackMove
+			test eax, eax
+			jz lbl_scroll
+			retn 0x18
+
+			lbl_scroll: jmp sub_StackMoveScroll
+		}
+	}
+
 	DWORD sub_TurnCenterCapital, sub_TurnCenterStack, sub_TurnCenterObject;
 	VOID __fastcall TurnCenterCapital(DWORD* view)
 	{
@@ -9115,6 +9169,9 @@ namespace Hooks
 			{
 				RedirectCall(hooker, hookSpace->trans_race_next, LoadTransition);
 				RedirectCall(hooker, hookSpace->trans_race_prev, LoadTransition);
+
+				if (hookSpace->trans_race_done)
+					sub_RaceTransitionDone = RedirectCall(hooker, hookSpace->trans_race_done, RaceTransitionDone);
 			}
 		}
 
@@ -9127,6 +9184,18 @@ namespace Hooks
 			sub_TurnCenterStack = RedirectCall(hooker, hookSpace->turn_center_stack, TurnCenterStack);
 			sub_TurnCenterObject = RedirectCall(hooker, hookSpace->turn_center_object, TurnCenterObject);
 			sub_ScrollToEvent = RedirectCall(hooker, hookSpace->turn_terrain_scroll, TerrainScroll);
+		}
+
+		if (hookSpace->ai_move_anim)
+		{
+			config.instantAiMove.hooked = TRUE;
+			sub_StackMoveFrames = RedirectCall(hooker, hookSpace->ai_move_anim, StackMoveFrames);
+
+			if (hookSpace->ai_move_scroll)
+			{
+				sub_StackIsPlayer = f(hookSpace->ai_move_is_player);
+				sub_StackMoveScroll = RedirectCall(hooker, hookSpace->ai_move_scroll, StackMoveScroll);
+			}
 		}
 
 		// AI turn

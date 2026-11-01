@@ -540,6 +540,12 @@
 		}
 		break;
 
+		case MenuInstantAiMove: {
+			EnableMenuItem(config.menu, IDM_INSTANT_AI_MOVE, MF_BYCOMMAND | (config.instantAiMove.hooked ? MF_ENABLED : (MF_DISABLED | MF_GRAYED)));
+			CheckMenuItem(config.menu, IDM_INSTANT_AI_MOVE, MF_BYCOMMAND | (config.instantAiMove.hooked && config.instantAiMove.enabled ? MF_CHECKED : MF_UNCHECKED));
+		}
+		break;
+
 		case MenuWindowType: {
 			MenuItemData mData;
 			mData.childId = IDM_MODE_BORDERLESS;
@@ -744,6 +750,7 @@
 		CheckMenu(MenuSkipIntro);
 		CheckMenu(MenuSkipTransitions);
 		CheckMenu(MenuFasterEndTurn);
+		CheckMenu(MenuInstantAiMove);
 		CheckMenu(MenuWindowType);
 		CheckMenu(MenuFastAI);
 		CheckMenu(MenuActive);
@@ -3110,6 +3117,13 @@
 				config.fasterEndTurn.enabled = !config.fasterEndTurn.enabled;
 				Config::Set(CONFIG_WRAPPER, "FasterEndTurn", config.fasterEndTurn.enabled);
 				CheckMenu(MenuFasterEndTurn);
+				return NULL;
+			}
+
+			case IDM_INSTANT_AI_MOVE: {
+				config.instantAiMove.enabled = !config.instantAiMove.enabled;
+				Config::Set(CONFIG_WRAPPER, "InstantAiMove", config.instantAiMove.enabled);
+				CheckMenu(MenuInstantAiMove);
 				return NULL;
 			}
 

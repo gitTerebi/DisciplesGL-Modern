@@ -343,6 +343,13 @@ namespace Hooks
 		DWORD volume_items_music;
 		DWORD volume_items_ackno;
 		DWORD volume_range;
+
+		DWORD trans_race_done;
+
+		DWORD ai_move_anim;
+
+		DWORD ai_move_scroll;
+		DWORD ai_move_is_player;
 	};
 
 	struct BlendData {

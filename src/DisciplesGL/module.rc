@@ -263,6 +263,7 @@ BEGIN
 		MENUITEM "Skip &Intro Videos",				IDM_SKIP_INTRO
 		MENUITEM "Skip Menu &Transitions",			IDM_SKIP_TRANSITIONS
 		MENUITEM "Faster &End Turn",				IDM_FASTER_END_TURN
+		MENUITEM "Instant &AI Movement",			IDM_INSTANT_AI_MOVE
 		MENUITEM SEPARATOR
 		POPUP "Game &Speed\a"
 		BEGIN

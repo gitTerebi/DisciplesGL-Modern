@@ -323,6 +323,11 @@ struct ConfigItems {
 		BOOL enabled;
 		BOOL hooked;
 	} fasterEndTurn;
+
+	struct {
+		BOOL enabled;
+		BOOL hooked;
+	} instantAiMove;
 	DisplayMode* mode;
 	Resolution resolution;
 
@@ -581,6 +586,7 @@ enum MenuType
 	MenuSkipIntro,
 	MenuSkipTransitions,
 	MenuFasterEndTurn,
+	MenuInstantAiMove,
 	MenuWindowType,
 	MenuFastAI,
 	MenuActive,
