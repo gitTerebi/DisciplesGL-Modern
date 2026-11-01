@@ -7162,6 +7162,32 @@ namespace Hooks
 	}
 #pragma endregion
 
+#pragma region Battle sound repeat
+	DWORD sub_PlayBattleSound;
+	DWORD __fastcall PlayBattleSound(DWORD _this, DWORD /*edx*/, CHAR* name, DWORD a3, DWORD* callback)
+	{
+		static DWORD lastCaller, lastTime;
+		DWORD caller = (DWORD)_ReturnAddress();
+		DWORD time = timeGetTime();
+		if (name && *name)
+		{
+			// Discipl2.exe v2.02b 0x00631A83 starts one hit sound per target in the same millisecond
+			if (caller == lastCaller && time - lastTime < 20)
+			{
+				DWORD* handler = (DWORD*)callback[1];
+				if (handler)
+					((VOID(__thiscall*)(DWORD*, DWORD))((DWORD*)handler[0])[0])(handler, 0);
+				return 0;
+			}
+
+			lastCaller = caller;
+			lastTime = time;
+		}
+
+		return ((DWORD(__thiscall*)(DWORD, CHAR*, DWORD, DWORD*))sub_PlayBattleSound)(_this, name, a3, callback);
+	}
+#pragma endregion
+
 #pragma region Map move by mouse
 #define LBUTTON 1
 #define MBUTTON 2
@@ -8497,6 +8523,21 @@ namespace Hooks
 			sub_PlaySpell = RedirectCall(hooker, hookSpace->async_spell, hook_004F21C0);
 			sub_PlayDeath = RedirectCall(hooker, hookSpace->async_death, hook_004EF722);
 			sub_PlayRuin = RedirectCall(hooker, hookSpace->async_ruin, hook_004F1D80);
+		}
+
+		// Battle sound player tail after its first call (Discipl2.exe v3.01b 0x005C1DEC + 21)
+		{
+			static const BYTE battleSound[] = {
+				0x84, 0xC0, 0x75, 0x1D, 0x8B, 0x4E, 0x04, 0x33, 0xC0, 0x85, 0xC9, 0x0F, 0x94, 0xC0, 0xF6, 0xD8, 0x1B, 0xC0, 0x40, 0x84,
+				0xC0, 0x74, 0x06, 0x8B, 0x01, 0x6A, 0x00, 0xFF, 0x10, 0x32, 0xC0, 0xEB, 0x02, 0xB0, 0x01, 0x5E, 0xC2, 0x0C, 0x00
+			};
+			DWORD addr = FindBlock(hooker, battleSound, sizeof(battleSound), IMAGE_SCN_MEM_EXECUTE);
+			if (addr)
+			{
+				addr -= 21;
+				RedirectAllCalls(hooker, addr, PlayBattleSound, IMAGE_SCN_MEM_EXECUTE);
+				sub_PlayBattleSound = f(addr);
+			}
 		}
 
 		if (deepHooksStage == 11)
