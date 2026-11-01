@@ -478,6 +478,8 @@ namespace Hooks
 			0x004F26B7, // ai_move_anim
 
 			0x004F4D93, 0x004F2939, // ai_move_scroll
+
+			0x006E79EC, 0x0061A79E, 0x0061A76A, 0x0064133F, 0x0063FA3B, 0x0063E533, 0x0063E503, 0x006653A0, 0x0063D91F, // turn_order
 		},
 #pragma endregion
 
@@ -687,6 +689,8 @@ namespace Hooks
 			0x004F652C, // ai_move_anim
 
 			0x004F8C08, 0x004F67AE, // ai_move_scroll
+
+			0x006F4294, 0x00623B8C, 0x00623B58, 0x0064AE7F, 0x00649678, 0x00648123, 0x006480F3, 0x006704F0, 0x0064752D, // turn_order
 		},
 #pragma endregion
 
@@ -762,6 +766,8 @@ namespace Hooks
 			0x004F58BF, // ai_move_anim
 
 			0x004F7F9B, 0x004F5B41, // ai_move_scroll
+
+			0x006F2244, 0x0062271C, 0x006226E8, 0x006497BF, 0x00647EF8, 0x006469A3, 0x00646973, 0x0066ED90, 0x00645D5D, // turn_order
 		},
 #pragma endregion
 
@@ -5729,12 +5735,17 @@ namespace Hooks
 			((VOID(__thiscall*)(DWORD, CHAR*))(sub_PrintText))(gameObject, str);
 	}
 
+	VOID HookTurnOrderUpdate();
+
 	DWORD sub_GameObjectInit;
 	VOID __declspec(naked) hook_00405A1A()
 	{
 		__asm
 		{
 			mov gameObject, ecx
+			push ecx
+			call HookTurnOrderUpdate
+			pop ecx
 			jmp sub_GameObjectInit
 		}
 	}
@@ -8311,6 +8322,497 @@ namespace Hooks
 	}
 #pragma endregion
 
+#pragma region Battle turn order
+	#define TURN_ORDER_SLOTS 13
+	// Discipl2.exe v3.01b 0x00646C69: the battle engine draws lower layer keys in front, units use 20 - 130, the big face 10
+	#define TURN_ORDER_LAYER 11
+	#define TURN_ORDER_GAP 2
+	#define TURN_ORDER_BORDER 2
+	#define TURN_ORDER_PANEL 175
+	#define TURN_ORDER_SLIDE 300
+	#define TURN_ORDER_DIVIDER 6
+	#define TURN_ORDER_CARDS 32
+	#define TURN_ORDER_UNITS 22
+	// Discipl2.exe v3.01b 0x0053A2A0: CImage2Outline, which leaves its middle transparent, builds its surface with hint 0
+	#define TURN_ORDER_KEYED 0
+	#define STATUS_DEAD 1
+	#define STATUS_LOWER_INITIATIVE 13
+	// Discipl2.exe v2.02b 0x0082EBF8: the empty CMidgardID the turn order is cleared with holds 0x003F0000 at runtime
+	#define EMPTY_ID 0x003F0000
+	#define COLOR_OWN_565 0x07E0
+	#define COLOR_ENEMY_565 0xF800
+	#define COLOR_CURRENT_565 0xFFE0
+	#define COLOR_DIVIDER_565 0xFFFF
+
+	struct {
+		DWORD order;
+		DWORD engine;
+		DWORD area;
+		DWORD objectMap;
+		DWORD unitInfo;
+		DWORD hidden;
+		DWORD retreated;
+		DWORD unsummoned;
+	} turnOrderOffsets;
+
+	struct TurnStrip {
+		DWORD* imageVtbl;
+		DWORD* textureVtbl;
+		DWORD surface[6];
+		POINT size;
+		BYTE dirty;
+	};
+
+	struct TurnCard {
+		DWORD unitId;
+		DWORD* face;
+		BYTE* pixels;
+		BOOL attacker;
+		BOOL leaving;
+		BOOL next;
+		BOOL divider;
+		LONG from;
+		LONG to;
+		DWORD start;
+	};
+
+	DWORD sub_BattleViewerUpdate, sub_BattleViewerAttack, sub_BattleViewerEnd;
+	DWORD sub_UnitStatus, sub_UnitAttacker, sub_BaseUnitImpl, sub_UnitFace, sub_LayerSet, sub_LayerRemove, sub_ImageSurface, sub_UnitAttack;
+	DWORD sub_TurnStripDestructor;
+	DWORD turnStripImageVtbl[12], turnStripTextureVtbl[4];
+	DWORD* turnViewer;
+	DWORD turnViewerVtbl;
+	BYTE turnOwnAttacker;
+	TurnStrip* turnStrip;
+	TurnCard turnCards[TURN_ORDER_CARDS];
+	DWORD turnCardCount;
+	POINT turnCardSize;
+	LONG turnStep;
+
+	VOID FreeTurnCard(TurnCard* card)
+	{
+		if (card->face)
+			((VOID(__thiscall*)(DWORD*, BYTE))((DWORD*)card->face[0])[0])(card->face, 1);
+
+		if (card->pixels)
+			MemoryFree(card->pixels);
+	}
+
+	VOID FreeTurnCards()
+	{
+		for (DWORD i = 0; i < turnCardCount; ++i)
+			FreeTurnCard(&turnCards[i]);
+
+		turnCardCount = 0;
+	}
+
+	LONG TurnCardX(const TurnCard* card, DWORD now)
+	{
+		DWORD elapsed = now - card->start;
+		if (elapsed >= TURN_ORDER_SLIDE)
+			return card->to;
+
+		FLOAT t = (FLOAT)elapsed / TURN_ORDER_SLIDE;
+		t = t * t * (3.0f - 2.0f * t);
+		return card->from + (LONG)((card->to - card->from) * t);
+	}
+
+	VOID __fastcall TurnStripDestructor(TurnStrip* obj, DWORD /*edx*/, BYTE flags)
+	{
+		if (turnStrip == obj)
+			turnStrip = NULL;
+
+		((VOID(__thiscall*)(TurnStrip*, BYTE))sub_TurnStripDestructor)(obj, flags & ~1);
+		if (flags & 1)
+			MemoryFree(obj);
+	}
+
+	DWORD AveragePixel(const DWORD* pix, const DWORD* masks)
+	{
+		DWORD res = 0;
+		for (DWORD i = 0; i < 4; ++i)
+		{
+			ULONGLONG m = masks[i];
+			res |= (DWORD)((((pix[0] & m) + (pix[1] & m) + (pix[2] & m) + (pix[3] & m)) >> 2) & m);
+		}
+
+		return res;
+	}
+
+	DWORD DimPixel(DWORD pix, const DWORD* masks)
+	{
+		DWORD res = pix & masks[3];
+		for (DWORD i = 0; i < 3; ++i)
+			res |= ((pix & masks[i]) >> 1) & masks[i];
+
+		return res;
+	}
+
+	VOID RenderTurnCard(TurnCard* card, BYTE* data, DWORD bpp, const DWORD* masks)
+	{
+		POINT size;
+		((POINT*(__thiscall*)(DWORD*, POINT*))((DWORD*)card->face[0])[1])(card->face, &size);
+
+		BYTE* pixels = (BYTE*)MemoryAlloc(size.x * size.y * bpp);
+
+		// Discipl2.exe v3.01b 0x005B149D: SurfaceDecompressData is 1072 bytes, memory at +0x4, area at +0x8, pitch at +0x18
+		BYTE faceData[1072];
+		MemoryCopy(faceData, data, sizeof(faceData));
+		*(BYTE**)(faceData + 0x4) = pixels;
+		*(RECT*)(faceData + 0x8) = { 0, 0, size.x, size.y };
+		*(LONG*)(faceData + 0x18) = size.x << 1;
+		((VOID(__stdcall*)(DWORD*, BYTE*))((DWORD*)card->face[1])[1])(card->face + 1, faceData);
+
+		LONG width = turnCardSize.x - TURN_ORDER_BORDER * 2;
+		LONG height = turnCardSize.y - TURN_ORDER_BORDER * 2;
+		card->pixels = (BYTE*)MemoryAlloc(width * height * bpp);
+		for (LONG y = 0; y < height; ++y)
+		{
+			for (LONG x = 0; x < width; ++x)
+			{
+				LONG sx = min(x << 1, size.x - 2);
+				LONG sy = min(y << 1, size.y - 2);
+
+				DWORD block[4];
+				for (DWORD i = 0; i < 4; ++i)
+				{
+					BYTE* src = pixels + ((sy + (i >> 1)) * size.x + sx + (i & 1)) * bpp;
+					block[i] = bpp == sizeof(DWORD) ? *(DWORD*)src : *(WORD*)src;
+				}
+
+				DWORD pix = AveragePixel(block, masks);
+				BYTE* dst = card->pixels + (y * width + x) * bpp;
+				if (bpp == sizeof(DWORD))
+					*(DWORD*)dst = pix;
+				else
+					*(WORD*)dst = (WORD)pix;
+			}
+		}
+
+		MemoryFree(pixels);
+	}
+
+	VOID __stdcall TurnStripDraw(DWORD* texture, BYTE* data)
+	{
+		TurnStrip* obj = (TurnStrip*)(texture - 1);
+
+		BOOL isTrueColor = config.bpp32Hooked;
+		DWORD bpp = isTrueColor ? sizeof(DWORD) : sizeof(WORD);
+
+		static const DWORD masks32[] = { 0xFF, 0xFF00, 0xFF0000, 0xFF000000 };
+		static const DWORD masks565[] = { 0xF800, 0x07E0, 0x001F, 0 };
+		DWORD masks16[] = { *(DWORD*)(data + 0x420), *(DWORD*)(data + 0x424), *(DWORD*)(data + 0x428), 0 };
+		const DWORD* masks = isTrueColor ? masks32 : (masks16[0] && masks16[1] && masks16[2] ? masks16 : masks565);
+
+		// Discipl2.exe v3.01b 0x00560E5B: the area is this texture's place inside a shared surface
+		RECT* area = (RECT*)(data + 0x8);
+		LONG pitch = (*(LONG*)(data + 0x18) >> 1) * bpp;
+		BYTE* surface = *(BYTE**)(data + 0x4) + area->top * pitch + area->left * bpp;
+
+		DWORD key = isTrueColor ? Convert565toRGB(COLORKEY_CHECK_16) : COLORKEY_CHECK_16;
+		for (LONG y = 0; y < obj->size.y; ++y)
+			for (LONG x = 0; x < obj->size.x; ++x)
+				if (isTrueColor)
+					((DWORD*)(surface + y * pitch))[x] = key;
+				else
+					((WORD*)(surface + y * pitch))[x] = (WORD)key;
+
+		DWORD now = timeGetTime();
+		BOOL moving = FALSE;
+		LONG innerWidth = turnCardSize.x - TURN_ORDER_BORDER * 2;
+		for (DWORD i = 0; i < turnCardCount; ++i)
+		{
+			TurnCard* card = &turnCards[i];
+			if (!card->pixels && !card->divider)
+				RenderTurnCard(card, data, bpp, masks);
+
+			if (now - card->start < TURN_ORDER_SLIDE)
+				moving = TRUE;
+
+			WORD color565 = card->divider ? COLOR_DIVIDER_565 : (!card->next && card->to <= 0 ? COLOR_CURRENT_565 : (card->attacker == turnOwnAttacker ? COLOR_OWN_565 : COLOR_ENEMY_565));
+			DWORD color = isTrueColor ? Convert565toRGB(color565) : color565;
+
+			LONG left = TurnCardX(card, now);
+			LONG width = card->divider ? TURN_ORDER_DIVIDER : turnCardSize.x;
+			for (LONG y = 0; y < turnCardSize.y && y < obj->size.y; ++y)
+			{
+				BYTE* row = surface + y * pitch;
+				for (LONG x = 0; x < width; ++x)
+				{
+					LONG dx = left + x;
+					if (dx < 0 || dx >= obj->size.x)
+						continue;
+
+					if (card->divider && (x < (TURN_ORDER_DIVIDER >> 1) - 1 || x > TURN_ORDER_DIVIDER >> 1))
+						continue;
+
+					DWORD pix = color;
+					if (!card->divider && x >= TURN_ORDER_BORDER && y >= TURN_ORDER_BORDER && x < turnCardSize.x - TURN_ORDER_BORDER && y < turnCardSize.y - TURN_ORDER_BORDER)
+					{
+						BYTE* src = card->pixels + ((y - TURN_ORDER_BORDER) * innerWidth + x - TURN_ORDER_BORDER) * bpp;
+						pix = isTrueColor ? *(DWORD*)src : *(WORD*)src;
+					}
+
+					if (card->next)
+						pix = DimPixel(pix, masks);
+
+					if (isTrueColor)
+						((DWORD*)row)[dx] = pix;
+					else
+						((WORD*)row)[dx] = (WORD)pix;
+				}
+			}
+		}
+
+		// Discipl2.exe v3.01b 0x006775E0 sets the staging colour key from +0x1C after the draw, as 0x00560E31 stores it
+		*(DWORD*)(data + 0x1C) = COLORKEY_CHECK_16;
+		obj->dirty = moving;
+	}
+
+	TurnStrip* CreateTurnStrip(LONG width, LONG height)
+	{
+		TurnStrip* obj = (TurnStrip*)MemoryAlloc(sizeof(TurnStrip));
+		((TurnStrip*(__thiscall*)(TurnStrip*, DWORD, DWORD, DWORD, DWORD))sub_ImageSurface)(obj, width, height, TURN_ORDER_KEYED, 0xFF);
+
+		if (!sub_TurnStripDestructor)
+		{
+			MemoryCopy(turnStripImageVtbl, obj->imageVtbl, sizeof(turnStripImageVtbl));
+			MemoryCopy(turnStripTextureVtbl, obj->textureVtbl, sizeof(turnStripTextureVtbl));
+			sub_TurnStripDestructor = turnStripImageVtbl[0];
+			turnStripImageVtbl[0] = (DWORD)TurnStripDestructor;
+			turnStripTextureVtbl[1] = (DWORD)TurnStripDraw;
+		}
+
+		obj->imageVtbl = turnStripImageVtbl;
+		obj->textureVtbl = turnStripTextureVtbl;
+		return obj;
+	}
+
+	BOOL TurnUnitStatus(BYTE* msg, DWORD* unitId, DWORD status)
+	{
+		return ((BYTE(__thiscall*)(BYTE*, DWORD*, DWORD))sub_UnitStatus)(msg, unitId, status);
+	}
+
+	DWORD* LoadTurnFace(BYTE* msg, DWORD objectMap, DWORD* unitId)
+	{
+		DWORD implId;
+		((DWORD*(__stdcall*)(DWORD*, DWORD, DWORD*, BOOL))sub_BaseUnitImpl)(&implId, objectMap, unitId, FALSE);
+		BYTE attacker = ((BYTE(__thiscall*)(BYTE*, DWORD*))sub_UnitAttacker)(msg, unitId);
+
+		// Discipl2.exe v3.01b 0x00647EF8 never reads its this pointer
+		return ((DWORD*(__thiscall*)(DWORD, DWORD*, DWORD, DWORD))sub_UnitFace)(NULL, &implId, attacker, FALSE);
+	}
+
+	VOID ShowTurnOrder(DWORD* viewer, BYTE* msg)
+	{
+		BYTE* data = (BYTE*)viewer[1];
+		DWORD engine = *(DWORD*)(data + turnOrderOffsets.engine);
+
+		if (!config.turnOrder.enabled)
+		{
+			if (turnStrip)
+				((VOID(__thiscall*)(DWORD, DWORD))sub_LayerRemove)(engine, TURN_ORDER_LAYER);
+
+			FreeTurnCards();
+			return;
+		}
+
+		DWORD units[TURN_ORDER_SLOTS];
+		DWORD count = 0;
+		DWORD* turn = (DWORD*)(msg + turnOrderOffsets.order);
+		for (DWORD i = 0; i < TURN_ORDER_SLOTS && turn[i * 2] && turn[i * 2] != EMPTY_ID; ++i)
+			if (!((BYTE(__thiscall*)(BYTE*, DWORD*, DWORD))sub_UnitStatus)(msg, &turn[i * 2], STATUS_DEAD))
+				units[count++] = turn[i * 2];
+
+		DWORD objectMap = *(DWORD*)(data + turnOrderOffsets.objectMap);
+		DWORD now = timeGetTime();
+
+		struct {
+			DWORD unitId;
+			LONG initiative;
+		} estimate[TURN_ORDER_UNITS];
+		DWORD estimateCount = 0;
+		for (DWORD i = 0; i < TURN_ORDER_UNITS; ++i)
+		{
+			DWORD* id = (DWORD*)(msg + i * turnOrderOffsets.unitInfo);
+			if (!*id || *id == EMPTY_ID || TurnUnitStatus(msg, id, turnOrderOffsets.hidden) || TurnUnitStatus(msg, id, STATUS_DEAD) || TurnUnitStatus(msg, id, turnOrderOffsets.retreated) || TurnUnitStatus(msg, id, turnOrderOffsets.unsummoned))
+				continue;
+
+			// Discipl2.exe v3.01b 0x0062457C: round initiative is the attack's plus a random roll, halved by lower initiative
+			DWORD* attack = ((DWORD*(__stdcall*)(DWORD, DWORD*, BOOL))sub_UnitAttack)(objectMap, id, TRUE);
+			if (!attack)
+				continue;
+
+			LONG initiative = ((LONG(__thiscall*)(DWORD*))((DWORD*)attack[0])[5])(attack);
+			if (TurnUnitStatus(msg, id, STATUS_LOWER_INITIATIVE))
+				initiative >>= 1;
+
+			DWORD pos = estimateCount++;
+			while (pos && estimate[pos - 1].initiative < initiative)
+			{
+				estimate[pos] = estimate[pos - 1];
+				--pos;
+			}
+
+			estimate[pos].unitId = *id;
+			estimate[pos].initiative = initiative;
+		}
+
+		TurnCard next[TURN_ORDER_CARDS];
+		DWORD nextCount = 0;
+		BOOL used[TURN_ORDER_CARDS] = {};
+		DWORD total = count + (estimateCount ? estimateCount + 1 : 0);
+		for (DWORD i = 0; i < total; ++i)
+		{
+			BOOL isNext = i > count;
+			BOOL isDivider = i == count;
+			DWORD unitId = isDivider ? 0 : (isNext ? estimate[i - count - 1].unitId : units[i]);
+			LONG to = isNext ? (LONG)count * turnStep + TURN_ORDER_DIVIDER + (LONG)(i - count - 1) * turnStep : (LONG)i * turnStep;
+
+			DWORD j = 0;
+			while (j < turnCardCount && (used[j] || turnCards[j].leaving || turnCards[j].divider != isDivider || turnCards[j].unitId != unitId || turnCards[j].next != isNext))
+				++j;
+
+			if (j == turnCardCount && !isNext && !isDivider)
+			{
+				j = 0;
+				while (j < turnCardCount && (used[j] || turnCards[j].leaving || !turnCards[j].next || turnCards[j].unitId != unitId))
+					++j;
+			}
+
+			TurnCard* card = &next[nextCount];
+			if (j < turnCardCount)
+			{
+				used[j] = TRUE;
+				*card = turnCards[j];
+				card->from = TurnCardX(card, now);
+			}
+			else
+			{
+				MemoryZero(card, sizeof(TurnCard));
+				card->unitId = unitId;
+				card->divider = isDivider;
+				if (!isDivider)
+				{
+					card->face = LoadTurnFace(msg, objectMap, &unitId);
+					if (!card->face)
+						continue;
+
+					if (!turnCardSize.x)
+					{
+						((POINT*(__thiscall*)(DWORD*, POINT*))((DWORD*)card->face[0])[1])(card->face, &turnCardSize);
+						turnCardSize.x = (turnCardSize.x >> 1) + TURN_ORDER_BORDER * 2;
+						turnCardSize.y = (turnCardSize.y >> 1) + TURN_ORDER_BORDER * 2;
+						turnStep = turnCardSize.x + TURN_ORDER_GAP;
+						to = isNext ? (LONG)count * turnStep + TURN_ORDER_DIVIDER + (LONG)(i - count - 1) * turnStep : (LONG)i * turnStep;
+					}
+				}
+
+				card->from = isDivider ? to : to + turnStep;
+			}
+
+			if (!isDivider)
+				card->attacker = ((BYTE(__thiscall*)(BYTE*, DWORD*))sub_UnitAttacker)(msg, &unitId);
+
+			card->next = isNext;
+			card->to = to;
+			card->start = now;
+			++nextCount;
+		}
+
+		for (DWORD j = 0; j < turnCardCount; ++j)
+		{
+			if (used[j])
+				continue;
+
+			TurnCard* card = &turnCards[j];
+			if (!card->leaving && !card->next && !card->divider && card->to <= 0)
+			{
+				card->from = TurnCardX(card, now);
+				card->to = -turnStep;
+				card->start = now;
+				card->leaving = TRUE;
+			}
+
+			if (card->leaving && now - card->start < TURN_ORDER_SLIDE && nextCount < TURN_ORDER_CARDS)
+				next[nextCount++] = *card;
+			else
+				FreeTurnCard(card);
+		}
+
+		MemoryCopy(turnCards, next, nextCount * sizeof(TurnCard));
+		turnCardCount = nextCount;
+
+		if (!turnCardCount)
+			return;
+
+		if (!turnStrip)
+		{
+			RECT* area = (RECT*)(data + turnOrderOffsets.area);
+			LONG width = area->right - area->left;
+			LONG slots = min(TURN_ORDER_SLOTS, max(1, (width - TURN_ORDER_PANEL * 2 + TURN_ORDER_GAP) / turnStep));
+
+			turnStrip = CreateTurnStrip(slots * turnStep - TURN_ORDER_GAP, turnCardSize.y);
+			POINT pos = { (width - turnStrip->size.x) / 2, TURN_ORDER_GAP };
+			((VOID(__thiscall*)(DWORD, TurnStrip*, POINT*, DWORD, BOOL))sub_LayerSet)(engine, turnStrip, &pos, TURN_ORDER_LAYER, FALSE);
+		}
+
+		turnStrip->dirty = TRUE;
+
+		DebugLog("Turn order units=%d next=%d cards=%d own=%s", count, estimateCount, turnCardCount, turnOwnAttacker ? "attacker" : "defender");
+	}
+
+	VOID TurnViewer(DWORD* viewer)
+	{
+		HookTurnOrderUpdate();
+		if (turnViewer != viewer)
+		{
+			turnViewer = viewer;
+			turnOwnAttacker = TRUE;
+			turnStrip = NULL;
+			FreeTurnCards();
+		}
+	}
+
+	VOID __fastcall BattleViewerUpdate(DWORD* viewer, DWORD /*edx*/, BYTE* msg, DWORD* unitId, DWORD actions, DWORD targets)
+	{
+		((VOID(__thiscall*)(DWORD*, BYTE*, DWORD*, DWORD, DWORD))sub_BattleViewerUpdate)(viewer, msg, unitId, actions, targets);
+
+		TurnViewer(viewer);
+		turnOwnAttacker = ((BYTE(__thiscall*)(BYTE*, DWORD*))sub_UnitAttacker)(msg, unitId);
+		ShowTurnOrder(viewer, msg);
+	}
+
+	VOID __fastcall BattleViewerAttack(DWORD* viewer, DWORD /*edx*/, BYTE* msg, DWORD attackInfo, DWORD attackClass)
+	{
+		((VOID(__thiscall*)(DWORD*, BYTE*, DWORD, DWORD))sub_BattleViewerAttack)(viewer, msg, attackInfo, attackClass);
+
+		TurnViewer(viewer);
+		ShowTurnOrder(viewer, msg);
+	}
+
+	VOID __fastcall BattleViewerEnd(DWORD* viewer, DWORD /*edx*/, BYTE* msg, DWORD a3)
+	{
+		turnViewer = NULL;
+		((VOID(__thiscall*)(DWORD*, BYTE*, DWORD))sub_BattleViewerEnd)(viewer, msg, a3);
+	}
+
+	VOID HookTurnOrderUpdate()
+	{
+		if (!turnViewerVtbl || sub_BattleViewerUpdate)
+			return;
+
+		HOOKER hooker = CreateHooker(GetModuleHandle(NULL));
+		if (hooker)
+		{
+			if (ReadDWord(hooker, turnViewerVtbl + 4, &sub_BattleViewerUpdate))
+				PatchPtr(hooker, turnViewerVtbl + 4, BattleViewerUpdate);
+
+			ReleaseHooker(hooker);
+		}
+	}
+#pragma endregion
+
 #pragma region Banners and resources popup
 	BYTE* flagResPopup;
 	VOID __cdecl SetResources(DWORD value)
@@ -9196,6 +9698,34 @@ namespace Hooks
 				sub_StackIsPlayer = f(hookSpace->ai_move_is_player);
 				sub_StackMoveScroll = RedirectCall(hooker, hookSpace->ai_move_scroll, StackMoveScroll);
 			}
+		}
+
+		if (hookSpace->turn_order_attack && ReadDWord(hooker, hookSpace->turn_order_viewer + 8, &sub_BattleViewerAttack) && ReadDWord(hooker, hookSpace->turn_order_viewer + 12, &sub_BattleViewerEnd))
+		{
+			config.turnOrder.hooked = TRUE;
+
+			BOOL isV2 = hookSpace->version.high == 2;
+			turnOrderOffsets.order = isV2 ? 0x4D0 : 0xE70;
+			turnOrderOffsets.engine = isV2 ? 0x688 : 0x1028;
+			turnOrderOffsets.area = isV2 ? 0x68C : 0x102C;
+			turnOrderOffsets.objectMap = isV2 ? 0xB60 : 0x1500;
+			turnOrderOffsets.unitInfo = isV2 ? 0x38 : 0xA8;
+			turnOrderOffsets.hidden = isV2 ? 0x1C : 0x1E;
+			turnOrderOffsets.retreated = isV2 ? 0x1A : 0x1C;
+			turnOrderOffsets.unsummoned = isV2 ? 0x1E : 0x20;
+
+			sub_UnitStatus = f(hookSpace->turn_order_status);
+			sub_UnitAttacker = f(hookSpace->turn_order_attacker);
+			sub_BaseUnitImpl = f(hookSpace->turn_order_impl);
+			sub_UnitFace = f(hookSpace->turn_order_face);
+			sub_LayerSet = f(hookSpace->turn_order_layer_set);
+			sub_LayerRemove = f(hookSpace->turn_order_layer_remove);
+			sub_ImageSurface = f(hookSpace->turn_order_surface);
+			sub_UnitAttack = f(hookSpace->turn_order_attack);
+
+			turnViewerVtbl = hookSpace->turn_order_viewer;
+			PatchPtr(hooker, hookSpace->turn_order_viewer + 8, BattleViewerAttack);
+			PatchPtr(hooker, hookSpace->turn_order_viewer + 12, BattleViewerEnd);
 		}
 
 		// AI turn

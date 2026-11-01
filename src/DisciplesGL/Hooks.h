@@ -350,6 +350,16 @@ namespace Hooks
 
 		DWORD ai_move_scroll;
 		DWORD ai_move_is_player;
+
+		DWORD turn_order_viewer;
+		DWORD turn_order_status;
+		DWORD turn_order_attacker;
+		DWORD turn_order_impl;
+		DWORD turn_order_face;
+		DWORD turn_order_layer_set;
+		DWORD turn_order_layer_remove;
+		DWORD turn_order_surface;
+		DWORD turn_order_attack;
 	};
 
 	struct BlendData {

@@ -264,6 +264,7 @@ BEGIN
 		MENUITEM "Skip Menu &Transitions",			IDM_SKIP_TRANSITIONS
 		MENUITEM "Faster &End Turn",				IDM_FASTER_END_TURN
 		MENUITEM "Instant &AI Movement",			IDM_INSTANT_AI_MOVE
+		MENUITEM "Battle Tu&rn Order",				IDM_TURN_ORDER
 		MENUITEM SEPARATOR
 		POPUP "Game &Speed\a"
 		BEGIN

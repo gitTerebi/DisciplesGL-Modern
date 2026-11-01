@@ -226,6 +226,8 @@
 #define IDM_MAP_MMB 111
 #define IDM_MAP_EDGE 112
 
+#define IDM_TURN_ORDER 113
+
 #define IDM_RES_CUSTOM 200
 #define IDM_RES_640_480 201
 #define IDM_RES_800_600 (IDM_RES_640_480 + 1)

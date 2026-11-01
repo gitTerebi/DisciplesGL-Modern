@@ -546,6 +546,12 @@
 		}
 		break;
 
+		case MenuTurnOrder: {
+			EnableMenuItem(config.menu, IDM_TURN_ORDER, MF_BYCOMMAND | (config.turnOrder.hooked ? MF_ENABLED : (MF_DISABLED | MF_GRAYED)));
+			CheckMenuItem(config.menu, IDM_TURN_ORDER, MF_BYCOMMAND | (config.turnOrder.hooked && config.turnOrder.enabled ? MF_CHECKED : MF_UNCHECKED));
+		}
+		break;
+
 		case MenuWindowType: {
 			MenuItemData mData;
 			mData.childId = IDM_MODE_BORDERLESS;
@@ -751,6 +757,7 @@
 		CheckMenu(MenuSkipTransitions);
 		CheckMenu(MenuFasterEndTurn);
 		CheckMenu(MenuInstantAiMove);
+		CheckMenu(MenuTurnOrder);
 		CheckMenu(MenuWindowType);
 		CheckMenu(MenuFastAI);
 		CheckMenu(MenuActive);
@@ -3124,6 +3131,13 @@
 				config.instantAiMove.enabled = !config.instantAiMove.enabled;
 				Config::Set(CONFIG_WRAPPER, "InstantAiMove", config.instantAiMove.enabled);
 				CheckMenu(MenuInstantAiMove);
+				return NULL;
+			}
+
+			case IDM_TURN_ORDER: {
+				config.turnOrder.enabled = !config.turnOrder.enabled;
+				Config::Set(CONFIG_WRAPPER, "TurnOrder", config.turnOrder.enabled);
+				CheckMenu(MenuTurnOrder);
 				return NULL;
 			}
 
