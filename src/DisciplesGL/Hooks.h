@@ -379,6 +379,18 @@ namespace Hooks
 		DWORD shop_frame_list;
 		DWORD shop_frame_load_call;
 		DWORD shop_frame_images;
+
+		DWORD walk_step;
+
+		DWORD battle_anim_dispatch;
+		DWORD battle_animator;
+		DWORD battle_idle_load;
+
+		DWORD map_tile_to_world;
+
+		DWORD ai_stack_task;
+		DWORD ai_stack_vtable;
+		DWORD ai_local_player;
 	};
 
 	struct BlendData {

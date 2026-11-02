@@ -9,8 +9,11 @@ namespace FasterEndTurn
 {
 	#define AI_STEP_SCALE 2
 	#define TASK_SET_SIZE 8
+	#define TILE_HALF_WIDTH 32
+	#define TILE_HALF_HEIGHT 16
+	#define DEAD_ZONE_DIVISOR 4
 
-	DWORD sub_GetMapCenter, sub_SetMapCenter;
+	DWORD sub_GetMapCenter, sub_SetMapCenter, sub_TileToWorld;
 	DWORD* viewHolder;
 	DWORD fastestStep;
 
@@ -46,7 +49,7 @@ namespace FasterEndTurn
 	struct TaskSet {
 		DWORD* items[TASK_SET_SIZE];
 		DWORD next;
-	} jumpTasks, enemySpells;
+	} jumpTasks, enemyAnims;
 
 	VOID AddTask(TaskSet* set, DWORD* task)
 	{
@@ -80,11 +83,38 @@ namespace FasterEndTurn
 
 	BOOL jumpScroll;
 
+	DWORD* GetView()
+	{
+		return (DWORD*)viewHolder[1];
+	}
+
+	BOOL InDeadZone(POINT* tile)
+	{
+		DWORD* view = viewHolder && sub_TileToWorld ? GetView() : NULL;
+		if (!view)
+			return FALSE;
+
+		RECT* rc = (RECT*)((DWORD*)*view + 1);
+		POINT world;
+		((VOID(__thiscall*)(DWORD*, POINT*, POINT*))sub_TileToWorld)(view, tile, &world);
+
+		LONG x = world.x + TILE_HALF_WIDTH - (rc->left + rc->right) / 2;
+		LONG y = world.y + TILE_HALF_HEIGHT - (rc->top + rc->bottom) / 2;
+		return abs(x) * DEAD_ZONE_DIVISOR <= rc->right - rc->left && abs(y) * DEAD_ZONE_DIVISOR <= rc->bottom - rc->top;
+	}
+
 	BOOL __stdcall StackScroll(DWORD* path, BYTE* move, DWORD objectMap, DWORD player, POINT* pos, DWORD always, DWORD nearby, DWORD anim)
 	{
 		jumpScroll = IsAiStack((DWORD*)(move + 0x14), objectMap);
 		if (jumpScroll)
+		{
 			pos = (POINT*)(((DWORD*)path[1])[1] + 8 + 8);
+			if (InDeadZone(pos))
+			{
+				jumpScroll = FALSE;
+				return TRUE;
+			}
+		}
 
 		BOOL res = ((BOOL(__stdcall*)(DWORD, DWORD, POINT*, DWORD, DWORD, DWORD))sub_StackScroll)(objectMap, player, pos, always, nearby, anim);
 		jumpScroll = FALSE;
@@ -179,7 +209,7 @@ namespace FasterEndTurn
 	{
 		DWORD* task = ((DWORD*(__stdcall*)(DWORD, DWORD, DWORD))sub_SpellTask)(objectMap, target, flag);
 		if (task && *((DWORD*(__thiscall*)(DWORD*))sub_SpellCaster)(msg) != *player)
-			AddTask(&enemySpells, task);
+			AddTask(&enemyAnims, task);
 
 		return task;
 	}
@@ -196,13 +226,46 @@ namespace FasterEndTurn
 		}
 	}
 
-	DWORD* activeSpell;
-	VOID EndSpell(DWORD* task)
+	DWORD sub_StackTask, sub_LocalPlayer;
+	DWORD* __fastcall StackTask(DWORD* task, DWORD, BYTE* msg, DWORD objectMap, DWORD a1, DWORD a2, DWORD a3, DWORD a4)
 	{
-		TakeTask(&enemySpells, task);
-		if (task == activeSpell)
+		((DWORD*(__thiscall*)(DWORD*, DWORD, DWORD, DWORD, DWORD, DWORD))sub_StackTask)(task, objectMap, a1, a2, a3, a4);
+
+		DWORD app = ((DWORD(__stdcall*)())sub_GetApp)();
+		if (*(DWORD*)(msg + 0x34) != *((DWORD*(__thiscall*)(DWORD))sub_LocalPlayer)(app))
+			AddTask(&enemyAnims, task);
+
+		return task;
+	}
+
+	// Discipl2.exe v3.01b 0x004F369F: CCmdCreateStackMsg keeps the message in edi; its owner player id is at +0x34
+	VOID __declspec(naked) StackTaskHook()
+	{
+		__asm {
+			pop eax
+			push edi
+			push eax
+			jmp StackTask
+		}
+	}
+
+	DWORD* activeAnim;
+	VOID StartEnemyAnim(DWORD* task)
+	{
+		if (TakeTask(&enemyAnims, task))
 		{
-			activeSpell = NULL;
+			DWORD speed = GetOpponentSpeed();
+			activeAnim = task;
+			SetSpellFactor(speed ? speed : 1);
+		}
+	}
+
+	VOID EndEnemyAnim(DWORD* task)
+	{
+		TakeTask(&enemyAnims, task);
+		if (task == activeAnim)
+		{
+			activeAnim = NULL;
 			SetSpellFactor(1);
 		}
 	}
@@ -210,31 +273,39 @@ namespace FasterEndTurn
 	DWORD sub_SpellStart, sub_SpellFinish, sub_SpellRelease;
 	VOID __fastcall SpellStart(DWORD* task)
 	{
-		if (TakeTask(&enemySpells, task))
-		{
-			DWORD speed = GetOpponentSpeed();
-			activeSpell = task;
-			SetSpellFactor(speed ? speed : 1);
-		}
-
+		StartEnemyAnim(task);
 		((VOID(__thiscall*)(DWORD*))sub_SpellStart)(task);
 	}
 
 	VOID __fastcall SpellFinish(DWORD* task)
 	{
-		EndSpell(task);
+		EndEnemyAnim(task);
 		((VOID(__thiscall*)(DWORD*))sub_SpellFinish)(task);
 	}
 
 	DWORD* __fastcall SpellRelease(DWORD* task, DWORD, DWORD flag)
 	{
-		EndSpell(task);
+		EndEnemyAnim(task);
 		return ((DWORD*(__thiscall*)(DWORD*, DWORD))sub_SpellRelease)(task, flag);
 	}
 
-	DWORD* GetView()
+	DWORD sub_StackStart, sub_StackFinish, sub_StackRelease;
+	VOID __fastcall StackStart(DWORD* task)
 	{
-		return (DWORD*)viewHolder[1];
+		StartEnemyAnim(task);
+		((VOID(__thiscall*)(DWORD*))sub_StackStart)(task);
+	}
+
+	VOID __fastcall StackFinish(DWORD* task)
+	{
+		EndEnemyAnim(task);
+		((VOID(__thiscall*)(DWORD*))sub_StackFinish)(task);
+	}
+
+	DWORD* __fastcall StackRelease(DWORD* task, DWORD, DWORD flag)
+	{
+		EndEnemyAnim(task);
+		return ((DWORD*(__thiscall*)(DWORD*, DWORD))sub_StackRelease)(task, flag);
 	}
 
 	DWORD sub_EndTurn;
@@ -304,6 +375,17 @@ namespace FasterEndTurn
 			PatchPtr(hooker, hookSpace->ai_spell_vtable, SpellRelease);
 			PatchPtr(hooker, hookSpace->ai_spell_vtable + 8, SpellStart);
 			PatchPtr(hooker, hookSpace->ai_spell_vtable + 12, SpellFinish);
+
+			if (hookSpace->ai_stack_vtable && ReadDWord(hooker, hookSpace->ai_stack_vtable, &sub_StackRelease)
+				&& ReadDWord(hooker, hookSpace->ai_stack_vtable + 8, &sub_StackStart) && ReadDWord(hooker, hookSpace->ai_stack_vtable + 12, &sub_StackFinish))
+			{
+				sub_LocalPlayer = f(hookSpace->ai_local_player);
+				sub_StackTask = RedirectCall(hooker, hookSpace->ai_stack_task, StackTaskHook);
+
+				PatchPtr(hooker, hookSpace->ai_stack_vtable, StackRelease);
+				PatchPtr(hooker, hookSpace->ai_stack_vtable + 8, StackStart);
+				PatchPtr(hooker, hookSpace->ai_stack_vtable + 12, StackFinish);
+			}
 		}
 
 		if (hookSpace->ai_move_scroll_start && hookSpace->ai_move_walk_update && ReadDWord(hooker, hookSpace->ai_move_walk_update, &sub_WalkUpdate))
@@ -330,6 +412,7 @@ namespace FasterEndTurn
 				viewHolder = (DWORD*)f(hookSpace->ai_move_view);
 				sub_GetMapCenter = f(hookSpace->map_center_get);
 				sub_SetMapCenter = f(hookSpace->map_center_set);
+				sub_TileToWorld = hookSpace->map_tile_to_world ? f(hookSpace->map_tile_to_world) : 0;
 				PatchPtr(hooker, hookSpace->ai_move_end_turn, EndTurn);
 			}
 

@@ -269,6 +269,8 @@
     <ClCompile Include="TurnOrder.cpp" />
     <ClCompile Include="FasterEndTurn.cpp" />
     <ClCompile Include="ShopFrame.cpp" />
+    <ClCompile Include="WalkSpeed.cpp" />
+    <ClCompile Include="BattleSpeed.cpp" />
     <ClCompile Include="NewRenderer.cpp" />
     <ClCompile Include="OGLRenderer.cpp" />
     <ClCompile Include="OldRenderer.cpp" />
@@ -308,6 +310,8 @@
     <ClInclude Include="TurnOrder.h" />
     <ClInclude Include="FasterEndTurn.h" />
     <ClInclude Include="ShopFrame.h" />
+    <ClInclude Include="WalkSpeed.h" />
+    <ClInclude Include="BattleSpeed.h" />
     <ClInclude Include="NewRenderer.h" />
     <ClInclude Include="OGLRenderer.h" />
     <ClInclude Include="OldRenderer.h" />

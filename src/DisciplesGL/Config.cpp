@@ -29,6 +29,7 @@
 #include "Resource.h"
 #include "Window.h"
 #include "Hooker.h"
+#include "BattleSpeed.h"
 
 LONG GAME_WIDTH;
 LONG GAME_HEIGHT;
@@ -386,8 +387,7 @@ namespace Config
 				config.skipTransitions.enabled = TRUE;
 				config.fasterEndTurn.enabled = TRUE;
 				config.turnOrder.enabled = TRUE;
-				config.battle.speedIndex = 20;
-				config.battle.speedValue = config.battle.speedIndex + 10;
+				BattleSpeed::Reset();
 
 				config.zoom.enabled = TRUE;
 				config.zoom.value = 100;
@@ -452,7 +452,7 @@ namespace Config
 					ptr = Add(ptr, "TurnOrder", config.turnOrder.enabled, "Shows the faces of the units still to act this round at the top of the battle screen (0 - no; 1 - yes 'default')");
 					ptr = Add(ptr, "GameSpeed", config.speed.index, "Animation speed (1 - ..., 5 - 1.5x 'deafult'");
 					ptr = Add(ptr, "SpeedEnabled", config.speed.enabled, "Enables animation speed (0 - no 'default'; 1 - yes)");
-					ptr = Add(ptr, "BattleSpeed", config.battle.speedIndex, "Battle animation speed (0 - 1.0x, 10 - 2.0x, 20 - 3.0x 'default')");
+					ptr = Add(ptr, "BattleSpeed", config.battle.speedIndex, "Battle animation speed (0 - 1.0x, 4 - 3.0x 'default', 8 - 5.0x; 0.5x steps)");
 					ptr = Add(ptr, "AlwaysActive", config.alwaysActive, "Game window is always active (0 - no 'default'; 1 - yes)");
 					ptr = Add(ptr, "ColdCPU", config.cpu.cold, "Decrease CPU usage for OpenGL renderer (0 - no 'default'; 1 - yes)");
 
@@ -641,13 +641,7 @@ namespace Config
 
 				config.speed.enabled = (BOOL)Config::Get(CONFIG_WRAPPER, "SpeedEnabled", FALSE);
 
-				value = Config::Get(CONFIG_WRAPPER, "BattleSpeed", 20);
-				if (value < 0)
-					value = 20;
-				else if (value > 20)
-					value = 20;
-				config.battle.speedIndex = *(DWORD*)&value;
-				config.battle.speedValue = config.battle.speedIndex + 10;
+				BattleSpeed::LoadConfig();
 
 				config.alwaysActive = (BOOL)Config::Get(CONFIG_WRAPPER, "AlwaysActive", FALSE);
 				config.cpu.cold = (BOOL)Config::Get(CONFIG_WRAPPER, "ColdCPU", FALSE);

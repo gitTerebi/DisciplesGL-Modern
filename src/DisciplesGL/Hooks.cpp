@@ -42,6 +42,8 @@
 #include "FasterEndTurn.h"
 #include "SaveList.h"
 #include "ShopFrame.h"
+#include "WalkSpeed.h"
+#include "BattleSpeed.h"
 
 #define PANEL_WIDTH 160
 #define NUM(a, b) ((a << 16) | b)
@@ -484,6 +486,13 @@ namespace Hooks
 			0x00829680, 0x0048D5E4, 0x004F2B28, 0x004F4D93, 0x004F2939, 0x006D3BC8, 0x004F3331, 0x004F3469, 0x004F18A9, 0x004F1BF2, 0x004F00CD, 0x0047C641, 0x006D3B4C, 0x00401A1A, 0x004030EF, 0x00612CD5, 0x004F0180, // faster_end_turn
 
 			0x004FB833, 0x005A1724, 0x005C4CA0, 0x008301DC, // shop_frame
+
+			0x004F2B76, // walk_step
+
+			0x0051A8E6, 0x006D5FAC, 0x0064B6D7, // battle_speed
+
+			0x0053CF4E, // map_tile_to_world
+			0x004F0419, 0x006D3A0C, 0x00403072, // ai_stack
 		},
 #pragma endregion
 
@@ -693,6 +702,15 @@ namespace Hooks
 			0x006F4294, 0x00623B8C, 0x00623B58, 0x0064AE7F, 0x00649678, 0x00648123, 0x006480F3, 0x006704F0, 0x0064752D, 0x0064D5CB, // turn_order
 
 			0x00837DA0, 0x00490450, 0x004F699D, 0x004F8C08, 0x004F67AE, 0x006E0120, 0x004F71A6, 0x004F72DE, 0x004F56DD, 0x004F5A26, 0x004F3F1E, 0x0059E31C, 0x006E00A4, 0x00401D35, 0x00403401, 0x0061B75D, 0x004F3FD1, // faster_end_turn
+
+			0x00000000, 0x00000000, 0x00000000, 0x00000000, // shop_frame
+
+			0x004F69EB, // walk_step
+
+			0x0051EBA6, 0x006E250C, 0x006552E0, // battle_speed
+
+			0x005419F6, // map_tile_to_world
+			0x004F426A, 0x006DFF64, 0x00403384, // ai_stack
 		},
 #pragma endregion
 
@@ -768,6 +786,15 @@ namespace Hooks
 			0x006F2244, 0x0062271C, 0x006226E8, 0x006497BF, 0x00647EF8, 0x006469A3, 0x00646973, 0x0066ED90, 0x00645D5D, 0x0064BF0B, // turn_order
 
 			0x00835D50, 0x0048FF54, 0x004F5D30, 0x004F7F9B, 0x004F5B41, 0x006DE0C8, 0x004F6539, 0x004F6671, 0x004F4AED, 0x004F4E36, 0x004F3353, 0x0059D5B3, 0x006DE04C, 0x00401A7B, 0x00403147, 0x0061A272, 0x004F3406, // faster_end_turn
+
+			0x00503D74, 0x004F129B, 0x005C965C, 0x008388F4, // shop_frame
+
+			0x004F5D7E, // walk_step
+
+			0x0051E166, 0x006E04B4, 0x00653AD0, // battle_speed
+
+			0x005410A6, // map_tile_to_world
+			0x004F369F, 0x006DDF0C, 0x004030CA, // ai_stack
 		},
 #pragma endregion
 
@@ -9044,6 +9071,10 @@ namespace Hooks
 		TurnOrder::Load(hooker, hookSpace, baseOffset);
 
 		ShopFrame::Load(hooker, hookSpace, baseOffset);
+
+		WalkSpeed::Load(hooker, hookSpace, baseOffset);
+
+		BattleSpeed::Load(hooker, hookSpace, baseOffset);
 
 		// AI turn
 		if (hookSpace->startAiTurn && hookSpace->endAiTurn)
