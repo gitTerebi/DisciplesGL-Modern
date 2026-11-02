@@ -370,7 +370,7 @@ namespace Hooks
 
 		DWORD shop_frame_draw;
 		DWORD shop_frame_list;
-		DWORD shop_frame_load;
+		DWORD shop_frame_load_call;
 		DWORD shop_frame_images;
 	};
 
