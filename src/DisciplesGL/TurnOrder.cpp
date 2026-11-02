@@ -751,14 +751,15 @@ namespace TurnOrder
 		DWORD nextCount = 0;
 		BOOL used[TURN_ORDER_CARDS] = {};
 		LONG round = *(CHAR*)(msg + turnOrderOffsets.round);
-		DWORD total = 1 + count + (estimateCount ? estimateCount + 1 : 0);
+		DWORD lead = count ? count + 1 : 0;
+		DWORD total = lead + (estimateCount ? estimateCount + 1 : 0);
 		LONG x = 0;
 		for (DWORD i = 0; i < total; ++i)
 		{
-			BOOL isDivider = !i || i == count + 1;
-			BOOL isNext = i > count + 1;
-			BOOL isCurrent = i == 1 && !isDivider;
-			DWORD unitId = isDivider ? (i ? TURN_ORDER_NEXT_MARKER : TURN_ORDER_START_MARKER) : (isNext ? estimate[i - count - 2].unitId : units[i - 1]);
+			BOOL isDivider = i == lead || count && !i;
+			BOOL isNext = i > lead;
+			BOOL isCurrent = count && i == 1;
+			DWORD unitId = isDivider ? (i == lead ? TURN_ORDER_NEXT_MARKER : TURN_ORDER_START_MARKER) : (isNext ? estimate[i - lead - 1].unitId : units[i - 1]);
 			LONG to = x;
 			x += isDivider ? TURN_ORDER_MARKER : turnStep + (isCurrent ? TURN_ORDER_BIG_EXTRA : 0);
 
