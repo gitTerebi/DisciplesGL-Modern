@@ -39,7 +39,7 @@
 #include "Mods.h"
 #include "Hooker.h"
 #include "TurnOrder.h"
-#include "AiMoves.h"
+#include "FasterEndTurn.h"
 #include "SaveList.h"
 #include "ShopFrame.h"
 
@@ -481,7 +481,7 @@ namespace Hooks
 
 			0x006E79EC, 0x0061A79E, 0x0061A76A, 0x0064133F, 0x0063FA3B, 0x0063E533, 0x0063E503, 0x006653A0, 0x0063D91F, 0x00643A56, // turn_order
 
-			0x00829680, 0x0048D5E4, 0x004F2B28, 0x004F4D93, 0x004F2939, 0x006D3BC8, 0x004F3331, 0x004F3469, 0x004F18A9, 0x004F1BF2, // ai_moves
+			0x00829680, 0x0048D5E4, 0x004F2B28, 0x004F4D93, 0x004F2939, 0x006D3BC8, 0x004F3331, 0x004F3469, 0x004F18A9, 0x004F1BF2, 0x004F00CD, 0x0047C641, 0x006D3B4C, 0x00401A1A, 0x004030EF, 0x00612CD5, 0x004F0180, // faster_end_turn
 
 			0x004FB833, 0x005A1724, 0x005C4CA0, 0x008301DC, // shop_frame
 		},
@@ -692,7 +692,7 @@ namespace Hooks
 
 			0x006F4294, 0x00623B8C, 0x00623B58, 0x0064AE7F, 0x00649678, 0x00648123, 0x006480F3, 0x006704F0, 0x0064752D, 0x0064D5CB, // turn_order
 
-			0x00837DA0, 0x00490450, 0x004F699D, 0x004F8C08, 0x004F67AE, 0x006E0120, 0x004F71A6, 0x004F72DE, 0x004F56DD, 0x004F5A26, // ai_moves
+			0x00837DA0, 0x00490450, 0x004F699D, 0x004F8C08, 0x004F67AE, 0x006E0120, 0x004F71A6, 0x004F72DE, 0x004F56DD, 0x004F5A26, 0x004F3F1E, 0x0059E31C, 0x006E00A4, 0x00401D35, 0x00403401, 0x0061B75D, 0x004F3FD1, // faster_end_turn
 		},
 #pragma endregion
 
@@ -767,7 +767,7 @@ namespace Hooks
 
 			0x006F2244, 0x0062271C, 0x006226E8, 0x006497BF, 0x00647EF8, 0x006469A3, 0x00646973, 0x0066ED90, 0x00645D5D, 0x0064BF0B, // turn_order
 
-			0x00835D50, 0x0048FF54, 0x004F5D30, 0x004F7F9B, 0x004F5B41, 0x006DE0C8, 0x004F6539, 0x004F6671, 0x004F4AED, 0x004F4E36, // ai_moves
+			0x00835D50, 0x0048FF54, 0x004F5D30, 0x004F7F9B, 0x004F5B41, 0x006DE0C8, 0x004F6539, 0x004F6671, 0x004F4AED, 0x004F4E36, 0x004F3353, 0x0059D5B3, 0x006DE04C, 0x00401A7B, 0x00403147, 0x0061A272, 0x004F3406, // faster_end_turn
 		},
 #pragma endregion
 
@@ -4124,7 +4124,7 @@ namespace Hooks
 		AnimListEntry* entry = animList;
 		if (entry)
 		{
-			DWORD value = config.battle.active ? config.battle.speedValue : (config.speed.enabled ? config.speed.value : 10);
+			DWORD value = (config.battle.active ? config.battle.speedValue : (config.speed.enabled ? config.speed.value : 10)) * FasterEndTurn::SpellFactor();
 			DWORD speed = 10000 / (value * 15);
 			do
 			{
@@ -7974,33 +7974,6 @@ namespace Hooks
 	}
 #pragma endregion
 
-#pragma region Faster end turn
-	DWORD sub_TurnCenterCapital, sub_TurnCenterStack, sub_TurnCenterObject;
-	VOID __fastcall TurnCenterCapital(DWORD* view)
-	{
-		if (!config.fasterEndTurn.enabled)
-			((VOID(__thiscall*)(DWORD*))sub_TurnCenterCapital)(view);
-	}
-
-	VOID __fastcall TurnCenterStack(DWORD* view, DWORD, DWORD objectMap, DWORD* id)
-	{
-		if (!config.fasterEndTurn.enabled)
-			((VOID(__thiscall*)(DWORD*, DWORD, DWORD*))sub_TurnCenterStack)(view, objectMap, id);
-	}
-
-	VOID __fastcall TurnCenterObject(DWORD* view, DWORD, DWORD objectMap, DWORD* id)
-	{
-		if (!config.fasterEndTurn.enabled)
-			((VOID(__thiscall*)(DWORD*, DWORD, DWORD*))sub_TurnCenterObject)(view, objectMap, id);
-	}
-
-	DWORD sub_ScrollToEvent;
-	BOOL __stdcall TerrainScroll(DWORD view, DWORD player, POINT* pos, DWORD always, DWORD nearby, DWORD anim)
-	{
-		return !config.fasterEndTurn.enabled && ((bool(__stdcall*)(DWORD, DWORD, POINT*, DWORD, DWORD, DWORD))sub_ScrollToEvent)(view, player, pos, always, nearby, anim);
-	}
-#pragma endregion
-
 	DWORD sub_MouseAction;
 	BOOL MouseActionInner(DWORD* global, UINT uMsg, POINT* pt)
 	{
@@ -9066,18 +9039,7 @@ namespace Hooks
 			}
 		}
 
-		// Discipl2.exe v3.01b 0x004912B8: the CCmdTurnInfoMsg handler centres the map on the last selection or the capital.
-		// 0x004F3179: CCmdTerrainChangeMsg scrolls to each town spreading terrain after end turn; false is the stock path for unseen changes. Same layout in v2.02b and v3.01a
-		if (hookSpace->turn_center_capital)
-		{
-			config.fasterEndTurn.hooked = TRUE;
-			sub_TurnCenterCapital = RedirectCall(hooker, hookSpace->turn_center_capital, TurnCenterCapital);
-			sub_TurnCenterStack = RedirectCall(hooker, hookSpace->turn_center_stack, TurnCenterStack);
-			sub_TurnCenterObject = RedirectCall(hooker, hookSpace->turn_center_object, TurnCenterObject);
-			sub_ScrollToEvent = RedirectCall(hooker, hookSpace->turn_terrain_scroll, TerrainScroll);
-		}
-
-		AiMoves::Load(hooker, hookSpace, baseOffset);
+		FasterEndTurn::Load(hooker, hookSpace, baseOffset);
 
 		TurnOrder::Load(hooker, hookSpace, baseOffset);
 

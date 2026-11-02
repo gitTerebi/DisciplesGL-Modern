@@ -367,6 +367,13 @@ namespace Hooks
 		DWORD ai_move_walk_end;
 		DWORD ai_move_scroll_create;
 		DWORD ai_move_scroll_start;
+		DWORD ai_spell_task;
+		DWORD ai_spell_caster;
+		DWORD ai_spell_vtable;
+		DWORD ai_opponent_app;
+		DWORD ai_opponent_settings;
+		DWORD ai_opponent_speed;
+		DWORD ai_spell_task_target;
 
 		DWORD shop_frame_draw;
 		DWORD shop_frame_list;

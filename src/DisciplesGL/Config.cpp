@@ -448,7 +448,7 @@ namespace Config
 					ptr = Add(ptr, "FullScreenMode", config.borderless.mode, "Full screen window mode (0 - exclusive 'default'; 1 - borderless)");
 					ptr = Add(ptr, "MaximizedWindow", config.maximizedWindow, "Starts windowed mode maximized (0 - no; 1 - yes 'default')");
 					ptr = Add(ptr, "SkipTransitions", config.skipTransitions.enabled, "Skips the full screen animations between menus (0 - no; 1 - yes 'default')");
-					ptr = Add(ptr, "FasterEndTurn", config.fasterEndTurn.enabled, "Keeps the camera still after End Turn and at turn start, and skips the terrain spread animation around your towns (0 - no; 1 - yes 'default')");
+					ptr = Add(ptr, "FasterEndTurn", config.fasterEndTurn.enabled, "After End Turn the camera jumps to where each visible enemy stack stops and holds still while it walks, skips the terrain spread scrolls, and returns to your view at turn start (0 - no; 1 - yes 'default')");
 					ptr = Add(ptr, "TurnOrder", config.turnOrder.enabled, "Shows the faces of the units still to act this round at the top of the battle screen (0 - no; 1 - yes 'default')");
 					ptr = Add(ptr, "GameSpeed", config.speed.index, "Animation speed (1 - ..., 5 - 1.5x 'deafult'");
 					ptr = Add(ptr, "SpeedEnabled", config.speed.enabled, "Enables animation speed (0 - no 'default'; 1 - yes)");

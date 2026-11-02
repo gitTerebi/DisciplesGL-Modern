@@ -94,7 +94,7 @@
     <ClCompile Include="TurnOrder.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="AiMoves.cpp">
+    <ClCompile Include="FasterEndTurn.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="ShopFrame.cpp">
@@ -201,7 +201,7 @@
     <ClInclude Include="TurnOrder.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="AiMoves.h">
+    <ClInclude Include="FasterEndTurn.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="ShopFrame.h">
