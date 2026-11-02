@@ -264,6 +264,9 @@
     <ClCompile Include="IDrawUnknown.cpp" />
     <ClCompile Include="MidRenderer.cpp" />
     <ClCompile Include="Mods.cpp" />
+    <ClCompile Include="TurnArt.cpp" />
+    <ClCompile Include="SaveList.cpp" />
+    <ClCompile Include="TurnOrder.cpp" />
     <ClCompile Include="NewRenderer.cpp" />
     <ClCompile Include="OGLRenderer.cpp" />
     <ClCompile Include="OldRenderer.cpp" />
@@ -298,6 +301,9 @@
     <ClInclude Include="IDrawUnknown.h" />
     <ClInclude Include="MidRenderer.h" />
     <ClInclude Include="Mods.h" />
+    <ClInclude Include="TurnArt.h" />
+    <ClInclude Include="SaveList.h" />
+    <ClInclude Include="TurnOrder.h" />
     <ClInclude Include="NewRenderer.h" />
     <ClInclude Include="OGLRenderer.h" />
     <ClInclude Include="OldRenderer.h" />

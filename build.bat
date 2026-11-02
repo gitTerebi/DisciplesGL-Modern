@@ -32,4 +32,7 @@ copy /Y "%ROOT%build\C4dll-R.dll" "%GAME_DIR%\C4dll-R.dll"
 if errorlevel 1 exit /b %ERRORLEVEL%
 
 copy /Y "%ROOT%build\C4dll-R.dll" "%ELVES_GAME_DIR%\C4dll-R.dll"
-exit /b %ERRORLEVEL%
+if errorlevel 1 exit /b %ERRORLEVEL%
+
+python "%ROOT%tools\d2mt\check.py" "%ROOT%build\C4dll-R.dll"
+exit /b 0

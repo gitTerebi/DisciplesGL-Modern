@@ -1,0 +1,9 @@
+{
+ "bitmaskFix": "markMapPosition hook calls the original, and its trampoline holds our jmp",
+ "summoner_fix": "beforeBattleTurn is rewritten without the call this fix guards; the fix is dead and not needed",
+ "resources_nop": "respopupInit is rewritten from settings.lua showResources; our saved panel state is ignored, a hidden feature",
+ "locale_fix_1": "v3.01a editbox isCharValid is rewritten with its own input fix; our locale fix is dead there",
+ "scene_sort_hook": "menuPhase constructor hook calls the original, which holds our redirect",
+ "battle_save_move": "sendStackMove itself is detoured; our redirected callers run first and then call it",
+ "turn_order_viewer": "update slot is patched at game object init, after D2ModdingToolset has hooked"
+}

@@ -360,6 +360,7 @@ namespace Hooks
 		DWORD turn_order_layer_remove;
 		DWORD turn_order_surface;
 		DWORD turn_order_attack;
+		DWORD turn_order_hp_max;
 	};
 
 	struct BlendData {
@@ -387,6 +388,15 @@ namespace Hooks
 		DWORD color;
 	};
 
+	struct AutoSaveInfo
+	{
+		DWORD turn;
+		CHAR scenario[64];
+	};
+
+	extern DWORD(__fastcall* Convert565toRGB)(DWORD);
+
+	BOOL ReadAutoSaveInfo(const CHAR* path, AutoSaveInfo* info);
 	INT __stdcall MessageBoxHook(HWND, LPCSTR, LPCSTR, UINT);
 	VOID PrintText(CHAR* str);
 	VOID SetGameSpeed();
