@@ -346,11 +346,6 @@ namespace Hooks
 
 		DWORD trans_race_done;
 
-		DWORD ai_move_anim;
-
-		DWORD ai_move_scroll;
-		DWORD ai_move_is_player;
-
 		DWORD turn_order_viewer;
 		DWORD turn_order_status;
 		DWORD turn_order_attacker;
@@ -361,6 +356,22 @@ namespace Hooks
 		DWORD turn_order_surface;
 		DWORD turn_order_attack;
 		DWORD turn_order_hp_max;
+
+		DWORD ai_move_view;
+		DWORD ai_move_end_turn;
+		DWORD ai_move_step;
+		DWORD ai_move_scroll;
+		DWORD ai_move_is_player;
+		DWORD ai_move_walk_update;
+		DWORD ai_move_walk_follow;
+		DWORD ai_move_walk_end;
+		DWORD ai_move_scroll_create;
+		DWORD ai_move_scroll_start;
+
+		DWORD shop_frame_draw;
+		DWORD shop_frame_list;
+		DWORD shop_frame_load;
+		DWORD shop_frame_images;
 	};
 
 	struct BlendData {

@@ -94,6 +94,12 @@
     <ClCompile Include="TurnOrder.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="AiMoves.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="ShopFrame.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="TurnArt.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -193,6 +199,12 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="TurnOrder.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="AiMoves.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="ShopFrame.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="TurnArt.h">

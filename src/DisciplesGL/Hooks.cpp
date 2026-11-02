@@ -39,7 +39,9 @@
 #include "Mods.h"
 #include "Hooker.h"
 #include "TurnOrder.h"
+#include "AiMoves.h"
 #include "SaveList.h"
+#include "ShopFrame.h"
 
 #define PANEL_WIDTH 160
 #define NUM(a, b) ((a << 16) | b)
@@ -477,11 +479,11 @@ namespace Hooks
 
 			0x004EA369, // trans_race_done
 
-			0x004F26B7, // ai_move_anim
-
-			0x004F4D93, 0x004F2939, // ai_move_scroll
-
 			0x006E79EC, 0x0061A79E, 0x0061A76A, 0x0064133F, 0x0063FA3B, 0x0063E533, 0x0063E503, 0x006653A0, 0x0063D91F, 0x00643A56, // turn_order
+
+			0x00829680, 0x0048D5E4, 0x004F2B28, 0x004F4D93, 0x004F2939, 0x006D3BC8, 0x004F3331, 0x004F3469, 0x004F18A9, 0x004F1BF2, // ai_moves
+
+			0x004FB833, 0x005A1724, 0x005C4317, 0x008301DC, // shop_frame
 		},
 #pragma endregion
 
@@ -688,11 +690,9 @@ namespace Hooks
 
 			0x00000000, // trans_race_done
 
-			0x004F652C, // ai_move_anim
-
-			0x004F8C08, 0x004F67AE, // ai_move_scroll
-
 			0x006F4294, 0x00623B8C, 0x00623B58, 0x0064AE7F, 0x00649678, 0x00648123, 0x006480F3, 0x006704F0, 0x0064752D, 0x0064D5CB, // turn_order
+
+			0x00837DA0, 0x00490450, 0x004F699D, 0x004F8C08, 0x004F67AE, 0x006E0120, 0x004F71A6, 0x004F72DE, 0x004F56DD, 0x004F5A26, // ai_moves
 		},
 #pragma endregion
 
@@ -765,11 +765,9 @@ namespace Hooks
 
 			0x00000000, // trans_race_done
 
-			0x004F58BF, // ai_move_anim
-
-			0x004F7F9B, 0x004F5B41, // ai_move_scroll
-
 			0x006F2244, 0x0062271C, 0x006226E8, 0x006497BF, 0x00647EF8, 0x006469A3, 0x00646973, 0x0066ED90, 0x00645D5D, 0x0064BF0B, // turn_order
+
+			0x00835D50, 0x0048FF54, 0x004F5D30, 0x004F7F9B, 0x004F5B41, 0x006DE0C8, 0x004F6539, 0x004F6671, 0x004F4AED, 0x004F4E36, // ai_moves
 		},
 #pragma endregion
 
@@ -7977,35 +7975,6 @@ namespace Hooks
 #pragma endregion
 
 #pragma region Faster end turn
-	// Discipl2.exe v3.01b 0x004F5851: an empty frame list is the stock path for a stack moving unseen
-	DWORD sub_StackMoveFrames;
-	VOID __stdcall StackMoveFrames(DWORD* frames, DWORD path, DWORD isPlayer, DWORD fast)
-	{
-		if ((BYTE)isPlayer || !config.instantAiMove.enabled)
-			((VOID(__stdcall*)(DWORD*, DWORD, DWORD, DWORD))sub_StackMoveFrames)(frames, path, isPlayer, fast);
-	}
-
-	DWORD sub_StackMoveScroll, sub_StackIsPlayer;
-	BOOL __stdcall IsAiStackMove(BYTE* move, DWORD objectMap)
-	{
-		return config.instantAiMove.enabled && !(BYTE)((DWORD(__stdcall*)(BYTE*, DWORD))sub_StackIsPlayer)(move + 0x14, objectMap);
-	}
-
-	// Discipl2.exe v3.01b 0x004F7DBC: the stack move handler keeps the move object at [ebp+0x14] and the object map at [ebp+0x18]
-	VOID __declspec(naked) StackMoveScroll()
-	{
-		__asm {
-			push [ebp+0x18]
-			push [ebp+0x14]
-			call IsAiStackMove
-			test eax, eax
-			jz lbl_scroll
-			retn 0x18
-
-			lbl_scroll: jmp sub_StackMoveScroll
-		}
-	}
-
 	DWORD sub_TurnCenterCapital, sub_TurnCenterStack, sub_TurnCenterObject;
 	VOID __fastcall TurnCenterCapital(DWORD* view)
 	{
@@ -9108,19 +9077,11 @@ namespace Hooks
 			sub_ScrollToEvent = RedirectCall(hooker, hookSpace->turn_terrain_scroll, TerrainScroll);
 		}
 
-		if (hookSpace->ai_move_anim)
-		{
-			config.instantAiMove.hooked = TRUE;
-			sub_StackMoveFrames = RedirectCall(hooker, hookSpace->ai_move_anim, StackMoveFrames);
-
-			if (hookSpace->ai_move_scroll)
-			{
-				sub_StackIsPlayer = f(hookSpace->ai_move_is_player);
-				sub_StackMoveScroll = RedirectCall(hooker, hookSpace->ai_move_scroll, StackMoveScroll);
-			}
-		}
+		AiMoves::Load(hooker, hookSpace, baseOffset);
 
 		TurnOrder::Load(hooker, hookSpace, baseOffset);
+
+		ShopFrame::Load(hooker, hookSpace, baseOffset);
 
 		// AI turn
 		if (hookSpace->startAiTurn && hookSpace->endAiTurn)
