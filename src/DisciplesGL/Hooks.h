@@ -417,6 +417,8 @@ namespace Hooks
 		DWORD income_popup;
 		DWORD income_frame;
 		DWORD income_bank_blue;
+
+		DWORD turn_order_text;
 	};
 
 	struct BlendData {

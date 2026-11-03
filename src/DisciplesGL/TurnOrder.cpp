@@ -57,7 +57,6 @@ namespace TurnOrder
 	#define TURN_ORDER_INSET 2
 	#define TURN_ORDER_LIFT 0
 	#define TURN_ORDER_BOTTOM 1
-	#define TURN_ORDER_TEXT 128
 	#define TURN_ORDER_PANEL 175
 	#define TURN_ORDER_SLIDE 300
 	#define TURN_ORDER_CARDS 32
@@ -116,7 +115,9 @@ namespace TurnOrder
 
 	DWORD sub_BattleViewerUpdate, sub_BattleViewerAttack, sub_BattleViewerEnd;
 	DWORD sub_UnitStatus, sub_UnitAttacker, sub_BaseUnitImpl, sub_UnitFace, sub_LayerSet, sub_LayerRemove, sub_ImageSurface, sub_UnitAttack, sub_UnitHpMax;
-	DWORD sub_TurnStripDestructor;
+	DWORD sub_TurnStripDestructor, sub_FormattedText;
+	DWORD turnTextPtr[2];
+	DWORD* turnText;
 	DWORD turnStripImageVtbl[12], turnStripTextureVtbl[4];
 	DWORD* turnViewer;
 	DWORD turnViewerVtbl;
@@ -334,93 +335,6 @@ namespace TurnOrder
 		turnCrystal = TurnArt::Facet(&TurnArt::crystal, TURN_ORDER_CRYSTAL_WIDTH, TURN_ORDER_CRYSTAL_HEIGHT, turnOutline);
 	}
 
-	VOID RenderTurnText(const TurnArt::Font* font, const CHAR* text, BYTE* mask, LONG width, LONG room)
-	{
-		if (TurnArt::HasFont(font))
-		{
-			MemoryZero(mask, width * TURN_ORDER_BAND);
-			TurnArt::DrawText(font, text, TurnArt::TextWidth(font, text, FALSE) > room, mask, width, TURN_ORDER_BAND);
-			return;
-		}
-
-		static const LONG heights[] = { 11, 10, 9 };
-		static HDC dc;
-		static DWORD* bits;
-		static HFONT fonts[sizeof(heights) / sizeof(*heights)];
-		if (!dc)
-		{
-			dc = CreateCompatibleDC(NULL);
-
-			BITMAPINFO info = {};
-			info.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
-			info.bmiHeader.biWidth = TURN_ORDER_TEXT;
-			info.bmiHeader.biHeight = -TURN_ORDER_BAND;
-			info.bmiHeader.biPlanes = 1;
-			info.bmiHeader.biBitCount = 32;
-			SelectObject(dc, CreateDIBSection(dc, &info, DIB_RGB_COLORS, (VOID**)&bits, NULL, 0));
-			for (DWORD i = 0; i < sizeof(heights) / sizeof(*heights); ++i)
-				fonts[i] = CreateFontA(-heights[i], 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE, ANSI_CHARSET, OUT_TT_PRECIS, CLIP_DEFAULT_PRECIS,
-					ANTIALIASED_QUALITY, DEFAULT_PITCH | FF_ROMAN, "Times New Roman");
-			SetBkMode(dc, TRANSPARENT);
-			SetTextColor(dc, RGB(255, 255, 255));
-		}
-
-		MemoryZero(mask, width * TURN_ORDER_BAND);
-		if (!bits)
-			return;
-
-		room = min(room, TURN_ORDER_TEXT - 4);
-		const CHAR* widest[] = { "000/000", text };
-		DWORD size = 0;
-		for (DWORD w = 0; w < 2; ++w)
-		{
-			for (; size < sizeof(fonts) / sizeof(*fonts) - 1; ++size)
-			{
-				SelectObject(dc, fonts[size]);
-				RECT fit = {};
-				DrawTextA(dc, widest[w], -1, &fit, DT_CALCRECT | DT_SINGLELINE | DT_NOPREFIX);
-				if (fit.right <= room)
-					break;
-			}
-		}
-
-		SelectObject(dc, fonts[size]);
-		MemoryZero(bits, TURN_ORDER_TEXT * TURN_ORDER_BAND * sizeof(DWORD));
-		RECT rc = { 0, 0, min(width, TURN_ORDER_TEXT), TURN_ORDER_BAND };
-		DrawTextA(dc, text, -1, &rc, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
-		GdiFlush();
-
-		for (LONG y = 0; y < TURN_ORDER_BAND; ++y)
-			for (LONG x = 0; x < rc.right; ++x)
-				mask[y * width + x] = (BYTE)bits[y * TURN_ORDER_TEXT + x];
-	}
-
-	BOOL TurnTextInk(const BYTE* mask, LONG width, LONG x, LONG y)
-	{
-		return x >= 0 && x < width && y >= 0 && y < TURN_ORDER_BAND && mask[y * width + x] >= 0x80;
-	}
-
-	VOID BlendTurnText(BYTE* buffer, LONG pitch, LONG left, LONG top, const BYTE* mask, LONG width, COLORREF color, BOOL outline, DWORD key, BOOL isTrueColor, DWORD bpp, const DWORD* masks)
-	{
-		DWORD ink = TurnColor(color, isTrueColor, masks);
-		DWORD dark = TurnColor(RGB(10, 8, 6), isTrueColor, masks);
-		for (LONG y = 0; y < TURN_ORDER_BAND; ++y)
-		{
-			for (LONG x = 0; x < width; ++x)
-			{
-				BYTE* dst = buffer + ((top + y) * pitch + left + x) * bpp;
-				if (GetTurnPixel(dst, bpp) == key)
-					continue;
-
-				if (TurnTextInk(mask, width, x, y))
-					SetTurnPixel(dst, bpp, ink);
-				else if (TurnTextInk(mask, width, x - 1, y - 1) || outline && (TurnTextInk(mask, width, x - 1, y) || TurnTextInk(mask, width, x + 1, y)
-					|| TurnTextInk(mask, width, x, y - 1) || TurnTextInk(mask, width, x, y + 1)))
-					SetTurnPixel(dst, bpp, dark);
-			}
-		}
-	}
-
 	VOID ComposeTurnCard(TurnCard* card, DWORD look, DWORD key, BOOL isTrueColor, DWORD bpp, const DWORD* masks)
 	{
 		LONG faceWidth = card->faceSize.x;
@@ -474,14 +388,6 @@ namespace TurnOrder
 			}
 		}
 
-		CHAR text[32];
-		StrPrint(text, "%d/%d", card->hp, card->hpMax);
-		BYTE* textMask = (BYTE*)MemoryAlloc(slot * TURN_ORDER_BAND);
-		RenderTurnText(&TurnArt::normal, text, textMask, slot, faceWidth - 2);
-
-		BlendTurnText(card->pixels, width, 1, TURN_ORDER_TOP + 2 + faceHeight - TURN_ORDER_BAND, textMask, slot, RGB(240, 232, 208), FALSE, key, isTrueColor, bpp, masks);
-		MemoryFree(textMask);
-
 		BOOL enemy = (look & TURN_LOOK_ENEMY) != 0;
 		if (turnGems[enemy].pixels)
 			PasteTurnPiece(card->pixels, width, 1 + (slot - TURN_ORDER_GEM_WIDTH) / 2, 0, &turnGems[enemy], isTrueColor, bpp, masks);
@@ -508,14 +414,28 @@ namespace TurnOrder
 		else
 			DrawTurnGem(card->pixels, width, width / 2, height / 2, width / 2, RGB(200, 240, 236), RGB(40, 96, 100), isTrueColor, bpp, masks);
 
-		CHAR text[8];
-		StrPrint(text, "%d", card->hp);
-		BYTE* textMask = (BYTE*)MemoryAlloc(width * TURN_ORDER_BAND);
-		RenderTurnText(&TurnArt::medium, text, textMask, width, width - 6);
-
-		BlendTurnText(card->pixels, width, 0, (height - TURN_ORDER_BAND) / 2, textMask, width, RGB(250, 244, 224), TRUE, key, isTrueColor, bpp, masks);
-		MemoryFree(textMask);
 		card->shownHp = card->hp;
+	}
+
+	VOID DrawTurnText(BYTE* data, const CHAR* font, const CHAR* align, const CHAR* value, COLORREF color, BOOL dim, LONG left, LONG top, LONG right, LONG bottom)
+	{
+		if (!turnText)
+		{
+			((DWORD*(__stdcall*)(DWORD*))sub_FormattedText)(turnTextPtr);
+			turnText = (DWORD*)turnTextPtr[1];
+			if (!turnText)
+				return;
+		}
+
+		if (dim)
+			color = RGB(GetRValue(color) / 2, GetGValue(color) / 2, GetBValue(color) / 2);
+
+		CHAR text[64];
+		StrPrint(text, "\\f%s;\\hC;\\v%s;\\c%03d;%03d;%03d;%s", font, align, GetRValue(color), GetGValue(color), GetBValue(color), value);
+
+		RECT area = { left, top, right, bottom };
+		POINT size;
+		((POINT*(__thiscall*)(DWORD*, POINT*, BYTE*, const CHAR*, RECT*, DWORD))((DWORD*)*turnText)[2])(turnText, &size, data, text, &area, 1);
 	}
 
 	VOID RenderTurnFace(TurnCard* card, BYTE* data, LONG faceWidth, LONG faceHeight, DWORD bpp, const DWORD* masks)
@@ -637,6 +557,26 @@ namespace TurnOrder
 						pix = DimPixel(pix, masks);
 
 					SetTurnPixel(row + dx * bpp, bpp, pix);
+				}
+			}
+
+			LONG textLeft = card->divider ? left : left + 1;
+			LONG textRight = card->divider ? left + cardWidth : left + cardWidth - 1;
+			if (textLeft >= clip && textRight <= width - TURN_ORDER_INSET + 1 && top >= 0 && top + card->size.y <= height)
+			{
+				CHAR value[32];
+				if (card->divider)
+				{
+					StrPrint(value, "%d", card->hp);
+					DrawTurnText(data, "Medium", "C", value, RGB(250, 244, 224), card->next, textLeft, top, textRight, top + card->size.y);
+				}
+				else
+				{
+					StrPrint(value, "%d/%d", card->hp, card->hpMax);
+					LONG bandBottom = top + TURN_ORDER_TOP + 2 + card->faceSize.y;
+					LONG bandMiddle = bandBottom - TURN_ORDER_BAND / 2;
+					LONG half = min(13, min(bandMiddle, height - bandMiddle));
+					DrawTurnText(data, "Small", "C", value, RGB(240, 232, 208), card->next, max(textLeft - 2, 0), bandMiddle - half, min(textRight + 2, width), bandMiddle + half);
 				}
 			}
 		}
@@ -905,7 +845,7 @@ namespace TurnOrder
 
 	VOID Load(HOOKER hooker, const Hooks::AddressSpaceV2* hookSpace, DWORD baseOffset)
 	{
-		if (!(hookSpace->turn_order_attack && hookSpace->turn_order_hp_max && ReadDWord(hooker, hookSpace->turn_order_viewer + 8, &sub_BattleViewerAttack) && ReadDWord(hooker, hookSpace->turn_order_viewer + 12, &sub_BattleViewerEnd)))
+		if (!(hookSpace->turn_order_attack && hookSpace->turn_order_hp_max && hookSpace->turn_order_text && ReadDWord(hooker, hookSpace->turn_order_viewer + 8, &sub_BattleViewerAttack) && ReadDWord(hooker, hookSpace->turn_order_viewer + 12, &sub_BattleViewerEnd)))
 			return;
 
 		config.turnOrder.hooked = TRUE;
@@ -935,6 +875,7 @@ namespace TurnOrder
 		sub_ImageSurface = f(hookSpace->turn_order_surface);
 		sub_UnitAttack = f(hookSpace->turn_order_attack);
 		sub_UnitHpMax = f(hookSpace->turn_order_hp_max);
+		sub_FormattedText = f(hookSpace->turn_order_text);
 
 		turnViewerVtbl = hookSpace->turn_order_viewer;
 		PatchPtr(hooker, hookSpace->turn_order_viewer + 8, BattleViewerAttack);

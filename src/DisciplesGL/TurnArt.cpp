@@ -9,13 +9,10 @@
 #define ART_RECORD_TAG 0x4352514D
 #define ART_NAME_ENTRY 260
 #define ART_SAMPLES 4
-#define FONT_GLYPH_HEADER 17
 
 namespace TurnArt
 {
 	Piece crystal;
-	Font normal;
-	Font medium;
 
 	struct Record {
 		DWORD id;
@@ -71,139 +68,6 @@ namespace TurnArt
 
 		StrCopy(slash + 1, name);
 		return CreateFileA(path, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
-	}
-
-	BOOL LoadFont(Font* font, const CHAR* name)
-	{
-		HANDLE file = OpenGameFile(name);
-		if (file == INVALID_HANDLE_VALUE)
-			return FALSE;
-
-		DWORD size = GetFileSize(file, NULL);
-		BYTE* data = (BYTE*)MemoryAlloc(size);
-		BOOL res = ReadAt(file, 0, data, size) && size > 12 && !MemoryCompare(data, "MFT", 4);
-		CloseHandle(file);
-
-		DWORD offset = res ? 12 + *(DWORD*)(data + 8) + 12 : 0;
-		for (DWORD i = 0; res && i < FONT_GLYPHS; ++i)
-		{
-			if (offset >= size)
-				res = FALSE;
-			else if (!data[offset])
-				++offset;
-			else if (offset + FONT_GLYPH_HEADER > size)
-				res = FALSE;
-			else
-			{
-				Glyph* glyph = &font->glyphs[i];
-				glyph->width = *(LONG*)(data + offset + 1);
-				glyph->height = *(LONG*)(data + offset + 5);
-				glyph->advance = *(LONG*)(data + offset + 9);
-				glyph->spacing = *(LONG*)(data + offset + 13);
-				glyph->rows = data + offset + FONT_GLYPH_HEADER;
-				offset += FONT_GLYPH_HEADER + glyph->height * ((glyph->width + 7) >> 3);
-				res = glyph->width >= 0 && glyph->width <= 64 && glyph->height >= 0 && glyph->height <= 64 && offset <= size;
-			}
-		}
-
-		if (!res)
-		{
-			MemoryFree(data);
-			MemoryZero(font, sizeof(Font));
-			return FALSE;
-		}
-
-		font->data = data;
-		font->inkTop = 64;
-		font->inkBottom = -1;
-		for (const CHAR* ch = "0123456789/"; *ch; ++ch)
-		{
-			const Glyph* glyph = &font->glyphs[(BYTE)*ch];
-			LONG pitch = (glyph->width + 7) >> 3;
-			for (LONG y = 0; y < glyph->height; ++y)
-			{
-				for (LONG x = 0; x < pitch; ++x)
-				{
-					if (glyph->rows[y * pitch + x])
-					{
-						font->inkTop = min(font->inkTop, y);
-						font->inkBottom = max(font->inkBottom, y);
-					}
-				}
-			}
-		}
-
-		return font->inkBottom >= font->inkTop;
-	}
-
-	BOOL HasFont(const Font* font)
-	{
-		return font->data != NULL;
-	}
-
-	LONG TextWidth(const Font* font, const CHAR* text, BOOL tight)
-	{
-		LONG width = 0;
-		for (; *text; ++text)
-		{
-			const Glyph* glyph = &font->glyphs[(BYTE)*text];
-			width += glyph->advance + (tight ? 0 : glyph->spacing);
-		}
-
-		return width;
-	}
-
-	BOOL GlyphInk(const Glyph* glyph, LONG x, LONG y)
-	{
-		return glyph->rows[y * ((glyph->width + 7) >> 3) + (x >> 3)] >> (7 - (x & 7)) & 1;
-	}
-
-	VOID DrawText(const Font* font, const CHAR* text, BOOL tight, BYTE* mask, LONG width, LONG height)
-	{
-		LONG inkLeft = MAXLONG, inkRight = MINLONG;
-		LONG x = 0;
-		for (const CHAR* ch = text; *ch; ++ch)
-		{
-			const Glyph* glyph = &font->glyphs[(BYTE)*ch];
-			for (LONG y = 0; y < glyph->height; ++y)
-			{
-				for (LONG gx = 0; gx < glyph->width; ++gx)
-				{
-					if (GlyphInk(glyph, gx, y))
-					{
-						inkLeft = min(inkLeft, x + gx);
-						inkRight = max(inkRight, x + gx);
-					}
-				}
-			}
-
-			x += glyph->advance + (tight ? 0 : glyph->spacing);
-		}
-
-		if (inkLeft > inkRight)
-			return;
-
-		x = (width - (inkRight - inkLeft + 1) + 1) / 2 - inkLeft;
-		LONG top = (height - (font->inkBottom - font->inkTop + 1) + 1) / 2 - font->inkTop;
-		for (; *text; ++text)
-		{
-			const Glyph* glyph = &font->glyphs[(BYTE)*text];
-			for (LONG y = 0; y < glyph->height; ++y)
-			{
-				LONG dy = top + y;
-				if (dy < 0 || dy >= height)
-					continue;
-
-				for (LONG gx = 0; gx < glyph->width; ++gx)
-				{
-					LONG dx = x + gx;
-					if (dx >= 0 && dx < width && GlyphInk(glyph, gx, y))
-						mask[dy * width + dx] = 0xFF;
-				}
-			}
-
-			x += glyph->advance + (tight ? 0 : glyph->spacing);
-		}
 	}
 
 	BYTE* ReadArtPng(DWORD* size)
@@ -320,9 +184,6 @@ namespace TurnArt
 			return loaded;
 
 		tried = TRUE;
-		BOOL font = LoadFont(&normal, "Interf\\normal.mft");
-		LoadFont(&medium, "Interf\\medium.mft");
-
 		DWORD size = 0;
 		BYTE* data = pnglib_create_read_struct && pnglib_read_image ? ReadArtPng(&size) : NULL;
 		if (data)
@@ -331,7 +192,7 @@ namespace TurnArt
 			MemoryFree(data);
 		}
 
-		DebugLog("Turn art %s, font %s", loaded ? "loaded" : "missing", font ? "loaded" : "missing");
+		DebugLog("Turn art %s", loaded ? "loaded" : "missing");
 		return loaded;
 	}
 
