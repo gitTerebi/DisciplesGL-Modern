@@ -375,8 +375,7 @@ namespace TextReplace
 
 	BOOL Enabled()
 	{
-		return initialized && rendererReady && config.bpp32Hooked && !config.type.editor
-			&& config.image.interpolation == InterpolateFsr && config.image.upscaling == UpscaleNone;
+		return initialized && rendererReady && config.bpp32Hooked && !config.type.editor;
 	}
 
 	VOID SetRenderer(BOOL ready)
@@ -576,10 +575,16 @@ namespace TextReplace
 
 			if (src->plane)
 			{
+				LONG marked = 0;
 				for (LONG py = t; py < b; ++py)
 					for (LONG px = l; px < r; ++px)
 						if (src->plane[(py - sy) * src->planeW + (px - sx)] > glyph.layer && PlaneEnsure(dst))
+						{
 							dst->plane[py * dst->planeW + px] = seq + 1;
+							++marked;
+						}
+				if (traceLeft && marked)
+					DebugLog("trace DIAG carrymask src %08X ch %d at %d,%d layer %d marked %d of %d", src->surface, glyph.ch, glyph.x, glyph.y, glyph.layer, marked, (r - l) * (b - t));
 			}
 
 			DWORD layer = glyph.layer;
@@ -940,6 +945,15 @@ namespace TextReplace
 				for (DWORD i = 0; i < entry->list.count; ++i)
 				{
 					Glyph glyph = entry->list.items[i];
+					if (traceLeft)
+					{
+						LONG masked = 0;
+						if (entry->plane)
+							for (LONG py = glyph.t; py < glyph.b; ++py)
+								for (LONG px = glyph.l; px < glyph.r; ++px)
+									masked += entry->plane[py * entry->planeW + px] > glyph.layer;
+						DebugLog("trace DIAG present ch %d font %08X at %d,%d rect %d,%d,%d,%d layer %d masked %d", glyph.ch, glyph.font, glyph.x, glyph.y, glyph.l, glyph.t, glyph.r, glyph.b, glyph.layer, masked);
+					}
 					if (entry->plane)
 					{
 						for (LONG py = glyph.t; py < glyph.b; ++py)

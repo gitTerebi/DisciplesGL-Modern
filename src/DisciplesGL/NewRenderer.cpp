@@ -389,7 +389,9 @@ BOOL NewRenderer::RenderInner(BOOL ready, BOOL force, StateBufferAligned** lpSta
 			this->frameBuffer = AlignedAlloc(config.mode->width * config.mode->height * (this->isTrueColor ? sizeof(DWORD) : sizeof(WORD)));
 		}
 
-		if (this->pixelBuffer->Update(lpStateBuffer, ready, TRUE) || state.flags || stateChanged || mapZoomChanged)
+		BOOL textUpActive = this->isTrueColor;
+		BOOL textUpChanged = TextReplace::Prepare(stateBuffer, textUpActive);
+		if (this->pixelBuffer->Update(lpStateBuffer, ready, TRUE) || state.flags || stateChanged || mapZoomChanged || textUpChanged)
 		{
 			BOOL clearBackTransition = this->backStatus && !stateBuffer->isBack;
 			BOOL zoomChanged = this->zoomStatus != stateBuffer->isZoomed;
@@ -680,6 +682,9 @@ BOOL NewRenderer::RenderInner(BOOL ready, BOOL force, StateBufferAligned** lpSta
 
 				if (!stateBuffer->isZoomed && !stateBuffer->isBack)
 					this->DrawMapZoom(textureId.primaryBO, this->viewSize, TRUE, state.interpolation == InterpolateFsr);
+
+				if (textUpActive)
+					TextReplace::Draw(&this->ddraw->viewport.rectangle, this->ddraw->viewport.offset, frameSize.width, frameSize.height);
 			}
 			isSwap = TRUE;
 		}
