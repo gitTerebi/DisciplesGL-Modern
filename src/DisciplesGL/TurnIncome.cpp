@@ -8,14 +8,14 @@
 
 namespace TurnIncome
 {
-	#define CURRENCY_COUNT 5
+	#define CURRENCY_COUNT 6
 	#define SHOW_MS 2000
 	#define COUNT_MS 1000
 	#define ARM_MS 5000
 	#define STEP_MS 16
 
-	// Discipl2.exe v2.02b 0x00486313 writes TXT_GOLD, TXT_ORANGE, TXT_BLANC, TXT_JAUNE, TXT_ROUGE from these bank slots
-	const DWORD fieldCurrency[CURRENCY_COUNT] = { 0, 3, 4, 2, 1 };
+	// Discipl2.exe v2.02b 0x00486313 writes TXT_GOLD..TXT_ROUGE from these bank slots; v3.01b 0x004891BB adds TXT_BLUE from 5
+	const DWORD fieldCurrency[CURRENCY_COUNT] = { 0, 3, 4, 2, 1, 5 };
 
 	DWORD sub_Text, sub_GetBank, sub_FindText, sub_SetText, sub_ViewFree, sub_Render;
 	const CHAR** names;
@@ -39,10 +39,10 @@ namespace TurnIncome
 		SHORT to[CURRENCY_COUNT];
 		DWORD start;
 		DWORD player;
-		DWORD objectMap;
 	} anim, pending;
 
-	DWORD pendingTime, armTime, stepTime, writes, ticks, gameThread;
+	DWORD pendingTime, armTime, stepTime;
+	BOOL armed;
 	DWORD* popupView;
 
 	VOID Start(const Anim* from)
@@ -51,8 +51,6 @@ namespace TurnIncome
 		anim.active = TRUE;
 		anim.start = timeGetTime();
 		stepTime = 0;
-		ticks = writes = 0;
-		DebugLog("Turn income gold=%d+%d red=%d+%d", anim.from[0], anim.to[0] - anim.from[0], anim.from[1], anim.to[1] - anim.from[1]);
 	}
 
 	VOID Arm()
@@ -61,17 +59,19 @@ namespace TurnIncome
 			return;
 
 		DWORD now = timeGetTime();
-		DebugLog("Turn income arm pending=%d", pending.player && now - pendingTime <= ARM_MS);
 		if (pending.player && now - pendingTime <= ARM_MS)
 		{
 			Start(&pending);
 			pending.player = 0;
 		}
 		else
-			armTime = now | 1;
+		{
+			armed = TRUE;
+			armTime = now;
+		}
 	}
 
-	VOID Observe(DWORD player, DWORD objectMap)
+	VOID Observe(DWORD player)
 	{
 		if (anim.active && anim.player == read.player)
 		{
@@ -94,13 +94,10 @@ namespace TurnIncome
 			if (up)
 			{
 				next.player = player;
-				next.objectMap = objectMap;
-
 				DWORD now = timeGetTime();
-				DebugLog("Turn income increase armed=%d", armTime && now - armTime <= ARM_MS);
-				if (armTime && now - armTime <= ARM_MS)
+				if (armed && now - armTime <= ARM_MS)
 				{
-					armTime = 0;
+					armed = FALSE;
 					Start(&next);
 				}
 				else
@@ -135,7 +132,6 @@ namespace TurnIncome
 			return;
 
 		StrCopy(shown[field], text);
-		++writes;
 		DWORD box = ((DWORD(__stdcall*)(DWORD, const CHAR*))sub_FindText)(dialog, names[field]);
 		if (box)
 			((VOID(__thiscall*)(DWORD, const CHAR*))sub_SetText)(box, text);
@@ -168,11 +164,7 @@ namespace TurnIncome
 		}
 
 		if (done)
-		{
 			anim.active = FALSE;
-			DebugLog("Turn income done ms=%u ticks=%u writes=%u thread=%u text=%s,%s,%s,%s,%s", elapsed, ticks, writes, GetCurrentThreadId(), shown[0], shown[1], shown[2], shown[3], shown[4]);
-			writes = ticks = 0;
-		}
 	}
 
 	SHORT __fastcall GetBank(DWORD* bank, DWORD, DWORD currency)
@@ -202,19 +194,9 @@ namespace TurnIncome
 			popupView = view;
 
 		read.player = player;
-		static DWORD logKey;
-		DWORD key = player ^ read.value[0] ^ (popupView ? 0x80000000 : 0);
-		if (key != logKey)
-		{
-			logKey = key;
-			DebugLog("Turn income text player=%08X view=%d gold=%d last=%08X/%d", player, popupView != NULL, read.value[0], last.player, last.value[0]);
-		}
-
-		Observe(player, objectMap);
+		Observe(player);
 		if (anim.active && anim.player == player && IsPopup(dialog))
 		{
-			gameThread = GetCurrentThreadId();
-			DebugLog("Turn income game write ms=%u gold=%d thread=%u", timeGetTime() - anim.start, read.value[0], gameThread);
 			MemoryCopy(popupHas, read.has, sizeof(popupHas));
 			MemoryZero(shown, sizeof(shown));
 			Override(dialog);
@@ -242,9 +224,6 @@ namespace TurnIncome
 			return;
 
 		stepTime = now;
-		if (!ticks++)
-			DebugLog("Turn income first tick ms=%u thread=%u game=%u", now - anim.start, GetCurrentThreadId(), gameThread);
-
 		DWORD dialog = popupView[popupOffset / sizeof(DWORD)];
 		if (dialog && IsPopup(dialog))
 			Override(dialog);
@@ -265,7 +244,7 @@ namespace TurnIncome
 			anim.active = FALSE;
 			pending.player = 0;
 			last.player = 0;
-			armTime = 0;
+			armed = FALSE;
 		}
 
 		((VOID(__thiscall*)(DWORD*))sub_ViewFree)(view);
@@ -297,6 +276,8 @@ namespace TurnIncome
 		RedirectCall(hooker, hookSpace->income_bank_blanc, GetBank);
 		RedirectCall(hooker, hookSpace->income_bank_jaune, GetBank);
 		RedirectCall(hooker, hookSpace->income_bank_rouge, GetBank);
+		if (hookSpace->income_bank_blue)
+			RedirectCall(hooker, hookSpace->income_bank_blue, GetBank);
 
 		PatchCall(hooker, hookSpace->income_view_capture, CaptureView, 1);
 		sub_ViewFree = f(hookSpace->income_view_free);
