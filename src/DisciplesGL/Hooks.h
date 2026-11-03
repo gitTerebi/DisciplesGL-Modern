@@ -391,6 +391,31 @@ namespace Hooks
 		DWORD ai_stack_task;
 		DWORD ai_stack_vtable;
 		DWORD ai_local_player;
+
+		DWORD begin_turn_info_state;
+		DWORD begin_turn_load_state;
+		DWORD begin_turn_vtable;
+		DWORD begin_turn_dialog_vtable;
+		DWORD begin_turn_ok;
+
+		DWORD income_text_view;
+		DWORD income_text_popup;
+		DWORD income_text_palette_new;
+		DWORD income_text_popup_new;
+		DWORD income_bank_gold;
+		DWORD income_bank_orange;
+		DWORD income_bank_blanc;
+		DWORD income_bank_jaune;
+		DWORD income_bank_rouge;
+		DWORD income_find_text;
+		DWORD income_set_text;
+		DWORD income_names;
+		DWORD income_dialog_name;
+		DWORD income_view_capture;
+		DWORD income_view_free;
+		DWORD income_view_offset;
+		DWORD income_popup;
+		DWORD income_frame;
 	};
 
 	struct BlendData {

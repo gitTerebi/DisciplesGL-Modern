@@ -327,6 +327,11 @@ struct ConfigItems {
 	struct {
 		BOOL enabled;
 		BOOL hooked;
+	} skipTurnSummary;
+
+	struct {
+		BOOL enabled;
+		BOOL hooked;
 	} turnOrder;
 	DisplayMode* mode;
 	Resolution resolution;
@@ -586,6 +591,7 @@ enum MenuType
 	MenuSkipIntro,
 	MenuSkipTransitions,
 	MenuFasterEndTurn,
+	MenuSkipTurnSummary,
 	MenuTurnOrder,
 	MenuWindowType,
 	MenuFastAI,

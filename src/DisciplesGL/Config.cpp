@@ -386,6 +386,7 @@ namespace Config
 				config.maximizedWindow = TRUE;
 				config.skipTransitions.enabled = TRUE;
 				config.fasterEndTurn.enabled = TRUE;
+				config.skipTurnSummary.enabled = TRUE;
 				config.turnOrder.enabled = TRUE;
 				BattleSpeed::Reset();
 
@@ -449,6 +450,7 @@ namespace Config
 					ptr = Add(ptr, "MaximizedWindow", config.maximizedWindow, "Starts windowed mode maximized (0 - no; 1 - yes 'default')");
 					ptr = Add(ptr, "SkipTransitions", config.skipTransitions.enabled, "Skips the full screen animations between menus (0 - no; 1 - yes 'default')");
 					ptr = Add(ptr, "FasterEndTurn", config.fasterEndTurn.enabled, "After End Turn the camera jumps to where each visible enemy stack stops and holds still while it walks, skips the terrain spread scrolls, and returns to your view at turn start (0 - no; 1 - yes 'default')");
+					ptr = Add(ptr, "SkipTurnSummary", config.skipTurnSummary.enabled, "Skips the Beginning day income popup at the start of each turn (0 - no; 1 - yes 'default')");
 					ptr = Add(ptr, "TurnOrder", config.turnOrder.enabled, "Shows the faces of the units still to act this round at the top of the battle screen (0 - no; 1 - yes 'default')");
 					ptr = Add(ptr, "GameSpeed", config.speed.index, "Animation speed (1 - ..., 5 - 1.5x 'deafult'");
 					ptr = Add(ptr, "SpeedEnabled", config.speed.enabled, "Enables animation speed (0 - no 'default'; 1 - yes)");
@@ -575,6 +577,7 @@ namespace Config
 				config.maximizedWindow = (BOOL)Config::Get(CONFIG_WRAPPER, "MaximizedWindow", FALSE);
 				config.skipTransitions.enabled = (BOOL)Config::Get(CONFIG_WRAPPER, "SkipTransitions", FALSE);
 				config.fasterEndTurn.enabled = (BOOL)Config::Get(CONFIG_WRAPPER, "FasterEndTurn", FALSE);
+				config.skipTurnSummary.enabled = (BOOL)Config::Get(CONFIG_WRAPPER, "SkipTurnSummary", TRUE);
 				config.turnOrder.enabled = (BOOL)Config::Get(CONFIG_WRAPPER, "TurnOrder", TRUE);
 
 				config.image.aspect = (BOOL)Config::Get(CONFIG_WRAPPER, "ImageAspect", TRUE);

@@ -40,6 +40,8 @@
 #include "Hooker.h"
 #include "TurnOrder.h"
 #include "FasterEndTurn.h"
+#include "TurnSummary.h"
+#include "TurnIncome.h"
 #include "SaveList.h"
 #include "ShopFrame.h"
 #include "WalkSpeed.h"
@@ -493,6 +495,9 @@ namespace Hooks
 
 			0x0053CF4E, // map_tile_to_world
 			0x004F0419, 0x006D3A0C, 0x00403072, // ai_stack
+			0x00487A87, 0x00486B3D, 0x006D0A44, 0x006CDD44, 0x004D542D, // begin_turn
+			0x0048929C, 0x004892CA, 0x00486088, 0x00486A9F, 0x00486344, 0x00486391, 0x004863D3, 0x00486415, 0x00486457,
+			0x00507786, 0x0052F6CC, 0x0078D428, 0x0057EBD3, 0x004892B4, 0x00485597, 0x00000010, 0x00000034, 0x00512D71, // income
 		},
 #pragma endregion
 
@@ -711,6 +716,9 @@ namespace Hooks
 
 			0x005419F6, // map_tile_to_world
 			0x004F426A, 0x006DFF64, 0x00403384, // ai_stack
+			0x0048A755, 0x004897E7, 0x006DCFB4, 0x006DA12C, 0x004D97E3, // begin_turn
+			0x00000000, 0x0048C088, 0x00000000, 0x00489590, 0x00489603, 0x00489650, 0x00489692, 0x004896D4, 0x00489716,
+			0x0050BB0F, 0x005341D6, 0x0079B984, 0x005FFC5F, 0x0048C072, 0x0048827B, 0x00000010, 0x00000034, 0x00517111, // income
 		},
 #pragma endregion
 
@@ -795,6 +803,9 @@ namespace Hooks
 
 			0x005410A6, // map_tile_to_world
 			0x004F369F, 0x006DDF0C, 0x004030CA, // ai_stack
+			0x0048A33E, 0x004893D0, 0x006DAF54, 0x006D80CC, 0x004D8E34, // begin_turn
+			0x00000000, 0x0048BC71, 0x00000000, 0x00489179, 0x004891EC, 0x00489239, 0x0048927B, 0x004892BD, 0x004892FF,
+			0x0050B013, 0x005337B0, 0x0079992C, 0x00597FBB, 0x0048BC5B, 0x00487E69, 0x00000010, 0x00000034, 0x00516621, // income
 		},
 #pragma endregion
 
@@ -9050,6 +9061,8 @@ namespace Hooks
 			sub_SendExchange = RedirectCall(hooker, hookSpace->shift_send, SendExchange);
 			sub_ExchangeItem = RedirectCall(hooker, hookSpace->shift_exchange, ExchangeItem);
 		}
+		TurnSummary::Load(hooker, hookSpace, baseOffset);
+		TurnIncome::Load(hooker, hookSpace, baseOffset);
 
 		if (hookSpace->trans_menu)
 		{
