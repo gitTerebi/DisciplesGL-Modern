@@ -3026,25 +3026,22 @@
 			}
 
 			case IDM_FAST_AI: {
-				if (config.ai.fast || Main::ShowWarn(IDS_WARN_FAST_AI))
+				config.ai.fast = !config.ai.fast;
+				Config::Set(CONFIG_WRAPPER, "FastAI", config.ai.fast);
+
 				{
-					config.ai.fast = !config.ai.fast;
-					Config::Set(CONFIG_WRAPPER, "FastAI", config.ai.fast);
+					CHAR str1[32];
+					LoadString(hDllModule, IDS_FAST_AI, str1, sizeof(str1));
 
-					{
-						CHAR str1[32];
-						LoadString(hDllModule, IDS_FAST_AI, str1, sizeof(str1));
+					CHAR str2[32];
+					LoadString(hDllModule, config.ai.fast ? IDS_ON : IDS_OFF, str2, sizeof(str2));
 
-						CHAR str2[32];
-						LoadString(hDllModule, config.ai.fast ? IDS_ON : IDS_OFF, str2, sizeof(str2));
-
-						CHAR text[64];
-						StrPrint(text, "%s: %s", str1, str2);
-						Hooks::PrintText(text);
-					}
-
-					CheckMenu(MenuFastAI);
+					CHAR text[64];
+					StrPrint(text, "%s: %s", str1, str2);
+					Hooks::PrintText(text);
 				}
+
+				CheckMenu(MenuFastAI);
 
 				return NULL;
 			}

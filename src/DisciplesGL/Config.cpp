@@ -469,7 +469,7 @@ namespace Config
 					ptr = Add(ptr, "Locale", *(INT*)&config.locales.current.id, "Locale id (by default is determined by system locale)");
 					ptr = Add(ptr, "NoSSE2", !config.cpu.sse2, "Disables using of SSE2 instruction set, even if it's available (0 - no 'default'; 1 - yes)");
 					ptr = Add(ptr, "UpdateMode", (INT)config.updateMode, "Image comparison. Affects on rendering performance (0 - none; 1 - SSE2 'default'; 2 - classic; 3 - alternative)");
-					ptr = Add(ptr, "FastAI", config.ai.fast, "Increases AI performance, but may cause an unexpected game crash (0 - no 'default'; 1 - yes)");
+					ptr = Add(ptr, "FastAI", config.ai.fast, "Speeds up AI turns (0 - no 'default'; 1 - yes)");
 					ptr = Add(ptr, "MouseScroll", config.scroll.buttons.left | (config.scroll.buttons.middle << 1), "Allows map scrolling by pressing mouse button (0 - no; 1 - left button; 2 - middle button; 3 - both buttons 'default')");
 					ptr = Add(ptr, "EdgeScroll", config.scroll.edge.active, "Allows map scrolling on window/screen edge detection (0 - no; 1 - yes 'default')");
 					ptr = Add(ptr, "EasyScroll", config.scroll.easy.value, "Easy function timeout for map scrolling (150 - 'default')");

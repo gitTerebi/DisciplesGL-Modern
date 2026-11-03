@@ -37,7 +37,6 @@ BEGIN
 	IDS_INFO_NEXT_BATTLE			"This option will be affected at the next battle"
 	IDS_WARN_RESET					"This option will reset all wrapper configuration to default.\r\nAre you sure you want to continue?"
 	IDS_INFO_RESET					"All settings have been reset. Changes take effect after game restart"
-	IDS_WARN_FAST_AI				"This option increases AI performance, but may cause an unexpected game crash. Do you wish to continue?"
 	IDS_ASK_RESTART					"Restart the game now? Unsaved progress will be lost."
 
 	IDS_TEXT_INTERPOLATIN			"Interpolation filter"
@@ -264,6 +263,7 @@ BEGIN
 		MENUITEM "Skip &Intro Videos",				IDM_SKIP_INTRO
 		MENUITEM "Skip Menu &Transitions",			IDM_SKIP_TRANSITIONS
 		MENUITEM "Faster &End Turn",				IDM_FASTER_END_TURN
+		MENUITEM "Fast &AI",						IDM_FAST_AI
 		MENUITEM "Skip Turn Su&mmary",				IDM_SKIP_TURN_SUMMARY
 		MENUITEM "Battle Tu&rn Order",				IDM_TURN_ORDER
 		MENUITEM SEPARATOR

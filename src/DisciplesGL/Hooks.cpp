@@ -47,6 +47,7 @@
 #include "ShopFrame.h"
 #include "WalkSpeed.h"
 #include "BattleSpeed.h"
+#include "FastAI.h"
 
 #define PANEL_WIDTH 160
 #define NUM(a, b) ((a << 16) | b)
@@ -1250,25 +1251,7 @@ namespace Hooks
 		if (uMsg == WM_TIMER)
 		{
 			CheckAI();
-
-			while (config.ai.fast && config.ai.thinking)
-			{
-				Sleep(0);
-				MSG msg;
-				if (PeekMessage(&msg, hWnd, NULL, NULL, PM_REMOVE) && msg.message != WM_TIMER)
-				{
-					res = CallWindowProc(OldWindowProc, hWnd, msg.message, msg.wParam, msg.lParam);
-					if (msg.message == msgs.AIMESSAGE)
-						BeginAI();
-					else if (msg.message == WM_QUIT || msg.message == WM_CLOSE || msg.message == WM_DESTROY)
-						break;
-				}
-				else
-				{
-					res = CallWindowProc(OldWindowProc, hWnd, uMsg, wParam, lParam);
-					CheckAI();
-				}
-			}
+			FastAI::Tick(hWnd, OldWindowProc, wParam, lParam);
 		}
 		else if (uMsg == msgs.AIMESSAGE)
 			BeginAI();
@@ -1321,7 +1304,10 @@ namespace Hooks
 			}
 		}
 		else if (!StrCompare(lpClassName, "ThreadWindowClass"))
+		{
 			OldWindowProc = (WNDPROC)SetWindowLong(hWnd, GWL_WNDPROC, (LPARAM)WindowProc);
+			FastAI::SetWindow(hWnd);
+		}
 
 		return hWnd;
 	}
@@ -5897,7 +5883,7 @@ namespace Hooks
 			mov eax, [ecx]
 			test eax, eax
 			jz lbl_retn
-			mov [eax], 0x00FFFFFF
+			mov dword ptr [eax], 0x00FFFFFF
 			lbl_retn: retn 0x4
 		}
 	}
@@ -9564,6 +9550,7 @@ namespace Hooks
 
 				PatchImportByName(hooker, "CreateWindowExA", CreateWindowExHook);
 				PatchImportByName(hooker, "RegisterClassA", RegisterClassHook);
+				FastAI::Load(hooker);
 
 				PatchImportByName(hooker, "SetWindowLongA", SetWindowLongHook);
 

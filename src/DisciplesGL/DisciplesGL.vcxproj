@@ -274,6 +274,7 @@
     <ClCompile Include="ShopFrame.cpp" />
     <ClCompile Include="WalkSpeed.cpp" />
     <ClCompile Include="BattleSpeed.cpp" />
+    <ClCompile Include="FastAI.cpp" />
     <ClCompile Include="NewRenderer.cpp" />
     <ClCompile Include="OGLRenderer.cpp" />
     <ClCompile Include="OldRenderer.cpp" />
@@ -318,6 +319,7 @@
     <ClInclude Include="ShopFrame.h" />
     <ClInclude Include="WalkSpeed.h" />
     <ClInclude Include="BattleSpeed.h" />
+    <ClInclude Include="FastAI.h" />
     <ClInclude Include="NewRenderer.h" />
     <ClInclude Include="OGLRenderer.h" />
     <ClInclude Include="OldRenderer.h" />

@@ -115,6 +115,9 @@
     <ClCompile Include="BattleSpeed.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="FastAI.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="TurnArt.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -235,6 +238,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="BattleSpeed.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="FastAI.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="TurnArt.h">
