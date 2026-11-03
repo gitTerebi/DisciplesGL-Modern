@@ -48,6 +48,7 @@
 #include "WalkSpeed.h"
 #include "BattleSpeed.h"
 #include "FastAI.h"
+#include "ImageReplace.h"
 
 #define PANEL_WIDTH 160
 #define NUM(a, b) ((a << 16) | b)
@@ -501,6 +502,7 @@ namespace Hooks
 			0x0048929C, 0x004892CA, 0x00486088, 0x00486A9F, 0x00486344, 0x00486391, 0x004863D3, 0x00486415, 0x00486457,
 			0x00507786, 0x0052F6CC, 0x0078D428, 0x0057EBD3, 0x004892B4, 0x00485597, 0x00000010, 0x00000034, 0x00512D71, 0x00000000, // income
 			0x00524787, // turn_order_text
+			0x00529C8B, 0x00529DBD, 0x006D6A10, 0x00529AF1, 0x006D6760, 0x0052978C, // image_trace
 		},
 #pragma endregion
 
@@ -723,6 +725,7 @@ namespace Hooks
 			0x00000000, 0x0048C088, 0x00000000, 0x00489590, 0x00489603, 0x00489650, 0x00489692, 0x004896D4, 0x00489716,
 			0x0050BB0F, 0x005341D6, 0x0079B984, 0x005FFC5F, 0x0048C072, 0x0048827B, 0x00000010, 0x00000034, 0x00517111, 0x00489758, // income
 			0x00529175, // turn_order_text
+			0x0052E663, 0x0052E798, 0x006E2F78, 0x0052E4C6, 0x006E2CC8, 0x0052E159, // image_trace
 		},
 #pragma endregion
 
@@ -811,6 +814,7 @@ namespace Hooks
 			0x00000000, 0x0048BC71, 0x00000000, 0x00489179, 0x004891EC, 0x00489239, 0x0048927B, 0x004892BD, 0x004892FF,
 			0x0050B013, 0x005337B0, 0x0079992C, 0x00597FBB, 0x0048BC5B, 0x00487E69, 0x00000010, 0x00000034, 0x00516621, 0x00489341, // income
 			0x00528680, // turn_order_text
+			0x0052DC06, 0x0052DD56, 0x006E0F18, 0x0052DA6C, 0x006E0C68, 0x0052D707, // image_trace
 		},
 #pragma endregion
 
@@ -1997,6 +2001,7 @@ namespace Hooks
 	VOID __stdcall Pixel_Blit_Indexed_to_565(BYTE* srcData, LONG srcPitch, DWORD* palette, DWORD* dstData, LONG dstPitch, RECT* rect)
 	{
 		TextReplace::OnFillRect(dstData, rect);
+		ImageReplace::OnFillRect(dstData, rect);
 
 		BYTE* lpSrc = srcData + rect->top * srcPitch + rect->left;
 		dstPitch /= 2;
@@ -2068,6 +2073,7 @@ namespace Hooks
 	VOID __stdcall Pixel_Blit_By_Masks(DWORD* srcData, LONG srcPitch, DWORD redMask, DWORD greenMask, DWORD blueMask, DWORD alphaMask, BYTE* dstData, LONG dstPitch, RECT* rect)
 	{
 		TextReplace::OnFillRect(dstData, rect);
+		ImageReplace::OnFillRect(dstData, rect);
 
 		srcPitch /= 2;
 
@@ -2112,6 +2118,7 @@ namespace Hooks
 	VOID __stdcall Pixel_Blit_RGB_to_565(BYTE* srcData, LONG srcPitch, DWORD* dstData, LONG dstPitch, RECT* rect)
 	{
 		TextReplace::OnFillRect(dstData, rect);
+		ImageReplace::OnFillRect(dstData, rect);
 
 		dstPitch /= 2;
 
@@ -2193,6 +2200,7 @@ namespace Hooks
 	{
 		TextReplace::TracePixel("blend", blendItem.dstData, blendItem.srcData, blendItem.length, 1, 0, _ReturnAddress());
 		TextReplace::OnPixelRows(&blendItem, 1);
+		ImageReplace::OnPixelRows(&blendItem, 1);
 
 		for (; blendItem.length; --blendItem.length, ++blendItem.srcData, ++blendItem.dstData, ++blendItem.mskData)
 			*blendItem.dstData = Blend(*blendItem.dstData, *blendItem.srcData, *blendItem.mskData);
@@ -2202,6 +2210,7 @@ namespace Hooks
 	{
 		TextReplace::TracePixel("blend", blendItem.dstData, blendItem.srcData, blendItem.length, 1, 0, _ReturnAddress());
 		TextReplace::OnPixelRows(&blendItem, 1);
+		ImageReplace::OnPixelRows(&blendItem, 1);
 
 		__m128i zero = _mm_setzero_si128();
 		__m128i and1 = _mm_set1_epi16(0xFF);
@@ -2213,6 +2222,7 @@ namespace Hooks
 	{
 		TextReplace::TracePixel("blendkey", count ? blendItem->dstData : NULL, count ? blendItem->srcData : NULL, count ? blendItem->length : 0, count, 0, _ReturnAddress());
 		TextReplace::OnPixelRows(blendItem, count);
+		ImageReplace::OnPixelRows(blendItem, count);
 
 		if (count)
 		{
@@ -2247,6 +2257,7 @@ namespace Hooks
 	{
 		TextReplace::TracePixel("blendkey", count ? blendItem->dstData : NULL, count ? blendItem->srcData : NULL, count ? blendItem->length : 0, count, 0, _ReturnAddress());
 		TextReplace::OnPixelRows(blendItem, count);
+		ImageReplace::OnPixelRows(blendItem, count);
 
 		if (count)
 		{
@@ -2285,6 +2296,7 @@ namespace Hooks
 		{
 			TextReplace::TracePixel("average", dstData + dstPitch / 2 * dstPos->y + dstPos->x, srcData + srcPitch / 2 * srcPos->y + srcPos->x, size->cx, size->cy, flag, _ReturnAddress());
 			TextReplace::OnPixelCopy(srcData, srcPitch, srcPos, dstData, dstPitch, dstPos, size, TRUE, Convert565toRGB(colorKey), flag);
+			ImageReplace::OnPixelCopy(srcData, srcPitch, srcPos, dstData, dstPitch, dstPos, size, TRUE, Convert565toRGB(colorKey), flag);
 		}
 
 		if (!flag || !dstData || size->cx <= 0 || size->cy < 0)
@@ -2346,6 +2358,7 @@ namespace Hooks
 		{
 			TextReplace::TracePixel("average", dstData + dstPitch / 2 * dstPos->y + dstPos->x, srcData + srcPitch / 2 * srcPos->y + srcPos->x, size->cx, size->cy, flag, _ReturnAddress());
 			TextReplace::OnPixelCopy(srcData, srcPitch, srcPos, dstData, dstPitch, dstPos, size, TRUE, Convert565toRGB(colorKey), flag);
+			ImageReplace::OnPixelCopy(srcData, srcPitch, srcPos, dstData, dstPitch, dstPos, size, TRUE, Convert565toRGB(colorKey), flag);
 		}
 
 		if (!flag || !dstData || size->cx <= 0 || size->cy < 0)
@@ -2692,6 +2705,7 @@ namespace Hooks
 		{
 			TextReplace::TracePixel("colorkey", dstData + dstPitch / 2 * dstPos->y + dstPos->x, srcData + srcPitch / 2 * srcPos->y + srcPos->x, size->cx, size->cy, flag, _ReturnAddress());
 			TextReplace::OnPixelCopy(srcData, srcPitch, srcPos, dstData, dstPitch, dstPos, size, TRUE, Convert565toRGB(colorKey), min(255, flag * 2) / 2);
+			ImageReplace::OnPixelCopy(srcData, srcPitch, srcPos, dstData, dstPitch, dstPos, size, TRUE, Convert565toRGB(colorKey), min(255, flag * 2) / 2);
 		}
 
 		if (!flag || !dstData || size->cx <= 0 || size->cy <= 0)
@@ -2778,6 +2792,7 @@ namespace Hooks
 		{
 			TextReplace::TracePixel("colorkey", dstData + dstPitch / 2 * dstPos->y + dstPos->x, srcData + srcPitch / 2 * srcPos->y + srcPos->x, size->cx, size->cy, flag, _ReturnAddress());
 			TextReplace::OnPixelCopy(srcData, srcPitch, srcPos, dstData, dstPitch, dstPos, size, TRUE, Convert565toRGB(colorKey), min(255, flag * 2) / 2);
+			ImageReplace::OnPixelCopy(srcData, srcPitch, srcPos, dstData, dstPitch, dstPos, size, TRUE, Convert565toRGB(colorKey), min(255, flag * 2) / 2);
 		}
 
 		if (!flag || !dstData || size->cx <= 0 || size->cy <= 0)
@@ -2869,6 +2884,7 @@ namespace Hooks
 		{
 			TextReplace::TracePixel("empty", dstData + dstPitch / 2 * dstPos->y + dstPos->x, srcData + srcPitch / 2 * srcPos->y + srcPos->x, size->cx, size->cy, 127, _ReturnAddress());
 			TextReplace::OnPixelCopy(srcData, srcPitch, srcPos, dstData, dstPitch, dstPos, size, TRUE, 0, 127);
+			ImageReplace::OnPixelCopy(srcData, srcPitch, srcPos, dstData, dstPitch, dstPos, size, TRUE, 0, 127);
 		}
 
 		if (!dstData || size->cx <= 0 || size->cy <= 0)
@@ -3166,6 +3182,7 @@ namespace Hooks
 	{
 		if (obj->isTrueColor)
 			TextReplace::OnFillRect(obj->data, rect);
+			ImageReplace::OnFillRect(obj->data, rect);
 
 		LONG width = rect->right - rect->left;
 		LONG height = rect->bottom - rect->top;
@@ -3209,6 +3226,7 @@ namespace Hooks
 	VOID __fastcall DrawWaterBorders(DWORD* thisObj, DWORD /*edx*/, BlitObject* obj, POINT* loc, RECT* rect)
 	{
 		TextReplace::OnDiamond(obj->data, loc, rect);
+		ImageReplace::OnDiamond(obj->data, loc, rect);
 
 		DWORD pitch = obj->pitch >> 1;
 
@@ -3276,6 +3294,7 @@ namespace Hooks
 	VOID __fastcall DrawGround(DWORD* thisObj, DWORD /*edx*/, BlitObject* obj, POINT* srcLoc, POINT* dstLoc, RECT* rect, BYTE* blendMask, DWORD* alphaMask)
 	{
 		TextReplace::OnDiamond(obj->data, dstLoc, rect);
+		ImageReplace::OnDiamond(obj->data, dstLoc, rect);
 
 		static BlendData blendList[32];
 
@@ -3388,6 +3407,7 @@ namespace Hooks
 	VOID __stdcall ClearGround(BlitObject* obj, POINT* loc, RECT* rect)
 	{
 		TextReplace::OnDiamond(obj->data, loc, rect);
+		ImageReplace::OnDiamond(obj->data, loc, rect);
 
 		DWORD pitch = obj->pitch >> 1;
 
@@ -9125,6 +9145,8 @@ namespace Hooks
 		TurnIncome::Load(hooker, hookSpace, baseOffset);
 
 		TurnOrder::Load(hooker, hookSpace, baseOffset);
+
+		ImageReplace::Load(hooker, hookSpace, baseOffset);
 
 		ShopFrame::Load(hooker, hookSpace, baseOffset);
 

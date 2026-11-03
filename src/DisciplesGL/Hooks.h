@@ -419,6 +419,13 @@ namespace Hooks
 		DWORD income_bank_blue;
 
 		DWORD turn_order_text;
+
+		DWORD image_build_still;
+		DWORD image_build_anim;
+		DWORD image_render_slot;
+		DWORD image_render;
+		DWORD image_names_slot;
+		DWORD image_names;
 	};
 
 	struct BlendData {

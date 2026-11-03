@@ -29,6 +29,7 @@
 #include "Main.h"
 #include "Resource.h"
 #include "TextReplace.h"
+#include "ImageReplace.h"
 
 NewRenderer::NewRenderer(OpenDraw* ddraw)
 	: OGLRenderer(ddraw)
@@ -197,6 +198,7 @@ VOID NewRenderer::End()
 {
 	TextReplace::SetRenderer(FALSE);
 	TextReplace::ReleaseGL();
+	ImageReplace::ReleaseGL();
 
 	if (this->fsr.fboId)
 	{
@@ -391,6 +393,7 @@ BOOL NewRenderer::RenderInner(BOOL ready, BOOL force, StateBufferAligned** lpSta
 
 		BOOL textUpActive = this->isTrueColor;
 		BOOL textUpChanged = TextReplace::Prepare(stateBuffer, textUpActive);
+		textUpChanged |= ImageReplace::Prepare(stateBuffer, textUpActive);
 		if (this->pixelBuffer->Update(lpStateBuffer, ready, TRUE) || state.flags || stateChanged || mapZoomChanged || textUpChanged)
 		{
 			BOOL clearBackTransition = this->backStatus && !stateBuffer->isBack;
@@ -684,7 +687,10 @@ BOOL NewRenderer::RenderInner(BOOL ready, BOOL force, StateBufferAligned** lpSta
 					this->DrawMapZoom(textureId.primaryBO, this->viewSize, TRUE, state.interpolation == InterpolateFsr);
 
 				if (textUpActive)
+				{
+					ImageReplace::Draw(&this->ddraw->viewport.rectangle, this->ddraw->viewport.offset, frameSize.width, frameSize.height);
 					TextReplace::Draw(&this->ddraw->viewport.rectangle, this->ddraw->viewport.offset, frameSize.width, frameSize.height);
+				}
 			}
 			isSwap = TRUE;
 		}
@@ -721,6 +727,7 @@ BOOL NewRenderer::RenderInner(BOOL ready, BOOL force, StateBufferAligned** lpSta
 		lbl_noup:;
 		BOOL textActive = this->isTrueColor;
 		BOOL textChanged = TextReplace::Prepare(stateBuffer, textActive);
+		textChanged |= ImageReplace::Prepare(stateBuffer, textActive);
 		if (this->pixelBuffer->Update(lpStateBuffer, ready) || state.flags || stateChanged || mapZoomChanged || textChanged)
 		{
 			if (this->isVSync != config.image.vSync)
@@ -839,7 +846,10 @@ BOOL NewRenderer::RenderInner(BOOL ready, BOOL force, StateBufferAligned** lpSta
 				this->DrawMapZoom(textureId.primary, this->texSize, FALSE, state.interpolation == InterpolateFsr);
 
 			if (textActive)
+			{
+				ImageReplace::Draw(&this->ddraw->viewport.rectangle, this->ddraw->viewport.offset, frameSize.width, frameSize.height);
 				TextReplace::Draw(&this->ddraw->viewport.rectangle, this->ddraw->viewport.offset, frameSize.width, frameSize.height);
+			}
 
 			isSwap = TRUE;
 		}

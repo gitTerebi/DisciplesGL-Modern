@@ -33,6 +33,7 @@
 #include "PngLib.h"
 #include "Mods.h"
 #include "TextReplace.h"
+#include "ImageReplace.h"
 
 OpenDrawSurface::OpenDrawSurface(IDrawUnknown** list, OpenDraw* lpDD, SurfaceType type, OpenDrawSurface* attached)
 	: IDrawSurface7(list)
@@ -372,6 +373,7 @@ VOID OpenDrawSurface::CreateBuffer(DWORD width, DWORD height, DWORD bpp, VOID* b
 VOID OpenDrawSurface::ReleaseBuffer()
 {
 	TextReplace::OnRelease(this);
+	ImageReplace::OnRelease(this);
 
 	delete this->indexBuffer;
 	this->indexBuffer = NULL;
@@ -548,6 +550,7 @@ VOID OpenDrawSurface::Flush()
 		((StateBufferAligned*)this->backBuffer)->size = surfaceBuffer->isZoomed ? config.zoom.size : *(Size*)config.mode;
 
 		TextReplace::OnPresent(surface, this->backBuffer, textLeft, textTop);
+		ImageReplace::OnPresent(surface, this->backBuffer, textLeft, textTop);
 		this->SwapBuffers();
 
 #ifdef BENCH
@@ -770,6 +773,7 @@ HRESULT __stdcall OpenDrawSurface::Blt(LPRECT lpDestRect, IDrawSurface7* lpDDSrc
 		if (this->drawEnabled)
 		{
 			TextReplace::OnFill(this);
+			ImageReplace::OnFill(this);
 
 			DWORD size = this->mode.width * this->mode.height * (this->mode.bpp == 8 ? 1 : (config.bpp32Hooked ? sizeof(DWORD) : sizeof(WORD)));
 			MemoryZero(this->indexBuffer->data, size);
@@ -837,6 +841,7 @@ HRESULT __stdcall OpenDrawSurface::Blt(LPRECT lpDestRect, IDrawSurface7* lpDDSrc
 		if (config.bpp32Hooked)
 		{
 			TextReplace::OnBlit(this, lpDestRect->left, lpDestRect->top, surface, lpSrcRect, sWidth, FALSE, 0);
+			ImageReplace::OnBlit(this, lpDestRect->left, lpDestRect->top, surface, lpSrcRect, sWidth, FALSE, 0);
 
 			DWORD* src = (DWORD*)surface->indexBuffer->data + lpSrcRect->top * sWidth + lpSrcRect->left;
 			DWORD* dst = (DWORD*)this->indexBuffer->data + lpDestRect->top * dWidth + lpDestRect->left;
@@ -904,6 +909,8 @@ HRESULT __stdcall OpenDrawSurface::BltFast(DWORD dwX, DWORD dwY, IDrawSurface7* 
 		if (config.bpp32Hooked)
 		{
 			TextReplace::OnBlit(this, dwX, dwY, surface, lpSrcRect, sWidth, surface->colorKey.enabled, surface->colorKey.high);
+			if (ImageReplace::OnBlit(this, dwX, dwY, surface, lpSrcRect, sWidth, surface->colorKey.enabled, surface->colorKey.high))
+				return DD_OK;
 
 			DWORD* src = (DWORD*)surface->indexBuffer->data + lpSrcRect->top * sWidth + lpSrcRect->left;
 			DWORD* dst = (DWORD*)this->indexBuffer->data + lpDestRect->top * dWidth + lpDestRect->left;
