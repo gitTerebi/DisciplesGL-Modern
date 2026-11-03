@@ -417,7 +417,7 @@ namespace TurnOrder
 		card->shownHp = card->hp;
 	}
 
-	VOID DrawTurnText(BYTE* data, const CHAR* font, const CHAR* align, const CHAR* value, COLORREF color, BOOL dim, LONG left, LONG top, LONG right, LONG bottom)
+	VOID DrawTurnText(BYTE* data, const CHAR* font, const CHAR* align, BOOL outline, const CHAR* value, COLORREF color, BOOL dim, LONG left, LONG top, LONG right, LONG bottom)
 	{
 		if (!turnText)
 		{
@@ -431,7 +431,7 @@ namespace TurnOrder
 			color = RGB(GetRValue(color) / 2, GetGValue(color) / 2, GetBValue(color) / 2);
 
 		CHAR text[64];
-		StrPrint(text, "\\f%s;\\hC;\\v%s;\\c%03d;%03d;%03d;%s", font, align, GetRValue(color), GetGValue(color), GetBValue(color), value);
+		StrPrint(text, "\\f%s;\\hC;\\v%s;%s\\c%03d;%03d;%03d;%s", font, align, outline ? "\\o000;000;000;" : "", GetRValue(color), GetGValue(color), GetBValue(color), value);
 
 		RECT area = { left, top, right, bottom };
 		POINT size;
@@ -568,7 +568,7 @@ namespace TurnOrder
 				if (card->divider)
 				{
 					StrPrint(value, "%d", card->hp);
-					DrawTurnText(data, "Medium", "C", value, RGB(250, 244, 224), card->next, textLeft, top, textRight, top + card->size.y);
+					DrawTurnText(data, "Medium", "C", TRUE, value, RGB(250, 244, 224), card->next, textLeft + 1, max(top - 1, 0), textRight + 1, top + card->size.y - 1);
 				}
 				else
 				{
@@ -576,7 +576,7 @@ namespace TurnOrder
 					LONG bandBottom = top + TURN_ORDER_TOP + 2 + card->faceSize.y;
 					LONG bandMiddle = bandBottom - TURN_ORDER_BAND / 2;
 					LONG half = min(13, min(bandMiddle, height - bandMiddle));
-					DrawTurnText(data, "Small", "C", value, RGB(240, 232, 208), card->next, max(textLeft - 2, 0), bandMiddle - half, min(textRight + 2, width), bandMiddle + half);
+					DrawTurnText(data, "Small", "C", FALSE, value, RGB(240, 232, 208), card->next, max(textLeft - 2, 0), bandMiddle - half, min(textRight + 2, width), bandMiddle + half);
 				}
 			}
 		}
