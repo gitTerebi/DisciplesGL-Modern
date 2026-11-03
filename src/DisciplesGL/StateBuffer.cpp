@@ -26,10 +26,6 @@
 #include "StateBuffer.h"
 #include "Config.h"
 
-static LONG stateBufferCount;
-static LONG stateBufferAlignedCount;
-static DWORD stateBufferBytes;
-
 StateBuffer::StateBuffer()
 {
 	this->data = NULL;
@@ -38,9 +34,6 @@ StateBuffer::StateBuffer()
 
 StateBuffer::StateBuffer(DWORD size)
 {
-	InterlockedIncrement(&stateBufferCount);
-	stateBufferBytes += size;
-	DebugLog("StateBuffer alloc size=%u count=%ld total=%u", size, stateBufferCount, stateBufferBytes);
 	this->data = MemoryAlloc(size);
 	this->isAllocated = TRUE;
 
@@ -58,8 +51,6 @@ StateBuffer::~StateBuffer()
 	if (this->isAllocated)
 	{
 		MemoryFree(this->data);
-		InterlockedDecrement(&stateBufferCount);
-		DebugLog("StateBuffer free count=%ld", stateBufferCount);
 	}
 }
 
@@ -69,8 +60,6 @@ StateBufferAligned::StateBufferAligned()
 
 	BOOL isTrue = config.mode->bpp != 16 || config.bpp32Hooked;
 	DWORD length = config.mode->width * config.mode->height * (isTrue ? sizeof(DWORD) : sizeof(WORD));
-	InterlockedIncrement(&stateBufferAlignedCount);
-	DebugLog("StateBufferAligned alloc length=%u count=%ld renderer=%u true=%u", length, stateBufferAlignedCount, config.renderer, isTrue);
 
 	if (config.renderer != RendererGDI || !isTrue)
 		this->data = AlignedAlloc(length);
@@ -118,8 +107,6 @@ StateBufferAligned::~StateBufferAligned()
 			DeleteObject(this->hBmp);
 			DeleteDC(this->hDc);
 		}
-		InterlockedDecrement(&stateBufferAlignedCount);
-		DebugLog("StateBufferAligned free count=%ld", stateBufferAlignedCount);
 	}
 }
 

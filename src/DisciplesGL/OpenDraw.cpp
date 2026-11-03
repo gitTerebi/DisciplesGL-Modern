@@ -669,7 +669,6 @@ ULONG __stdcall OpenDraw::Release()
 
 HRESULT __stdcall OpenDraw::SetCooperativeLevel(HWND hWnd, DWORD dwFlags)
 {
-	DebugLog("SetCooperativeLevel hwnd=%08X flags=%08X", hWnd, dwFlags);
 	this->hWnd = hWnd;
 
 	if (dwFlags & DDSCL_NORMAL)
@@ -697,10 +696,6 @@ HRESULT __stdcall OpenDraw::SetDisplayMode(DWORD dwWidth, DWORD dwHeight, DWORD 
 
 HRESULT __stdcall OpenDraw::CreateSurface(LPDDSURFACEDESC2 lpDDSurfaceDesc, IDrawSurface7** lplpDDSurface, IUnknown* pUnkOuter)
 {
-	DebugLog("CreateSurface flags=%08X caps=%08X w=%u h=%u bpp=%u pitch=%u surf=%08X",
-		lpDDSurfaceDesc->dwFlags, lpDDSurfaceDesc->ddsCaps.dwCaps, lpDDSurfaceDesc->dwWidth,
-		lpDDSurfaceDesc->dwHeight, lpDDSurfaceDesc->ddpfPixelFormat.dwRGBBitCount,
-		lpDDSurfaceDesc->lPitch, lpDDSurfaceDesc->lpSurface);
 	// 1 - DDSD_CAPS // 512 - DDSCAPS_PRIMARYSURFACE
 	// 33 - DDSD_BACKBUFFERCOUNT | DDSD_CAPS // 536 - DDSCAPS_PRIMARYSURFACE | DDSCAPS_FLIP | DDSCAPS_COMPLEX
 	// 4103 - DDSD_PIXELFORMAT | DDSD_WIDTH | DDSD_HEIGHT | DDSD_CAPS // 2112 - DDSCAPS_SYSTEMMEMORY | DDSCAPS_OFFSCREENPLAIN

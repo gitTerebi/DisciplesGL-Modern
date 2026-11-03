@@ -103,6 +103,9 @@
     <ClCompile Include="TurnIncome.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="TextReplace.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="ShopFrame.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -220,6 +223,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="TurnIncome.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="TextReplace.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="ShopFrame.h">

@@ -29,6 +29,13 @@ vec3 FsrEasuCF(vec2 p) {
 #endif
 }
 
+
+float TextInk(vec3 c) { return step(max(c.r, max(c.g, c.b)), 0.01); }
+vec4 CatRom(float t) {
+    float t2 = t * t, t3 = t2 * t;
+    return vec4(-0.5 * t3 + t2 - 0.5 * t, 1.5 * t3 - 2.5 * t2 + 1.0, -1.5 * t3 + 2.0 * t2 + 0.5 * t, 0.5 * t3 - 0.5 * t2);
+}
+
 /**** EASU ****/
 void FsrEasuCon(
     out vec4 con0,
@@ -250,6 +257,46 @@ void FsrEasuF(
     //------------------------------------------------------------------------------------------------------------------------------
     // Normalize and dering.
     pix=min(max4,max(min4,aC/aW));
+
+    // The 1-bit game font draws diagonals as pixels touching only at corners, which EASU fills with background.
+    // When the quad is one dark and one light diagonal, draw the line along whichever diagonal is the stroke;
+    // the -0.25 bias picks the dark one in dense text, where the outer taps are nearly as dark as the quad.
+    float outer = (bL + cL + eL + hL + iL + lL + nL + oL) * 0.125;
+    float quad = (fL + gL + jL + kL) * 0.25;
+    vec3 lineC = pix;
+    float dist = 9.0;
+    if (min(gL, jL) - max(fL, kL) > 0.5) {
+        if (outer > quad - 0.25) { lineC = min(fC, kC); dist = abs(pp.x - pp.y); }
+        else { lineC = max(gC, jC); dist = abs(pp.x + pp.y - 1.0); }
+    } else if (min(fL, kL) - max(gL, jL) > 0.5) {
+        if (outer > quad - 0.25) { lineC = min(gC, jC); dist = abs(pp.x + pp.y - 1.0); }
+        else { lineC = max(fC, kC); dist = abs(pp.x - pp.y); }
+    }
+    pix = mix(pix, lineC, 1.0 - smoothstep(0.35, 0.85, dist));
+
+    // EASU turns the pure-black 1-bit font into grey ramps. Instead, fit a Catmull-Rom surface through the
+    // ink mask and cut it at 50% with a one-output-pixel edge: smooth glyph outlines, 1px dots and stems keep their size.
+    // fwidth needs this outside any branch.
+    vec3 aC0 = FsrEasuCF((fp + vec2(-0.5, -0.5)) * con1.xy);
+    vec3 dC0 = FsrEasuCF((fp + vec2(2.5, -0.5)) * con1.xy);
+    vec3 mC0 = FsrEasuCF((fp + vec2(-0.5, 2.5)) * con1.xy);
+    vec3 pC0 = FsrEasuCF((fp + vec2(2.5, 2.5)) * con1.xy);
+    vec4 wx = CatRom(pp.x);
+    vec4 wy = CatRom(pp.y);
+    float cov = dot(wy, vec4(
+        dot(wx, vec4(TextInk(aC0), TextInk(bC), TextInk(cC), TextInk(dC0))),
+        dot(wx, vec4(TextInk(eC), TextInk(fC), TextInk(gC), TextInk(hC))),
+        dot(wx, vec4(TextInk(iC), TextInk(jC), TextInk(kC), TextInk(lC))),
+        dot(wx, vec4(TextInk(mC0), TextInk(nC), TextInk(oC), TextInk(pC0)))));
+    float ink = clamp((cov - 0.5) / max(fwidth(cov), 1e-4) + 0.5, 0.0, 1.0);
+    vec4 q = vec4(TextInk(fC), TextInk(gC), TextInk(jC), TextInk(kC));
+    if (dot(q, vec4(1.0)) > 0.0 && max(max(fL, gL), max(jL, kL)) > 1.0) {
+        vec4 bw = vec4((1.0 - pp.x) * (1.0 - pp.y), pp.x * (1.0 - pp.y), (1.0 - pp.x) * pp.y, pp.x * pp.y) * (1.0 - q);
+        vec3 paper = (fC * bw.x + gC * bw.y + jC * bw.z + kC * bw.w) / max(dot(bw, vec4(1.0)), 1e-4);
+        if (dot(bw, vec4(1.0)) < 1e-4)
+            paper = max(max(fC, gC), max(jC, kC));
+        pix = mix(paper, min(min(fC, gC), min(jC, kC)), ink);
+    }
 }
 
 void main()
@@ -257,7 +304,8 @@ void main()
     vec3 c;
     vec4 con0,con1,con2,con3;
     
-    vec2 fragCoord = fTex.xy * dstSize.xy;
+    // FsrEasuF wants the integer pixel index, not the pixel centre; without -0.5 the image lands half a pixel off.
+    vec2 fragCoord = fTex.xy * dstSize.xy - 0.5;
     
     FsrEasuCon( con0, con1, con2, con3, texSize.xy, texSize.xy, dstSize.xy );
 

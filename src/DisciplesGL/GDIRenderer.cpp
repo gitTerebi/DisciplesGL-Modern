@@ -38,7 +38,6 @@ GDIRenderer::GDIRenderer(OpenDraw* ddraw)
 
 BOOL GDIRenderer::Start()
 {
-	DebugLog("GDIRenderer::Start begin");
 	if (!Renderer::Start())
 		return FALSE;
 
@@ -71,7 +70,6 @@ BOOL GDIRenderer::Start()
 
 			if (config.background.allowed)
 			{
-				DebugLog("GDIRenderer background alloc %u", config.mode->width * config.mode->height * sizeof(DWORD));
 				this->hDcBack = CreateCompatibleDC(hDcMain);
 
 				DWORD length = config.mode->width * config.mode->height * sizeof(DWORD);

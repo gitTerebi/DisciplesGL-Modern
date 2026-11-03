@@ -34,6 +34,7 @@
 #include "Main.h"
 #include "Config.h"
 #include "Resource.h"
+#include "TextReplace.h"
 #include "Window.h"
 #include "PngLib.h"
 #include "Mods.h"
@@ -2006,6 +2007,8 @@ namespace Hooks
 
 	VOID __stdcall Pixel_Blit_Indexed_to_565(BYTE* srcData, LONG srcPitch, DWORD* palette, DWORD* dstData, LONG dstPitch, RECT* rect)
 	{
+		TextReplace::OnFillRect(dstData, rect);
+
 		BYTE* lpSrc = srcData + rect->top * srcPitch + rect->left;
 		dstPitch /= 2;
 		DWORD* lpDst = dstData + rect->top * dstPitch + rect->left;
@@ -2075,6 +2078,8 @@ namespace Hooks
 
 	VOID __stdcall Pixel_Blit_By_Masks(DWORD* srcData, LONG srcPitch, DWORD redMask, DWORD greenMask, DWORD blueMask, DWORD alphaMask, BYTE* dstData, LONG dstPitch, RECT* rect)
 	{
+		TextReplace::OnFillRect(dstData, rect);
+
 		srcPitch /= 2;
 
 		if (dstPitch & 3)
@@ -2117,6 +2122,8 @@ namespace Hooks
 
 	VOID __stdcall Pixel_Blit_RGB_to_565(BYTE* srcData, LONG srcPitch, DWORD* dstData, LONG dstPitch, RECT* rect)
 	{
+		TextReplace::OnFillRect(dstData, rect);
+
 		dstPitch /= 2;
 
 		srcData += rect->left + rect->top * srcPitch;
@@ -2195,12 +2202,18 @@ namespace Hooks
 
 	VOID __stdcall Pixel_BlitBlend(BlendData blendItem)
 	{
+		TextReplace::TracePixel("blend", blendItem.dstData, blendItem.srcData, blendItem.length, 1, 0, _ReturnAddress());
+		TextReplace::OnPixelRows(&blendItem, 1);
+
 		for (; blendItem.length; --blendItem.length, ++blendItem.srcData, ++blendItem.dstData, ++blendItem.mskData)
 			*blendItem.dstData = Blend(*blendItem.dstData, *blendItem.srcData, *blendItem.mskData);
 	}
 
 	VOID __stdcall Pixel_BlitBlend_SSE(BlendData blendItem)
 	{
+		TextReplace::TracePixel("blend", blendItem.dstData, blendItem.srcData, blendItem.length, 1, 0, _ReturnAddress());
+		TextReplace::OnPixelRows(&blendItem, 1);
+
 		__m128i zero = _mm_setzero_si128();
 		__m128i and1 = _mm_set1_epi16(0xFF);
 		for (; blendItem.length; --blendItem.length, ++blendItem.srcData, ++blendItem.dstData, ++blendItem.mskData)
@@ -2209,6 +2222,9 @@ namespace Hooks
 
 	VOID __stdcall Pixel_BlitBlendWithColorKey(BlendData* blendItem, DWORD count, DWORD colorKey)
 	{
+		TextReplace::TracePixel("blendkey", count ? blendItem->dstData : NULL, count ? blendItem->srcData : NULL, count ? blendItem->length : 0, count, 0, _ReturnAddress());
+		TextReplace::OnPixelRows(blendItem, count);
+
 		if (count)
 		{
 			colorKey = Convert565toRGB(colorKey);
@@ -2240,6 +2256,9 @@ namespace Hooks
 
 	VOID __stdcall Pixel_BlitBlendWithColorKey_SSE(BlendData* blendItem, DWORD count, DWORD colorKey)
 	{
+		TextReplace::TracePixel("blendkey", count ? blendItem->dstData : NULL, count ? blendItem->srcData : NULL, count ? blendItem->length : 0, count, 0, _ReturnAddress());
+		TextReplace::OnPixelRows(blendItem, count);
+
 		if (count)
 		{
 			colorKey = Convert565toRGB(colorKey);
@@ -2273,6 +2292,12 @@ namespace Hooks
 
 	VOID __stdcall Pixel_BlitBlendAvarage(DWORD* srcData, LONG srcPitch, POINT* srcPos, DWORD* dstData, LONG dstPitch, POINT* dstPos, SIZE* size, BYTE flag, DWORD colorKey)
 	{
+		if (flag && dstData && size->cx > 0 && size->cy > 0)
+		{
+			TextReplace::TracePixel("average", dstData + dstPitch / 2 * dstPos->y + dstPos->x, srcData + srcPitch / 2 * srcPos->y + srcPos->x, size->cx, size->cy, flag, _ReturnAddress());
+			TextReplace::OnPixelCopy(srcData, srcPitch, srcPos, dstData, dstPitch, dstPos, size, TRUE, Convert565toRGB(colorKey), flag);
+		}
+
 		if (!flag || !dstData || size->cx <= 0 || size->cy < 0)
 			return;
 
@@ -2328,6 +2353,12 @@ namespace Hooks
 
 	VOID __stdcall Pixel_BlitBlendAvarage_SSE(DWORD* srcData, LONG srcPitch, POINT* srcPos, DWORD* dstData, LONG dstPitch, POINT* dstPos, SIZE* size, BYTE flag, DWORD colorKey)
 	{
+		if (flag && dstData && size->cx > 0 && size->cy > 0)
+		{
+			TextReplace::TracePixel("average", dstData + dstPitch / 2 * dstPos->y + dstPos->x, srcData + srcPitch / 2 * srcPos->y + srcPos->x, size->cx, size->cy, flag, _ReturnAddress());
+			TextReplace::OnPixelCopy(srcData, srcPitch, srcPos, dstData, dstPitch, dstPos, size, TRUE, Convert565toRGB(colorKey), flag);
+		}
+
 		if (!flag || !dstData || size->cx <= 0 || size->cy < 0)
 			return;
 
@@ -2489,6 +2520,8 @@ namespace Hooks
 
 	VOID __stdcall Pixel_Add(DWORD* src, LONG srcPitch, POINT* srcPos, DWORD* dst, LONG dstPitch, POINT* dstPos, SIZE* size)
 	{
+		TextReplace::TracePixel("add", dst, src, size->cx, size->cy, 0, _ReturnAddress());
+
 		if (!dst || size->cx <= 0 || size->cy <= 0)
 			return;
 
@@ -2532,6 +2565,8 @@ namespace Hooks
 
 	VOID __stdcall Pixel_Add_SSE(DWORD* src, LONG srcPitch, POINT* srcPos, DWORD* dst, LONG dstPitch, POINT* dstPos, SIZE* size)
 	{
+		TextReplace::TracePixel("add", dst, src, size->cx, size->cy, 0, _ReturnAddress());
+
 		if (!dst || size->cx <= 0 || size->cy <= 0)
 			return;
 
@@ -2574,6 +2609,8 @@ namespace Hooks
 
 	VOID __stdcall Pixel_Sub(DWORD* src, LONG srcPitch, POINT* srcPos, DWORD* dst, LONG dstPitch, POINT* dstPos, SIZE* size)
 	{
+		TextReplace::TracePixel("sub", dst, src, size->cx, size->cy, 0, _ReturnAddress());
+
 		if (!dst || size->cx <= 0 || size->cy <= 0)
 			return;
 
@@ -2617,6 +2654,8 @@ namespace Hooks
 
 	VOID __stdcall Pixel_Sub_SSE(DWORD* src, LONG srcPitch, POINT* srcPos, DWORD* dst, LONG dstPitch, POINT* dstPos, SIZE* size)
 	{
+		TextReplace::TracePixel("sub", dst, src, size->cx, size->cy, 0, _ReturnAddress());
+
 		if (!dst || size->cx <= 0 || size->cy <= 0)
 			return;
 
@@ -2660,6 +2699,12 @@ namespace Hooks
 
 	VOID __stdcall Pixel_BlitColorKey(DWORD* srcData, LONG srcPitch, POINT* srcPos, DWORD* dstData, LONG dstPitch, POINT* dstPos, SIZE* size, BYTE flag, DWORD colorKey)
 	{
+		if (flag && dstData && size->cx > 0 && size->cy > 0)
+		{
+			TextReplace::TracePixel("colorkey", dstData + dstPitch / 2 * dstPos->y + dstPos->x, srcData + srcPitch / 2 * srcPos->y + srcPos->x, size->cx, size->cy, flag, _ReturnAddress());
+			TextReplace::OnPixelCopy(srcData, srcPitch, srcPos, dstData, dstPitch, dstPos, size, TRUE, Convert565toRGB(colorKey), min(255, flag * 2) / 2);
+		}
+
 		if (!flag || !dstData || size->cx <= 0 || size->cy <= 0)
 			return;
 
@@ -2740,6 +2785,12 @@ namespace Hooks
 
 	VOID __stdcall Pixel_BlitColorKey_SSE(DWORD* srcData, LONG srcPitch, POINT* srcPos, DWORD* dstData, LONG dstPitch, POINT* dstPos, SIZE* size, BYTE flag, DWORD colorKey)
 	{
+		if (flag && dstData && size->cx > 0 && size->cy > 0)
+		{
+			TextReplace::TracePixel("colorkey", dstData + dstPitch / 2 * dstPos->y + dstPos->x, srcData + srcPitch / 2 * srcPos->y + srcPos->x, size->cx, size->cy, flag, _ReturnAddress());
+			TextReplace::OnPixelCopy(srcData, srcPitch, srcPos, dstData, dstPitch, dstPos, size, TRUE, Convert565toRGB(colorKey), min(255, flag * 2) / 2);
+		}
+
 		if (!flag || !dstData || size->cx <= 0 || size->cy <= 0)
 			return;
 
@@ -2825,6 +2876,12 @@ namespace Hooks
 
 	VOID __stdcall Pixel_BlitEmptyColor(DWORD* srcData, LONG srcPitch, POINT* srcPos, DWORD* dstData, LONG dstPitch, POINT* dstPos, SIZE* size)
 	{
+		if (dstData && size->cx > 0 && size->cy > 0)
+		{
+			TextReplace::TracePixel("empty", dstData + dstPitch / 2 * dstPos->y + dstPos->x, srcData + srcPitch / 2 * srcPos->y + srcPos->x, size->cx, size->cy, 127, _ReturnAddress());
+			TextReplace::OnPixelCopy(srcData, srcPitch, srcPos, dstData, dstPitch, dstPos, size, TRUE, 0, 127);
+		}
+
 		if (!dstData || size->cx <= 0 || size->cy <= 0)
 			return;
 
@@ -2868,6 +2925,8 @@ namespace Hooks
 
 	VOID __stdcall Pixel_DoubleLighter(DWORD* data, LONG pitch, SIZE* size, DWORD colorKey, BYTE flag)
 	{
+		TextReplace::TracePixel("lighter", data, NULL, size->cx, size->cy, flag, _ReturnAddress());
+
 		if (size->cx <= 0 || size->cy <= 0)
 			return;
 
@@ -3116,6 +3175,9 @@ namespace Hooks
 
 	VOID __fastcall FillColor(BlitObject* obj, DWORD /*edx*/, DWORD color, RECT* rect)
 	{
+		if (obj->isTrueColor)
+			TextReplace::OnFillRect(obj->data, rect);
+
 		LONG width = rect->right - rect->left;
 		LONG height = rect->bottom - rect->top;
 
@@ -3157,6 +3219,8 @@ namespace Hooks
 
 	VOID __fastcall DrawWaterBorders(DWORD* thisObj, DWORD /*edx*/, BlitObject* obj, POINT* loc, RECT* rect)
 	{
+		TextReplace::OnDiamond(obj->data, loc, rect);
+
 		DWORD pitch = obj->pitch >> 1;
 
 		DWORD* srcData = (*(DWORD * (__thiscall**)(DWORD*))((*thisObj) + 12))(thisObj);
@@ -3222,6 +3286,8 @@ namespace Hooks
 
 	VOID __fastcall DrawGround(DWORD* thisObj, DWORD /*edx*/, BlitObject* obj, POINT* srcLoc, POINT* dstLoc, RECT* rect, BYTE* blendMask, DWORD* alphaMask)
 	{
+		TextReplace::OnDiamond(obj->data, dstLoc, rect);
+
 		static BlendData blendList[32];
 
 		DWORD pitch = obj->pitch >> 1;
@@ -3332,6 +3398,8 @@ namespace Hooks
 
 	VOID __stdcall ClearGround(BlitObject* obj, POINT* loc, RECT* rect)
 	{
+		TextReplace::OnDiamond(obj->data, loc, rect);
+
 		DWORD pitch = obj->pitch >> 1;
 
 		DWORD* dstData = (DWORD*)obj->data + loc->y * pitch;
@@ -3388,6 +3456,9 @@ namespace Hooks
 	{
 		if (symbol != '\n' && symbol != '\r')
 		{
+			if (TextReplace::OnGlyph(obj, data, pt, clipper, colorFill, colorShadow, castShadow, *(BYTE*)&symbol))
+				return;
+
 			LONG* font = *(LONG**)(*obj + 4 * *(BYTE*)&symbol + 16);
 
 			POINT shift = { 0, 0 };
@@ -4009,7 +4080,6 @@ namespace Hooks
 			townClass = config.screen.buildStruct || name && !StrCompare(name, ".?AVCCapitalInterf@@");
 			config.screen.strategic = name && !StrCompare(name, ".?AVCStratInterf@@");
 			loadClass = name && (!StrCompare(name, ".?AVCLoadGameInterf@@") || !StrCompareNum(name, ".?AVCMenuLoad", 13));
-			DebugLog("Screen %s popup=%d", name ? name : "(unknown)", config.screen.popup);
 		}
 
 		if (!config.screen.popup)
@@ -7489,34 +7559,23 @@ namespace Hooks
 	VOID SaveBeforeBattle(DWORD* view)
 	{
 		if (*(LONG*)((BYTE*)view + 0xF0) > 0)
-		{
-			DebugLog("DIAG battle save skipped: view+0xF0=%d", *(LONG*)((BYTE*)view + 0xF0));
 			return;
-		}
 
 		DWORD phase = ((DWORD(__thiscall*)(DWORD*))sub_BattleSavePhase)(view);
 		if (!((BYTE(__thiscall*)(DWORD))sub_BattleSavePhaseReady)(phase))
-		{
-			DebugLog("DIAG battle save skipped: phase not ready phase=%08X", phase);
 			return;
-		}
 
 		DWORD app = ((DWORD(*)())sub_BattleSaveApp)();
 		if (((BYTE(__thiscall*)(DWORD))sub_BattleSaveAppNet)(app) && !((BYTE(__thiscall*)(DWORD))sub_BattleSaveAppHost)(app))
-		{
-			DebugLog("DIAG battle save skipped: network client");
 			return;
-		}
 
 		((VOID(__thiscall*)(BYTE*, const CHAR*))sub_BattleSave)((BYTE*)view - 4, "BattleSave");
-		DebugLog("Battle save before stack move");
 	}
 
 	// The save goes to the game server on the same queue as the move, so sending it first saves the state before the move
 	VOID __fastcall SendStackMove(DWORD phase, DWORD /*edx*/, DWORD a1, DWORD a2, DWORD a3, DWORD a4)
 	{
 		DWORD* view = battleSaveView;
-		DebugLog("DIAG SendStackMove armed=%d cursor=%d", view != NULL, currentCursor);
 		if (view)
 		{
 			battleSaveView = NULL;
@@ -7531,7 +7590,6 @@ namespace Hooks
 	VOID __fastcall ContinueMove(DWORD* view)
 	{
 		DWORD* last = battleSaveView;
-		DebugLog("DIAG ContinueMove vtable=%08X isoView=%08X", *view, isoViewVTable);
 		if (*view == isoViewVTable)
 			battleSaveView = view;
 
@@ -8088,8 +8146,6 @@ namespace Hooks
 	BOOL __fastcall MouseAction(DWORD* global, DWORD /*edx*/, UINT uMsg, POINT* pt)
 	{
 		DWORD* view = battleSaveView;
-		if (uMsg == WM_LBUTTONDOWN || uMsg == WM_LBUTTONUP)
-			DebugLog("DIAG MouseAction msg=%04X vtable=%08X isoView=%08X cursor=%d", uMsg, *global, isoViewVTable, currentCursor);
 		if ((uMsg == WM_LBUTTONDOWN || uMsg == WM_LBUTTONUP) && sub_SendStackMove && *global == isoViewVTable && currentCursor == CURSOR_BATTLE)
 			battleSaveView = global;
 
@@ -8698,7 +8754,6 @@ namespace Hooks
 	{
 		DebugLog("LoadV2 version major=%08X minor=%08X check=%08X", hookSpace->version_major.value, hookSpace->version_minor.value, hookSpace->check);
 		INT deepHooksStage = Config::Get(CONFIG_WRAPPER, "DeepHooksStage", 0);
-		DebugLog("DeepHooksStage=%d", deepHooksStage);
 		DWORD baseOffset = GetBaseOffset(hooker);
 
 		// Async spell & death sounds
@@ -8765,7 +8820,6 @@ namespace Hooks
 		// Transition
 		if (hookSpace->trans_npc)
 		{
-			DebugLog("Skipping transition npc hook");
 			if (deepHooksStage == 131)
 			{
 				DebugLog("DeepHooksStage 131 stop after transition npc");
@@ -9061,8 +9115,6 @@ namespace Hooks
 			sub_SendExchange = RedirectCall(hooker, hookSpace->shift_send, SendExchange);
 			sub_ExchangeItem = RedirectCall(hooker, hookSpace->shift_exchange, ExchangeItem);
 		}
-		TurnSummary::Load(hooker, hookSpace, baseOffset);
-		TurnIncome::Load(hooker, hookSpace, baseOffset);
 
 		if (hookSpace->trans_menu)
 		{
@@ -9080,6 +9132,8 @@ namespace Hooks
 		}
 
 		FasterEndTurn::Load(hooker, hookSpace, baseOffset);
+		TurnSummary::Load(hooker, hookSpace, baseOffset);
+		TurnIncome::Load(hooker, hookSpace, baseOffset);
 
 		TurnOrder::Load(hooker, hookSpace, baseOffset);
 

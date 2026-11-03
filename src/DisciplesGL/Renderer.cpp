@@ -51,7 +51,6 @@ Renderer::~Renderer()
 
 BOOL Renderer::Start()
 {
-	DebugLog("Renderer::Start begin hwnd=%08X finish=%u", this->ddraw->hWnd, (INT)this->isFinish);
 	if (!this->isFinish || !this->ddraw->hWnd)
 		return FALSE;
 
@@ -99,7 +98,6 @@ BOOL Renderer::Start()
 	this->ddraw->viewport.height = rect.bottom - this->ddraw->viewport.offset;
 	this->ddraw->viewport.refresh = TRUE;
 
-	DebugLog("Renderer::Start end draw=%08X viewport=%ux%u", this->ddraw->hDraw, this->ddraw->viewport.width, this->ddraw->viewport.height);
 	return TRUE;
 }
 

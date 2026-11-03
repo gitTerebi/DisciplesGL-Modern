@@ -28,6 +28,7 @@
 #include "Config.h"
 #include "Main.h"
 #include "Resource.h"
+#include "TextReplace.h"
 
 NewRenderer::NewRenderer(OpenDraw* ddraw)
 	: OGLRenderer(ddraw)
@@ -42,6 +43,7 @@ VOID NewRenderer::Begin()
 	PostMessage(this->ddraw->hWnd, config.msgMenu, NULL, NULL);
 
 	this->isTrueColor = config.mode->bpp != 16 || config.bpp32Hooked;
+	TextReplace::SetRenderer(this->isTrueColor);
 	this->maxTexSize = GetPow2(config.mode->width > config.mode->height ? config.mode->width : config.mode->height);
 
 	FLOAT texWidth = config.mode->width == this->maxTexSize ? 1.0f : (FLOAT)config.mode->width / this->maxTexSize;
@@ -193,6 +195,9 @@ VOID NewRenderer::Begin()
 
 VOID NewRenderer::End()
 {
+	TextReplace::SetRenderer(FALSE);
+	TextReplace::ReleaseGL();
+
 	if (this->fsr.fboId)
 	{
 		GLDeleteTextures(1, &this->fsr.textureId);
@@ -709,7 +714,9 @@ BOOL NewRenderer::RenderInner(BOOL ready, BOOL force, StateBufferAligned** lpSta
 		}
 
 		lbl_noup:;
-		if (this->pixelBuffer->Update(lpStateBuffer, ready) || state.flags || stateChanged || mapZoomChanged)
+		BOOL textActive = this->isTrueColor;
+		BOOL textChanged = TextReplace::Prepare(stateBuffer, textActive);
+		if (this->pixelBuffer->Update(lpStateBuffer, ready) || state.flags || stateChanged || mapZoomChanged || textChanged)
 		{
 			if (this->isVSync != config.image.vSync)
 			{
@@ -825,6 +832,9 @@ BOOL NewRenderer::RenderInner(BOOL ready, BOOL force, StateBufferAligned** lpSta
 
 			if (!stateBuffer->isZoomed && !stateBuffer->isBack)
 				this->DrawMapZoom(textureId.primary, this->texSize, FALSE, state.interpolation == InterpolateFsr);
+
+			if (textActive)
+				TextReplace::Draw(&this->ddraw->viewport.rectangle, this->ddraw->viewport.offset, frameSize.width, frameSize.height);
 
 			isSwap = TRUE;
 		}

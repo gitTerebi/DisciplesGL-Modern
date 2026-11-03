@@ -32,6 +32,7 @@
 #include "Resource.h"
 #include "PngLib.h"
 #include "Mods.h"
+#include "TextReplace.h"
 
 OpenDrawSurface::OpenDrawSurface(IDrawUnknown** list, OpenDraw* lpDD, SurfaceType type, OpenDrawSurface* attached)
 	: IDrawSurface7(list)
@@ -300,7 +301,6 @@ VOID OpenDrawSurface::DrawBorders(VOID* data, DWORD width, DWORD height)
 
 VOID OpenDrawSurface::CreateBuffer(DWORD width, DWORD height, DWORD bpp, VOID* buffer)
 {
-	DebugLog("Surface CreateBuffer type=%u %ux%u bpp=%u external=%08X", this->type, width, height, bpp, buffer);
 	this->ReleaseBuffer();
 
 	this->mode.width = width;
@@ -365,10 +365,14 @@ VOID OpenDrawSurface::CreateBuffer(DWORD width, DWORD height, DWORD bpp, VOID* b
 				this->backBuffer = CreateBufferImage(WIDE_WIDTH, WIDE_HEIGHT);
 		}
 	}
+
+	TextReplace::OnBuffer(this);
 }
 
 VOID OpenDrawSurface::ReleaseBuffer()
 {
+	TextReplace::OnRelease(this);
+
 	delete this->indexBuffer;
 	this->indexBuffer = NULL;
 	delete this->secondaryBuffer;
@@ -416,6 +420,7 @@ VOID OpenDrawSurface::SwapBuffers()
 VOID OpenDrawSurface::Flush()
 {
 	OpenDrawSurface* surface = this->attachedSurface;
+	TextReplace::TraceFrame();
 
 	if (this->mode.bpp == 8)
 	{
@@ -478,6 +483,7 @@ VOID OpenDrawSurface::Flush()
 				this->ddraw->flushTime = config.syncStep.value * (time / config.syncStep.value + 1);
 				this->drawEnabled = FALSE;
 #endif
+		LONG textLeft = 0, textTop = 0;
 		if (surface->redraw)
 		{
 			surface->redraw = FALSE;
@@ -487,6 +493,8 @@ VOID OpenDrawSurface::Flush()
 
 			DWORD left = (this->mode.width - config.mode->width) >> 1;
 			DWORD top = (this->mode.height - config.mode->height) >> 1;
+			textLeft = left;
+			textTop = top;
 
 			DWORD sctPitch = surface->mode.width;
 			DWORD* src = (DWORD*)surface->indexBuffer->data + top * sctPitch + left;
@@ -539,6 +547,7 @@ VOID OpenDrawSurface::Flush()
 
 		((StateBufferAligned*)this->backBuffer)->size = surfaceBuffer->isZoomed ? config.zoom.size : *(Size*)config.mode;
 
+		TextReplace::OnPresent(surface, this->backBuffer, textLeft, textTop);
 		this->SwapBuffers();
 
 #ifdef BENCH
@@ -558,6 +567,7 @@ VOID OpenDrawSurface::Flush()
 				config.drawEnabled = surface->drawEnabled = FALSE;
 		}
 #endif
+		TextReplace::OnFlushEnd(surface);
 	}
 }
 
@@ -595,9 +605,17 @@ HRESULT __stdcall OpenDrawSurface::GetPixelFormat(LPDDPIXELFORMAT lpDDPixelForma
 	return DD_OK;
 }
 
+HRESULT __stdcall OpenDrawSurface::IsLost()
+{
+	TextReplace::OnIsLost(this);
+	return DD_OK;
+}
+
 HRESULT __stdcall OpenDrawSurface::Lock(LPRECT lpDestRect, LPDDSURFACEDESC2 lpDDSurfaceDesc, DWORD dwFlags, HANDLE hEvent)
 {
 	// 2049 - DDLOCK_NOSYSLOCK | DDLOCK_WAIT
+	TextReplace::TraceLock(this, lpDestRect, _ReturnAddress());
+	TextReplace::OnLock(this);
 	this->GetSurfaceDesc(lpDDSurfaceDesc);
 
 	return DD_OK;
@@ -746,10 +764,13 @@ HRESULT __stdcall OpenDrawSurface::GetColorKey(DWORD dwFlags, LPDDCOLORKEY lpDDC
 HRESULT __stdcall OpenDrawSurface::Blt(LPRECT lpDestRect, IDrawSurface7* lpDDSrcSurface, LPRECT lpSrcRect, DWORD dwFlags, LPDDBLTFX lpDDBltFx)
 {
 	// 16778240 - DDBLT_WAIT | DDBLT_COLORFILL
+	TextReplace::TraceBlt("blt", this, lpDestRect, 0, 0, (OpenDrawSurface*)lpDDSrcSurface, lpSrcRect, dwFlags, _ReturnAddress());
 	if (dwFlags & DDBLT_COLORFILL)
 	{
 		if (this->drawEnabled)
 		{
+			TextReplace::OnFill(this);
+
 			DWORD size = this->mode.width * this->mode.height * (this->mode.bpp == 8 ? 1 : (config.bpp32Hooked ? sizeof(DWORD) : sizeof(WORD)));
 			MemoryZero(this->indexBuffer->data, size);
 
@@ -815,6 +836,8 @@ HRESULT __stdcall OpenDrawSurface::Blt(LPRECT lpDestRect, IDrawSurface7* lpDDSrc
 
 		if (config.bpp32Hooked)
 		{
+			TextReplace::OnBlit(this, lpDestRect->left, lpDestRect->top, surface, lpSrcRect, sWidth, FALSE, 0);
+
 			DWORD* src = (DWORD*)surface->indexBuffer->data + lpSrcRect->top * sWidth + lpSrcRect->left;
 			DWORD* dst = (DWORD*)this->indexBuffer->data + lpDestRect->top * dWidth + lpDestRect->left;
 
@@ -847,6 +870,7 @@ HRESULT __stdcall OpenDrawSurface::Blt(LPRECT lpDestRect, IDrawSurface7* lpDDSrc
 HRESULT __stdcall OpenDrawSurface::BltFast(DWORD dwX, DWORD dwY, IDrawSurface7* lpDDSrcSurface, LPRECT lpSrcRect, DWORD dwTrans)
 {
 	// 17 - DDBLTFAST_WAIT | DDBLTFAST_SRCCOLORKEY
+	TextReplace::TraceBlt("bltfast", this, NULL, dwX, dwY, (OpenDrawSurface*)lpDDSrcSurface, lpSrcRect, dwTrans, _ReturnAddress());
 	if (this->drawEnabled)
 	{
 		OpenDrawSurface* surface = (OpenDrawSurface*)lpDDSrcSurface;
@@ -879,6 +903,8 @@ HRESULT __stdcall OpenDrawSurface::BltFast(DWORD dwX, DWORD dwY, IDrawSurface7* 
 
 		if (config.bpp32Hooked)
 		{
+			TextReplace::OnBlit(this, dwX, dwY, surface, lpSrcRect, sWidth, surface->colorKey.enabled, surface->colorKey.high);
+
 			DWORD* src = (DWORD*)surface->indexBuffer->data + lpSrcRect->top * sWidth + lpSrcRect->left;
 			DWORD* dst = (DWORD*)this->indexBuffer->data + lpDestRect->top * dWidth + lpDestRect->left;
 

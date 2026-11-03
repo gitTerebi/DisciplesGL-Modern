@@ -39,6 +39,7 @@ BOOL __stdcall DllMain(HMODULE hModule, DWORD fdwReason, LPVOID lpReserved)
 	{
 	case DLL_PROCESS_ATTACH: {
 		hDllModule = hModule;
+		Main::WaitForRestart();
 		DebugLog("DllMain attach");
 		if (Config::Load())
 		{

@@ -72,6 +72,7 @@ public:
 	HRESULT __stdcall BltFast(DWORD, DWORD, IDrawSurface7*, LPRECT, DWORD) override;
 	HRESULT __stdcall GetPixelFormat(LPDDPIXELFORMAT) override;
 	HRESULT __stdcall GetSurfaceDesc(LPDDSURFACEDESC2) override;
+	HRESULT __stdcall IsLost() override;
 	HRESULT __stdcall Lock(LPRECT, LPDDSURFACEDESC2, DWORD, HANDLE) override;
 	HRESULT __stdcall SetClipper(IDrawClipper*) override;
 	HRESULT __stdcall GetClipper(IDrawClipper**) override;

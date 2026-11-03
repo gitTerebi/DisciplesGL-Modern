@@ -270,6 +270,7 @@
     <ClCompile Include="FasterEndTurn.cpp" />
     <ClCompile Include="TurnSummary.cpp" />
     <ClCompile Include="TurnIncome.cpp" />
+    <ClCompile Include="TextReplace.cpp" />
     <ClCompile Include="ShopFrame.cpp" />
     <ClCompile Include="WalkSpeed.cpp" />
     <ClCompile Include="BattleSpeed.cpp" />
@@ -313,6 +314,7 @@
     <ClInclude Include="FasterEndTurn.h" />
     <ClInclude Include="TurnSummary.h" />
     <ClInclude Include="TurnIncome.h" />
+    <ClInclude Include="TextReplace.h" />
     <ClInclude Include="ShopFrame.h" />
     <ClInclude Include="WalkSpeed.h" />
     <ClInclude Include="BattleSpeed.h" />

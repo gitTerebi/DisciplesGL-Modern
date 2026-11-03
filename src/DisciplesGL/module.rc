@@ -38,6 +38,7 @@ BEGIN
 	IDS_WARN_RESET					"This option will reset all wrapper configuration to default.\r\nAre you sure you want to continue?"
 	IDS_INFO_RESET					"All settings have been reset. Changes take effect after game restart"
 	IDS_WARN_FAST_AI				"This option increases AI performance, but may cause an unexpected game crash. Do you wish to continue?"
+	IDS_ASK_RESTART					"Restart the game now? Unsaved progress will be lost."
 
 	IDS_TEXT_INTERPOLATIN			"Interpolation filter"
 	IDS_TEXT_UPSCALING				"Upscaling filter"
@@ -618,6 +619,9 @@ IDR_CUBIC_FRAGMENT			RCDATA		DISCARDABLE			"..\\glsl\\cubic\\fragment.glsl"
 IDR_LANCZOS_FRAGMENT		RCDATA		DISCARDABLE			"..\\glsl\\lanczos\\fragment.glsl"
 IDR_FSR_EASU_FRAGMENT		RCDATA		DISCARDABLE			"..\\glsl\\fsr\\easu.glsl"
 IDR_FSR_RCAS_FRAGMENT		RCDATA		DISCARDABLE			"..\\glsl\\fsr\\rcas.glsl"
+IDR_TEXT_VERTEX				RCDATA		DISCARDABLE			"..\\glsl\\text\\vertex.glsl"
+IDR_TEXT_FRAGMENT			RCDATA		DISCARDABLE			"..\\glsl\\text\\fragment.glsl"
+IDR_TEXT_SHEET				RCDATA		DISCARDABLE			"..\\files\\textsheet.bin"
 IDR_BLANK_BIK				RCDATA		DISCARDABLE			"..\\files\\blank.bik"
 
 IDR_XBRZ_FRAGMENT_2X		RCDATA		DISCARDABLE			"..\\glsl\\xbrz\\fragment_2x.glsl"

@@ -43,6 +43,9 @@ namespace Main
 	VOID ShowError(CHAR* message, CHAR* file, DWORD line);
 	VOID ShowInfo(UINT id);
 	VOID ShowInfo(CHAR* message);
+	VOID ShowRestart(UINT id);
+	BOOL Restart();
+	VOID WaitForRestart();
 	BOOL ShowWarn(UINT id);
 	BOOL ShowWarn(CHAR* message);
 

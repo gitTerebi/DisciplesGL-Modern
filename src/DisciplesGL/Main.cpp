@@ -35,7 +35,6 @@ namespace Main
 {
 	HRESULT __stdcall DrawEnumerateEx(LPDDENUMCALLBACKEXA lpCallback, LPVOID lpContext, DWORD dwFlags)
 	{
-		DebugLog("DrawEnumerateEx flags=%08X", dwFlags);
 		static const GUID id = { 0x51221AA6, 0xC5DA, 0x468F, 0x82, 0x31, 0x68, 0x0E, 0xC9, 0x03, 0xA3, 0xB8 };
 		lpCallback((GUID*)&id, "OpenGL Wrapper", "OpenGL Wrapper", lpContext, NULL);
 		return DD_OK;
@@ -43,14 +42,12 @@ namespace Main
 
 	HRESULT __stdcall DrawCreate(GUID* lpGUID, LPDIRECTDRAW* lplpDD, IUnknown* pUnkOuter)
 	{
-		DebugLog("DrawCreate");
 		*lplpDD = (LPDIRECTDRAW) new OpenDraw((IDrawUnknown**)&drawList);
 		return DD_OK;
 	}
 
 	HRESULT __stdcall DrawCreateEx(GUID* lpGuid, LPVOID* lplpDD, REFIID iid, IUnknown* pUnkOuter)
 	{
-		DebugLog("DrawCreateEx");
 		*lplpDD = new OpenDraw((IDrawUnknown**)&drawList);
 		return DD_OK;
 	}
@@ -117,6 +114,67 @@ namespace Main
 	VOID ShowInfo(CHAR* message)
 	{
 		Hooks::MessageBoxHook(NULL, message, "Information", MB_OK | MB_ICONASTERISK | MB_TASKMODAL);
+	}
+
+	#define RESTART_ENV "DISCIPLESGL_RESTART_PID"
+
+	BOOL Restart()
+	{
+		CHAR exe[MAX_PATH];
+		CHAR dir[MAX_PATH];
+		if (!GetModuleFileName(NULL, exe, MAX_PATH) || !GetCurrentDirectory(MAX_PATH, dir))
+			return FALSE;
+
+		static CHAR cmd[32768];
+		StrCopy(cmd, GetCommandLine());
+
+		CHAR pid[16];
+		StrFromInt(GetCurrentProcessId(), pid, 10);
+		SetEnvironmentVariable(RESTART_ENV, pid);
+
+		STARTUPINFO si = {};
+		si.cb = sizeof(si);
+		PROCESS_INFORMATION pi;
+		BOOL ok = CreateProcess(exe, cmd, NULL, NULL, FALSE, 0, NULL, dir, &si, &pi);
+		SetEnvironmentVariable(RESTART_ENV, NULL);
+
+		if (!ok)
+			return FALSE;
+
+		CloseHandle(pi.hThread);
+		CloseHandle(pi.hProcess);
+		Exit(EXIT_SUCCESS);
+		return TRUE;
+	}
+
+	VOID WaitForRestart()
+	{
+		CHAR pid[16];
+		if (!GetEnvironmentVariable(RESTART_ENV, pid, sizeof(pid)))
+			return;
+
+		SetEnvironmentVariable(RESTART_ENV, NULL);
+		HANDLE hProcess = OpenProcess(SYNCHRONIZE, FALSE, (DWORD)StrToInt(pid));
+		if (hProcess)
+		{
+			WaitForSingleObject(hProcess, 15000);
+			CloseHandle(hProcess);
+		}
+	}
+
+	VOID ShowRestart(UINT id)
+	{
+		CHAR message[256];
+		LoadString(hDllModule, id, message, sizeof(message));
+
+		CHAR question[256];
+		LoadString(hDllModule, IDS_ASK_RESTART, question, sizeof(question));
+
+		CHAR text[520];
+		StrPrint(text, "%s\r\n\r\n%s", message, question);
+
+		if (Hooks::MessageBoxHook(NULL, text, "Restart", MB_OKCANCEL | MB_DEFBUTTON2 | MB_ICONQUESTION | MB_TASKMODAL) == IDOK)
+			Restart();
 	}
 
 	BOOL ShowWarn(UINT id)

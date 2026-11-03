@@ -46,7 +46,7 @@ in vec2 fTex;
 
 
 #define FSR_RCAS_LIMIT (0.25-(1.0/16.0))
-//#define FSR_RCAS_DENOISE
+#define FSR_RCAS_DENOISE
 
 vec4 FsrRcasLoadF(vec2 p) {
     return texture(tex01, p / texSize.xy);
@@ -113,6 +113,9 @@ vec3 FsrRcasF(
         -FSR_RCAS_LIMIT,
         min(max(lobeRGB.r, max(lobeRGB.g, lobeRGB.b)), 0.)
     ) * con;
+    // A pixel lighter or darker than its whole ring is a joint in a 1px diagonal of the 800x600 font; sharpening it opens a hole in the stroke.
+    if (eL > max(max(bL, dL), max(fL, hL)) || eL < min(min(bL, dL), min(fL, hL)))
+        lobe = 0.0;
     // Apply noise removal.
 #ifdef FSR_RCAS_DENOISE
     lobe *= nz;

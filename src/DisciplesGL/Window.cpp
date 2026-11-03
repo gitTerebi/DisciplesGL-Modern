@@ -2762,7 +2762,7 @@
 				if (Main::ShowWarn(IDS_WARN_RESET))
 				{
 					Config::Set(CONFIG_WRAPPER, "ReInit", TRUE);
-					Main::ShowInfo(IDS_INFO_RESET);
+					Main::ShowRestart(IDS_INFO_RESET);
 				}
 
 				return NULL;
@@ -3171,7 +3171,7 @@
 					if (val == RendererGDI || config.renderer == RendererGDI)
 					{
 						Config::Set(CONFIG_WRAPPER, "Renderer", *(INT*)&val);
-						Main::ShowInfo(IDS_INFO_RESTART);
+						Main::ShowRestart(IDS_INFO_RESTART);
 					}
 					else
 					{
@@ -3240,7 +3240,7 @@
 					config.scene.sort.value = val;
 					Config::Set(CONFIG_WRAPPER, "SceneSort", *(INT*)&config.scene.sort.value);
 
-					Main::ShowInfo(IDS_INFO_RESTART);
+					Main::ShowRestart(IDS_INFO_RESTART);
 					CheckMenu(MenuSceneSort);
 				}
 
@@ -3250,7 +3250,7 @@
 			case IDM_SCENE_ALL: {
 				config.scene.all = !config.scene.all;
 				Config::Set(CONFIG_DISCIPLE, "IncludeCampaign", config.scene.all);
-				Main::ShowInfo(IDS_INFO_RESTART);
+				Main::ShowRestart(IDS_INFO_RESTART);
 				CheckMenu(MenuSceneAll);
 				return NULL;
 			}
@@ -3262,7 +3262,7 @@
 				{
 					config.editorCamp = val;
 					Config::Set(CONFIG_DISCIPLE, "ScenEditDatabase", config.editorCamp);
-					Main::ShowInfo(IDS_INFO_RESTART);
+					Main::ShowRestart(IDS_INFO_RESTART);
 					CheckMenu(MenuEditorMode);
 				}
 
@@ -3355,7 +3355,7 @@
 
 				if (res == IDOK)
 				{
-					Main::ShowInfo(IDS_INFO_RESTART);
+					Main::ShowRestart(IDS_INFO_RESTART);
 					CheckMenu(MenuResolution);
 				}
 
@@ -3390,7 +3390,7 @@
 							Config::Set(CONFIG_DISCIPLE, "DisplaySize", mode);
 						}
 
-						Main::ShowInfo(IDS_INFO_RESTART);
+						Main::ShowRestart(IDS_INFO_RESTART);
 						CheckMenu(MenuResolution);
 					}
 

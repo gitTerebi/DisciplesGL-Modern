@@ -851,8 +851,6 @@ namespace TurnOrder
 		}
 
 		turnStrip->dirty = TRUE;
-
-		DebugLog("Turn order units=%d next=%d cards=%d own=%s", count, estimateCount, turnCardCount, turnOwnAttacker ? "attacker" : "defender");
 	}
 
 	VOID TurnViewer(DWORD* viewer)
