@@ -2329,7 +2329,7 @@ namespace Hooks
 
 		DWORD* src = srcData + srcPitch * srcPos->y + srcPos->x;
 		DWORD* dst = dstData + dstPitch * dstPos->y + dstPos->x;
-		Twin::OnWrite(dst, dstPitch, size->cx, size->cy);
+		Twin::OnPixelCopy(Twin::PixelAverage, src, srcPitch, dst, dstPitch, size->cx, size->cy, colorKey, flag);
 
 		srcPitch -= size->cx;
 		dstPitch -= size->cx;
@@ -2391,7 +2391,7 @@ namespace Hooks
 
 		DWORD* src = srcData + srcPitch * srcPos->y + srcPos->x;
 		DWORD* dst = dstData + dstPitch * dstPos->y + dstPos->x;
-		Twin::OnWrite(dst, dstPitch, size->cx, size->cy);
+		Twin::OnPixelCopy(Twin::PixelAverage, src, srcPitch, dst, dstPitch, size->cx, size->cy, colorKey, flag);
 
 		LONG width = size->cx;
 		LONG height = size->cy;
@@ -2554,7 +2554,7 @@ namespace Hooks
 
 		src += srcPitch * srcPos->y + srcPos->x;
 		dst += dstPitch * dstPos->y + dstPos->x;
-		Twin::OnWrite(dst, dstPitch, size->cx, size->cy);
+		Twin::OnPixelCopy(Twin::PixelAdd, src, srcPitch, dst, dstPitch, size->cx, size->cy, 0, 0);
 
 		srcPitch -= size->cx;
 		dstPitch -= size->cx;
@@ -2600,7 +2600,7 @@ namespace Hooks
 
 		src += srcPitch * srcPos->y + srcPos->x;
 		dst += dstPitch * dstPos->y + dstPos->x;
-		Twin::OnWrite(dst, dstPitch, size->cx, size->cy);
+		Twin::OnPixelCopy(Twin::PixelAdd, src, srcPitch, dst, dstPitch, size->cx, size->cy, 0, 0);
 
 		srcPitch -= size->cx;
 		dstPitch -= size->cx;
@@ -2645,7 +2645,7 @@ namespace Hooks
 
 		src += srcPitch * srcPos->y + srcPos->x;
 		dst += dstPitch * dstPos->y + dstPos->x;
-		Twin::OnWrite(dst, dstPitch, size->cx, size->cy);
+		Twin::OnPixelCopy(Twin::PixelSub, src, srcPitch, dst, dstPitch, size->cx, size->cy, 0, 0);
 
 		srcPitch -= size->cx;
 		dstPitch -= size->cx;
@@ -2691,7 +2691,7 @@ namespace Hooks
 
 		src += srcPitch * srcPos->y + srcPos->x;
 		dst += dstPitch * dstPos->y + dstPos->x;
-		Twin::OnWrite(dst, dstPitch, size->cx, size->cy);
+		Twin::OnPixelCopy(Twin::PixelSub, src, srcPitch, dst, dstPitch, size->cx, size->cy, 0, 0);
 
 		srcPitch -= size->cx;
 		dstPitch -= size->cx;
@@ -2744,7 +2744,7 @@ namespace Hooks
 
 		srcData += srcPitch * srcPos->y + srcPos->x;
 		dstData += dstPitch * dstPos->y + dstPos->x;
-		Twin::OnWrite(dstData, dstPitch, size->cx, size->cy);
+		Twin::OnPixelCopy(Twin::PixelKeyed, srcData, srcPitch, dstData, dstPitch, size->cx, size->cy, colorKey, flag | (((dstPos->x + dstPos->y + 1) & 1) << 8));
 
 		BOOL check = (~dstPos->y ^ dstPos->x) & 1;
 
@@ -2831,7 +2831,7 @@ namespace Hooks
 
 		srcData += srcPitch * srcPos->y + srcPos->x;
 		dstData += dstPitch * dstPos->y + dstPos->x;
-		Twin::OnWrite(dstData, dstPitch, size->cx, size->cy);
+		Twin::OnPixelCopy(Twin::PixelKeyed, srcData, srcPitch, dstData, dstPitch, size->cx, size->cy, colorKey, flag | (((dstPos->x + dstPos->y + 1) & 1) << 8));
 
 		BOOL check = (~dstPos->y ^ dstPos->x) & 1;
 
@@ -2920,7 +2920,7 @@ namespace Hooks
 
 		srcData += srcPitch * srcPos->y + srcPos->x;
 		dstData += dstPitch * dstPos->y + dstPos->x;
-		Twin::OnWrite(dstData, dstPitch, size->cx, size->cy);
+		Twin::OnPixelCopy(Twin::PixelEmpty, srcData, srcPitch, dstData, dstPitch, size->cx, size->cy, 0, (dstPos->x + dstPos->y + 1) & 1);
 
 		BOOL check = (~dstPos->y ^ dstPos->x) & 1;
 

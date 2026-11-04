@@ -42,6 +42,12 @@
 #ifndef GL_TEXTURE2
 #define GL_TEXTURE2 0x84C2
 #endif
+#ifndef GL_FUNC_ADD
+#define GL_FUNC_ADD 0x8006
+#endif
+#ifndef GL_FUNC_REVERSE_SUBTRACT
+#define GL_FUNC_REVERSE_SUBTRACT 0x800B
+#endif
 #ifndef GL_READ_FRAMEBUFFER_BINDING
 #define GL_READ_FRAMEBUFFER_BINDING 0x8CAA
 #endif
@@ -79,6 +85,8 @@
 #define GROUND_LOGS 8
 #define SCREEN_LOGS 64
 #define SHOW_LOGS 32
+#define SYNC_MAX 8
+#define PIXEL_MODES 5
 #define UNMATCHED_LOGS 16
 #define LOGS_FRAME 4
 #define SHOT_DELAY 15000
@@ -86,9 +94,11 @@
 #define SHOT_SCREEN_H 1200
 #define SHOT_SHEET 2048
 
+typedef VOID(__stdcall* GLBLENDEQUATION)(GLenum mode);
+
 namespace Twin
 {
-	enum CmdType { CmdCreate, CmdDestroy, CmdCopy, CmdFill, CmdUpload, CmdPresent, CmdReset, CmdArt, CmdGround };
+	enum CmdType { CmdCreate, CmdDestroy, CmdCopy, CmdFill, CmdUpload, CmdPresent, CmdReset, CmdArt, CmdGround, CmdPixel };
 
 	enum PresentFlags { PresentMapZoom = 1, PresentBack = 2, PresentZoomed = 4, PresentCheck = 8, PresentShot = 16 };
 
@@ -237,6 +247,16 @@ namespace Twin
 		BOOL tileCheck;
 		BOOL tileKeyDown;
 		BOOL tintKeyDown;
+		struct {
+			StateBuffer* owner;
+			DWORD id;
+			RECT rect;
+		} syncs[SYNC_MAX];
+		DWORD syncCount;
+		DWORD pixelOps[PIXEL_MODES];
+		DWORD pixelArt;
+		DWORD pixelUntwinned;
+		DWORD pixelSelf;
 		DWORD presentNoTwin;
 		DWORD presentLogTick;
 		DWORD screenLogs;
@@ -313,6 +333,8 @@ namespace Twin
 		DWORD artCalls;
 		DWORD groundReplayed;
 		DWORD groundFallbacks;
+		DWORD pixelReplayed;
+		DWORD pixelCalls;
 		DWORD showOpaque;
 		DWORD showBack;
 		DWORD showInvalid;
@@ -336,6 +358,9 @@ namespace Twin
 		GLint keyLoc;
 		GLint artLoc;
 		GLint tintLoc;
+		GLint emptyLoc;
+		GLint weightLoc;
+		GLBLENDEQUATION blendEquation;
 		GLint opaqueLoc;
 		GLint scaleLoc;
 		GLuint vao;
@@ -374,6 +399,8 @@ namespace Twin
 		DWORD showOther;
 		DWORD groundReplayed;
 		DWORD groundFallbacks;
+		DWORD pixelReplayed;
+		DWORD pixelCalls;
 		BYTE* checkMask;
 		DWORD showView;
 		DWORD showTwin;
@@ -1001,8 +1028,43 @@ namespace Twin
 				EmitCreate(&game.twins[i], i);
 	}
 
+	VOID DrainSync()
+	{
+		for (DWORD i = 0; i < game.syncCount; ++i)
+		{
+			Record* twin = &game.twins[game.syncs[i].id];
+			const RECT* rect = &game.syncs[i].rect;
+			if (twin->owner != game.syncs[i].owner || !twin->mirror)
+				continue;
+
+			LONG width = rect->right - rect->left;
+			const DWORD* src = (const DWORD*)twin->base + rect->top * twin->pitch + rect->left;
+			DWORD* mirror = twin->mirror + rect->top * twin->width + rect->left;
+			for (LONG y = rect->bottom - rect->top; y; --y)
+			{
+				MemoryCopy(mirror, src, width * sizeof(DWORD));
+				src += twin->pitch;
+				mirror += twin->width;
+			}
+		}
+		game.syncCount = 0;
+	}
+
+	VOID DeferSync(Record* twin, DWORD id, const RECT* rect)
+	{
+		// the hook writes 1x right after this call, so the mirror can only take the real pixels at the next entry point
+		if (game.syncCount == SYNC_MAX)
+			DrainSync();
+		game.syncs[game.syncCount].owner = twin->owner;
+		game.syncs[game.syncCount].id = id;
+		game.syncs[game.syncCount].rect = *rect;
+		++game.syncCount;
+	}
+
 	VOID Sync()
 	{
+		DrainSync();
+
 		LONG gen = shared.gen;
 		if (gen == game.seenGen)
 			return;
@@ -1189,7 +1251,7 @@ namespace Twin
 		return NULL;
 	}
 
-	BOOL RecordArt(Record* target, DWORD dstId, const RECT* to, DWORD srcId, const RECT* from, LONG frame, BOOL flipped, const RECT* place, BOOL keyed, DWORD key, BOOL cached)
+	BOOL RecordArt(Record* target, DWORD dstId, const RECT* to, DWORD srcId, const RECT* from, LONG frame, BOOL flipped, const RECT* place, BOOL keyed, DWORD key, BOOL cached, BOOL half)
 	{
 		if (!ImageReplace::ArtReady(frame))
 		{
@@ -1206,7 +1268,7 @@ namespace Twin
 		cmd->clip = *from;
 		cmd->place = *place;
 		cmd->value = (DWORD)frame;
-		cmd->flags = (flipped ? 1 : 0) | (keyed ? 2 : 0);
+		cmd->flags = (flipped ? 1 : 0) | (keyed ? 2 : 0) | (half ? 4 : 0);
 		cmd->extra = key;
 
 		++art.draws;
@@ -1266,7 +1328,7 @@ namespace Twin
 		link->lastUse = ++art.useClock;
 	}
 
-	BOOL ArtCopy(Record* target, DWORD dstId, const RECT* to, Record* source, DWORD srcId, const RECT* from, Expect* e, LONG x, LONG y, BOOL keyed, DWORD key)
+	BOOL ArtCopy(Record* target, DWORD dstId, const RECT* to, Record* source, DWORD srcId, const RECT* from, Expect* e, LONG x, LONG y, BOOL keyed, DWORD key, BOOL half)
 	{
 		e->used = TRUE;
 		while (art.head < art.count && art.expect[art.head].used)
@@ -1290,14 +1352,14 @@ namespace Twin
 			return FALSE;
 		}
 
-		if (!RecordArt(target, dstId, to, srcId, from, image->frame, image->flipped, &image->place, keyed, key, FALSE))
+		if (!RecordArt(target, dstId, to, srcId, from, image->frame, image->flipped, &image->place, keyed, key, FALSE, half))
 			return FALSE;
 
 		Remember(source, from, image->frame, image->flipped, &image->place, to);
 		return TRUE;
 	}
 
-	BOOL CachedArt(Record* target, DWORD dstId, const RECT* to, Record* source, DWORD srcId, const RECT* from, BOOL keyed, DWORD key)
+	BOOL CachedArt(Record* target, DWORD dstId, const RECT* to, Record* source, DWORD srcId, const RECT* from, BOOL keyed, DWORD key, BOOL half)
 	{
 		if (!source->linkCount)
 			return FALSE;
@@ -1318,7 +1380,7 @@ namespace Twin
 		LONG cx = link->cx + from->left - link->rect.left;
 		LONG cy = link->cy + from->top - link->rect.top;
 		RECT place = { to->left - cx, to->top - cy, to->left - cx + link->placeW, to->top - cy + link->placeH };
-		return RecordArt(target, dstId, to, srcId, from, link->frame, link->flipped, &place, keyed, key, TRUE);
+		return RecordArt(target, dstId, to, srcId, from, link->frame, link->flipped, &place, keyed, key, TRUE, half);
 	}
 
 	VOID ExpireArt()
@@ -1491,11 +1553,15 @@ namespace Twin
 
 	VOID OnRelease(StateBuffer* buffer)
 	{
+		DrainSync();
+
 		DWORD id;
 		Record* twin = Find(buffer, &id);
 		if (twin)
 			Release(twin, id);
 	}
+
+	VOID CopyTwins(Record* target, DWORD dstId, LONG x, LONG y, Record* source, DWORD srcId, const RECT* srcRect, BOOL keyed, DWORD key);
 
 	VOID OnCopy(StateBuffer* dst, LONG x, LONG y, StateBuffer* src, const RECT* srcRect, BOOL keyed, DWORD key)
 	{
@@ -1509,10 +1575,14 @@ namespace Twin
 		if (!target)
 			return;
 
-		RECT whole = { x, y, x + srcRect->right - srcRect->left, y + srcRect->bottom - srcRect->top };
-
 		DWORD srcId;
 		Record* source = Find(src, &srcId);
+		CopyTwins(target, dstId, x, y, source, srcId, srcRect, keyed, key);
+	}
+
+	VOID CopyTwins(Record* target, DWORD dstId, LONG x, LONG y, Record* source, DWORD srcId, const RECT* srcRect, BOOL keyed, DWORD key)
+	{
+		RECT whole = { x, y, x + srcRect->right - srcRect->left, y + srcRect->bottom - srcRect->top };
 
 		if (!source)
 		{
@@ -1553,7 +1623,7 @@ namespace Twin
 		if (e || source->linkCount)
 		{
 			FlushRegion(target, dstId, &to, TRUE);
-			if (e ? ArtCopy(target, dstId, &to, source, srcId, &from, e, x, y, keyed, key) : CachedArt(target, dstId, &to, source, srcId, &from, keyed, key))
+			if (e ? ArtCopy(target, dstId, &to, source, srcId, &from, e, x, y, keyed, key, FALSE) : CachedArt(target, dstId, &to, source, srcId, &from, keyed, key, FALSE))
 			{
 				MirrorCopy(target, &to, source, &from, keyed, key);
 				if (target != source)
@@ -1694,6 +1764,111 @@ namespace Twin
 			MarkAll(twin);
 	}
 
+	BOOL PixelPos(const Record* twin, const VOID* ptr, LONG pitch, LONG width, LONG height, LONG* x, LONG* y)
+	{
+		LONG start = LONG(((const BYTE*)ptr - twin->base) / sizeof(DWORD));
+		*x = start % twin->pitch;
+		*y = start / twin->pitch;
+		return pitch == twin->pitch && *x + width <= twin->width && *y + height <= twin->height;
+	}
+
+	VOID OnPixelCopy(PixelMode mode, const DWORD* src, LONG srcPitch, const DWORD* dst, LONG dstPitch, LONG width, LONG height, DWORD key, DWORD param)
+	{
+		if (!dst || !src || width <= 0 || height <= 0 || (DWORD)mode >= PIXEL_MODES || !Active())
+			return;
+
+		Sync();
+
+		DWORD dstId;
+		Record* target = FindAddress(dst, &dstId);
+		if (!target)
+			return;
+
+		++game.pixelOps[mode];
+
+		LONG dx, dy;
+		if (!PixelPos(target, dst, dstPitch, width, height, &dx, &dy))
+		{
+			OnWrite(dst, dstPitch, width, height);
+			return;
+		}
+		RECT to = { dx, dy, dx + width, dy + height };
+
+		DWORD srcId;
+		Record* source = FindAddress(src, &srcId);
+		LONG sx, sy;
+		if (!source || !PixelPos(source, src, srcPitch, width, height, &sx, &sy))
+		{
+			++game.pixelUntwinned;
+			MarkDirty(target, to);
+			return;
+		}
+		RECT from = { sx, sy, sx + width, sy + height };
+
+		if (mode == PixelAverage && (param & 0xFF) >= 255)
+		{
+			CopyTwins(target, dstId, dx, dy, source, srcId, &from, TRUE, key);
+			return;
+		}
+
+		if (source == target)
+		{
+			++game.pixelSelf;
+			MarkDirty(target, to);
+			return;
+		}
+
+		FlushRegion(source, srcId, &from);
+		Verify(source, srcId, &from, NULL, 0, FALSE);
+		FlushRegion(target, dstId, &to, TRUE);
+		DropLinks(target, &to);
+
+		if (mode == PixelKeyed && (param & 0xFF) >= 255 && (art.count || source->linkCount))
+		{
+			source->keyed = TRUE;
+			source->key = key | ALPHA_COMPONENT;
+			Expect* e = art.count ? Match(dx, dy, width, height, sx, sy) : NULL;
+			if (e ? ArtCopy(target, dstId, &to, source, srcId, &from, e, dx, dy, TRUE, key, TRUE) : CachedArt(target, dstId, &to, source, srcId, &from, TRUE, key, TRUE))
+			{
+				++game.pixelArt;
+				AddArt(target, &to);
+				DeferSync(target, dstId, &to);
+				return;
+			}
+		}
+
+		Cmd* cmd = Emit(CmdPixel);
+		if (!cmd)
+		{
+			MarkDirty(target, to);
+			return;
+		}
+		cmd->dst = dstId;
+		cmd->src = srcId;
+		cmd->rect = from;
+		cmd->x = dx;
+		cmd->y = dy;
+		cmd->value = key;
+		cmd->flags = mode;
+		cmd->extra = param;
+
+		if (mode != PixelAdd && mode != PixelSub)
+		{
+			RECT part;
+			for (DWORD i = 0; i < source->artCount; ++i)
+				if (IntersectRect(&part, &source->art[i], &from))
+				{
+					OffsetRect(&part, dx - sx, dy - sy);
+					AddArt(target, &part);
+				}
+
+			// the smooth half-coverage and rounded blends differ from the 1x dither and floor on purpose, so the GPU check treats them like art
+			AddArt(target, &to);
+		}
+
+		DeferSync(target, dstId, &to);
+	}
+
 	VOID AddCounters(Counters* dst, const Counters* src)
 	{
 		dst->copies += src->copies;
@@ -1780,6 +1955,9 @@ namespace Twin
 		DWORD artCalls = shared.artCalls;
 		DWORD groundReplayed = shared.groundReplayed;
 		DWORD groundFallbacks = shared.groundFallbacks;
+		DWORD pixelReplayed = shared.pixelReplayed;
+		DWORD pixelCalls = shared.pixelCalls;
+		shared.pixelReplayed = shared.pixelCalls = 0;
 		shared.artDraws = shared.artFallbacks = shared.artRejected = shared.artCalls = shared.groundReplayed = shared.groundFallbacks = 0;
 		CheckResult check = shared.check;
 		DWORD showOpaque = shared.showOpaque, showBack = shared.showBack, showInvalid = shared.showInvalid, showGone = shared.showGone, showOffCount = shared.showOff, showOther = shared.showOther;
@@ -1791,6 +1969,12 @@ namespace Twin
 		DebugLog("twin art expected %u dup %u matched %u draws %u px %u notready %u rejected place %u aspect %u unmatched %u overflow %u | replayed %u calls %u fallbacks %u",
 			art.expected, art.duplicates, art.matched, art.draws, art.px, art.notReady, art.rejected, artRejected, art.unmatched, art.overflow, artReplayed, artCalls, artFallbacks);
 		art.expected = art.duplicates = art.matched = art.draws = art.px = art.notReady = art.rejected = art.unmatched = art.overflow = 0;
+
+		DebugLog("twin pixel ops keyed %u average %u add %u sub %u empty %u | art %u untwinned src %u self %u | replayed %u calls %u",
+			game.pixelOps[PixelKeyed], game.pixelOps[PixelAverage], game.pixelOps[PixelAdd], game.pixelOps[PixelSub], game.pixelOps[PixelEmpty],
+			game.pixelArt, game.pixelUntwinned, game.pixelSelf, pixelReplayed, pixelCalls);
+		MemoryZero(game.pixelOps, sizeof(game.pixelOps));
+		game.pixelArt = game.pixelUntwinned = game.pixelSelf = 0;
 
 		DebugLog("twin art cache hits %u misses %u cached draws %u | ground arts %u replayed %u fallbacks %u no twin %u",
 			art.cacheHits, art.cacheMisses, art.cachedDraws, art.groundArts, groundReplayed, groundFallbacks, art.groundNoTwin);
@@ -2101,7 +2285,8 @@ namespace Twin
 			"uniform int keyed;\n"
 			"uniform int art;\n"
 			"uniform int tint;\n"
-
+			"uniform int empty;\n"
+			"uniform vec2 weight;\n"
 			"uniform vec4 key;\n"
 			"in vec2 fTex;\n"
 			"out vec4 FRAG_COLOR;\n"
@@ -2112,7 +2297,6 @@ namespace Twin
 			"	vec4 c = texture(tex01, fTex);\n"
 			"	if (art != 0 && tint != 0)\n"
 			"		c.rgb *= vec3(1.0, 0.15, 1.0);\n"
-
 			"	if (keyed != 0)\n"
 			"	{\n"
 			"		if (c.a < 0.5 / 255.0 || (c.a > 254.5 / 255.0 && all(lessThan(abs(c.rgb - key.rgb), vec3(0.5 / 255.0)))))\n"
@@ -2120,7 +2304,14 @@ namespace Twin
 			"		if (c.a > 253.5 / 255.0)\n"
 			"			c.a = 1.0;\n"
 			"	}\n"
-			"	FRAG_COLOR = c;\n"
+			"	if (empty != 0)\n"
+			"	{\n"
+			"		if (c.a < 254.5 / 255.0 && all(lessThan(c.rgb, vec3(0.5 / 255.0))))\n"
+			"			discard;\n"
+			"		if (c.a > 253.5 / 255.0)\n"
+			"			c.a = 1.0;\n"
+			"	}\n"
+			"	FRAG_COLOR = c * weight.x;\n"
 			"}\n";
 
 		const CHAR* checkFragment =
@@ -2134,6 +2325,7 @@ namespace Twin
 			"}\n";
 
 		QueryPerformanceFrequency(&gl.frequency);
+		gl.blendEquation = (GLBLENDEQUATION)wglGetProcAddress("glBlendEquation");
 
 		gl.copyProgram = Link(vertex, copyFragment);
 		if (gl.copyProgram)
@@ -2144,7 +2336,11 @@ namespace Twin
 			gl.keyLoc = GLGetUniformLocation(gl.copyProgram, "key");
 			gl.artLoc = GLGetUniformLocation(gl.copyProgram, "art");
 			gl.tintLoc = GLGetUniformLocation(gl.copyProgram, "tint");
+			gl.emptyLoc = GLGetUniformLocation(gl.copyProgram, "empty");
+			gl.weightLoc = GLGetUniformLocation(gl.copyProgram, "weight");
 			GLUniform1i(gl.tintLoc, 0);
+			GLUniform1i(gl.emptyLoc, 0);
+			GLUniform2f(gl.weightLoc, 1.0f, 0.0f);
 			GLUniform1i(gl.keyedLoc, 0);
 			GLUniform1i(gl.artLoc, 0);
 		}
@@ -2669,7 +2865,7 @@ namespace Twin
 	{
 		const Cmd* first = &list->cmds[index];
 		DWORD end = index + 1;
-		while (end < list->count && list->cmds[end].type == CmdArt && list->cmds[end].dst == first->dst && list->cmds[end].value == first->value)
+		while (end < list->count && list->cmds[end].type == CmdArt && list->cmds[end].dst == first->dst && list->cmds[end].value == first->value && (list->cmds[end].flags & 4) == (first->flags & 4))
 			++end;
 
 		GLuint texture = 0;
@@ -2711,12 +2907,16 @@ namespace Twin
 			UseCopy(FALSE, 0);
 			GLUniform1i(gl.artLoc, 1);
 			GLUniform1i(gl.tintLoc, shared.tint ? 1 : 0);
+			if (first->flags & 4)
+				GLUniform2f(gl.weightLoc, 0.5f, 0.0f);
 			GLBindTexture(GL_TEXTURE_2D, texture);
 			Blend(TRUE);
 			DrawVerts();
 			Blend(FALSE);
 			GLUniform1i(gl.artLoc, 0);
 			GLUniform1i(gl.tintLoc, 0);
+			if (first->flags & 4)
+				GLUniform2f(gl.weightLoc, 1.0f, 0.0f);
 			gl.artDraws += drawn;
 			++gl.artCalls;
 		}
@@ -2862,6 +3062,95 @@ namespace Twin
 		shared.check.art = artTiles;
 		shared.check.artDiffer = artBad;
 		Unlock();
+	}
+
+	DWORD ReplayPixels(const List* list, DWORD index)
+	{
+		const Cmd* first = &list->cmds[index];
+		DWORD end = index + 1;
+		while (end < list->count)
+		{
+			const Cmd* cmd = &list->cmds[end];
+			if (cmd->type != CmdPixel || cmd->src != first->src || cmd->dst != first->dst || cmd->flags != first->flags || cmd->value != first->value || cmd->extra != first->extra)
+				break;
+			++end;
+		}
+
+		DWORD mode = first->flags;
+		if (!Valid(first->src) || !Valid(first->dst) || (mode == PixelSub && !gl.blendEquation))
+			return end;
+
+		Gpu* src = &gl.twins[first->src];
+		Gpu* dst = &gl.twins[first->dst];
+		LONG scale = dst->scale;
+		FLOAT tw = (FLOAT)(dst->width * scale), th = (FLOAT)(dst->height * scale);
+
+		gl.vertCount = 0;
+		for (DWORD i = index; i < end; ++i)
+		{
+			const Cmd* cmd = &list->cmds[i];
+			LONG w = cmd->rect.right - cmd->rect.left;
+			LONG h = cmd->rect.bottom - cmd->rect.top;
+			AddQuad(tw, th, (FLOAT)(cmd->x * scale), (FLOAT)(cmd->y * scale), (FLOAT)((cmd->x + w) * scale), (FLOAT)((cmd->y + h) * scale),
+				(FLOAT)cmd->rect.left / src->width, (FLOAT)cmd->rect.top / src->height, (FLOAT)cmd->rect.right / src->width, (FLOAT)cmd->rect.bottom / src->height);
+		}
+
+		DWORD param = first->extra & 0xFF;
+		FLOAT weight = 1.0f;
+		BOOL keyed = FALSE, empty = FALSE;
+		switch (mode)
+		{
+		case PixelAverage:
+			keyed = TRUE;
+			weight = (param + 1) / 256.0f;
+			break;
+		case PixelKeyed:
+			// the CPU dithers every other pixel; at N× the smooth equivalent is half coverage
+			keyed = TRUE;
+			weight = 0.5f * (param >= 255 ? 1.0f : (param + 1) / 256.0f);
+			break;
+		case PixelEmpty:
+			empty = TRUE;
+			weight = 0.5f;
+			break;
+		default:
+			break;
+		}
+
+		TargetTwin(first->dst);
+		UseCopy(keyed, first->value);
+		if (empty)
+			GLUniform1i(gl.emptyLoc, 1);
+		if (weight != 1.0f)
+			GLUniform2f(gl.weightLoc, weight, 0.0f);
+		GLBindTexture(GL_TEXTURE_2D, src->texture);
+
+		GLEnable(GL_BLEND);
+		if (mode == PixelAdd || mode == PixelSub)
+		{
+			glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_FALSE);
+			GLBlendFunc(GL_ONE, GL_ONE);
+			if (mode == PixelSub)
+				gl.blendEquation(GL_FUNC_REVERSE_SUBTRACT);
+		}
+		else
+			GLBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+
+		DrawVerts();
+		++gl.pixelCalls;
+		gl.pixelReplayed += end - index;
+
+		if (mode == PixelSub)
+			gl.blendEquation(GL_FUNC_ADD);
+		if (mode == PixelAdd || mode == PixelSub)
+			glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+		GLDisable(GL_BLEND);
+		if (empty)
+			GLUniform1i(gl.emptyLoc, 0);
+		if (weight != 1.0f)
+			GLUniform2f(gl.weightLoc, 1.0f, 0.0f);
+		gl.vertCount = 0;
+		return end;
 	}
 
 	VOID ReplayGround(const Cmd* cmd, const List* list)
@@ -3055,6 +3344,10 @@ namespace Twin
 			case CmdGround:
 				ReplayGround(cmd, list);
 				break;
+
+			case CmdPixel:
+				i = ReplayPixels(list, i);
+				continue;
 
 			case CmdCopy:
 				i = ReplayCopies(list->cmds, list->count, i);
@@ -3317,10 +3610,13 @@ namespace Twin
 		gl.showUs = gl.showSamples = gl.showMaxUs = 0;
 		shared.groundReplayed += gl.groundReplayed;
 		shared.groundFallbacks += gl.groundFallbacks;
+		shared.pixelReplayed += gl.pixelReplayed;
+		shared.pixelCalls += gl.pixelCalls;
 		shared.showOther += gl.showOther;
 		shared.showOff += showOff;
 		gl.showOpaque = gl.showBack = gl.showInvalid = gl.showGone = gl.showOther = 0;
 		gl.groundReplayed = gl.groundFallbacks = 0;
+		gl.pixelReplayed = gl.pixelCalls = 0;
 
 		if (replayed)
 		{
