@@ -39,6 +39,9 @@
 #ifndef GL_READ_FRAMEBUFFER
 #define GL_READ_FRAMEBUFFER 0x8CA8
 #endif
+#ifndef GL_TEXTURE2
+#define GL_TEXTURE2 0x84C2
+#endif
 #ifndef GL_READ_FRAMEBUFFER_BINDING
 #define GL_READ_FRAMEBUFFER_BINDING 0x8CAA
 #endif
@@ -72,6 +75,9 @@
 #define REJECT_LOGS 16
 #define EXPECT_SCAN 256
 #define ART_LOGS 32
+#define LINK_MAX 256
+#define GROUND_LOGS 8
+#define SCREEN_LOGS 64
 #define UNMATCHED_LOGS 16
 #define LOGS_FRAME 4
 #define SHOT_DELAY 15000
@@ -81,7 +87,7 @@
 
 namespace Twin
 {
-	enum CmdType { CmdCreate, CmdDestroy, CmdCopy, CmdFill, CmdUpload, CmdPresent, CmdReset, CmdArt };
+	enum CmdType { CmdCreate, CmdDestroy, CmdCopy, CmdFill, CmdUpload, CmdPresent, CmdReset, CmdArt, CmdGround };
 
 	enum PresentFlags { PresentMapZoom = 1, PresentBack = 2, PresentZoomed = 4, PresentCheck = 8, PresentShot = 16 };
 
@@ -118,6 +124,17 @@ namespace Twin
 		DWORD size;
 		DWORD arenaCapacity;
 		Counters counters;
+	};
+
+	struct ArtLink {
+		RECT rect;
+		LONG frame;
+		BOOL flipped;
+		LONG placeW;
+		LONG placeH;
+		LONG cx;
+		LONG cy;
+		DWORD lastUse;
 	};
 
 	struct Expect {
@@ -163,6 +180,8 @@ namespace Twin
 		DWORD key;
 		DWORD artCount;
 		RECT art[ART_MAX];
+		ArtLink* links;
+		DWORD linkCount;
 		DWORD count;
 		RECT dirty[DIRTY_MAX];
 	};
@@ -217,6 +236,9 @@ namespace Twin
 		BOOL tileCheck;
 		BOOL tileKeyDown;
 		BOOL tintKeyDown;
+		DWORD presentNoTwin;
+		DWORD presentLogs;
+		DWORD screenLogs;
 		BOOL shotRequest;
 		DWORD lastArtSource;
 		DWORD frameNo;
@@ -247,6 +269,13 @@ namespace Twin
 		DWORD duplicates;
 		DWORD rejected;
 		DWORD draws;
+		DWORD cacheHits;
+		DWORD cacheMisses;
+		DWORD cachedDraws;
+		DWORD useClock;
+		DWORD groundArts;
+		DWORD groundNoTwin;
+		DWORD groundLogs;
 		DWORD px;
 		DWORD artLogs;
 		DWORD unmatchedLogs;
@@ -281,9 +310,12 @@ namespace Twin
 		DWORD artFallbacks;
 		DWORD artRejected;
 		DWORD artCalls;
+		DWORD groundReplayed;
+		DWORD groundFallbacks;
 		DWORD showOpaque;
 		DWORD showBack;
 		DWORD showInvalid;
+		DWORD showGone;
 		DWORD showOff;
 		DWORD showOther;
 		CheckResult check;
@@ -332,7 +364,11 @@ namespace Twin
 		DWORD showOpaque;
 		DWORD showBack;
 		DWORD showInvalid;
+		DWORD showGone;
 		DWORD showOther;
+		DWORD groundReplayed;
+		DWORD groundFallbacks;
+		BYTE* checkMask;
 		DWORD readFbo;
 		LARGE_INTEGER frequency;
 		struct {
@@ -518,11 +554,13 @@ namespace Twin
 
 	VOID MarkAll(Record* twin)
 	{
+		twin->linkCount = 0;
 		twin->count = 1;
 		SetRect(&twin->dirty[0], 0, 0, twin->width, twin->height);
 	}
 
 	VOID Upload(Record* twin, DWORD id, const RECT* rect);
+	VOID DropLinks(Record* twin, const RECT* rect);
 
 	VOID Append(Record* twin, const RECT* rect)
 	{
@@ -544,6 +582,9 @@ namespace Twin
 	{
 		if (!Clip(twin, &rect))
 			return;
+
+		if (twin->linkCount)
+			DropLinks(twin, &rect);
 
 		BOOL merged;
 		do
@@ -625,6 +666,14 @@ namespace Twin
 				twin->art[i - 1] = twin->art[--twin->artCount];
 	}
 
+	VOID DropLinks(Record* twin, const RECT* rect)
+	{
+		RECT part;
+		for (DWORD i = twin->linkCount; i; --i)
+			if (IntersectRect(&part, rect, &twin->links[i - 1].rect))
+				twin->links[i - 1] = twin->links[--twin->linkCount];
+	}
+
 	VOID Upload(Record* twin, DWORD id, const RECT* rect)
 	{
 		LONG width = rect->right - rect->left;
@@ -648,6 +697,7 @@ namespace Twin
 		++game.list->counters.uploads;
 		game.list->counters.pixels += width * height;
 		CoverArt(twin, rect);
+		DropLinks(twin, rect);
 
 		if (twin->mirror)
 		{
@@ -990,10 +1040,14 @@ namespace Twin
 				cmd->dst = id;
 		}
 
-		if (game.logged < LOG_TWINS)
+		BOOL screenSized = twin->width == *(LONG*)&config.mode->width && twin->height == *(LONG*)&config.mode->height;
+		if (game.logged < LOG_TWINS || (screenSized && game.screenLogs < SCREEN_LOGS))
 		{
-			++game.logged;
-			DebugLog("twin destroy %u %dx%d buffer %08X", id, twin->width, twin->height, twin->owner);
+			if (game.logged < LOG_TWINS)
+				++game.logged;
+			else
+				++game.screenLogs;
+			DebugLog("twin destroy %u %dx%d buffer %08X at frame %u", id, twin->width, twin->height, twin->owner, game.frameNo);
 		}
 
 		--game.alive;
@@ -1001,6 +1055,10 @@ namespace Twin
 		if (twin->mirror)
 			MemoryFree(twin->mirror);
 		twin->mirror = NULL;
+		if (twin->links)
+			MemoryFree(twin->links);
+		twin->links = NULL;
+		twin->linkCount = 0;
 		twin->owner = NULL;
 		twin->base = NULL;
 		twin->count = 0;
@@ -1117,7 +1175,84 @@ namespace Twin
 		return NULL;
 	}
 
-	BOOL ArtCopy(Record* target, DWORD dstId, const RECT* to, DWORD srcId, const RECT* from, Expect* e, LONG x, LONG y, BOOL keyed, DWORD key)
+	BOOL RecordArt(Record* target, DWORD dstId, const RECT* to, DWORD srcId, const RECT* from, LONG frame, BOOL flipped, const RECT* place, BOOL keyed, DWORD key, BOOL cached)
+	{
+		if (!ImageReplace::ArtReady(frame))
+		{
+			++art.notReady;
+			return FALSE;
+		}
+
+		Cmd* cmd = Emit(CmdArt);
+		if (!cmd)
+			return FALSE;
+		cmd->dst = dstId;
+		cmd->src = srcId;
+		cmd->rect = *to;
+		cmd->clip = *from;
+		cmd->place = *place;
+		cmd->value = (DWORD)frame;
+		cmd->flags = (flipped ? 1 : 0) | (keyed ? 2 : 0);
+		cmd->extra = key;
+
+		++art.draws;
+		if (cached)
+			++art.cachedDraws;
+		art.px += (to->right - to->left) * (to->bottom - to->top);
+		game.lastArtSource = srcId;
+		if (!art.firstTick)
+			art.firstTick = GetTickCount() | 1;
+		if (!art.checked)
+		{
+			art.checked = TRUE;
+			game.checkRequest = TRUE;
+		}
+
+		if (art.artLogs < ART_LOGS && art.frameLogs < LOGS_FRAME)
+		{
+			++art.artLogs;
+			++art.frameLogs;
+			DebugLog("twin art%s frame=%d src=%p sheet=%d,%d dst=%p %d,%d %dx%d canvas=%d,%d of %dx%d%s%s at frame %u", cached ? " cached" : "", frame, game.twins[srcId].owner, from->left, from->top,
+				target->owner, to->left, to->top, to->right - to->left, to->bottom - to->top, to->left - place->left, to->top - place->top,
+				place->right - place->left, place->bottom - place->top, flipped ? " flipped" : "", keyed ? " keyed" : "", game.frameNo);
+		}
+		return TRUE;
+	}
+
+	VOID Remember(Record* source, const RECT* from, LONG frame, BOOL flipped, const RECT* place, const RECT* to)
+	{
+		if (!source->links)
+		{
+			source->links = (ArtLink*)MemoryAlloc(LINK_MAX * sizeof(ArtLink));
+			source->linkCount = 0;
+			if (!source->links)
+				return;
+		}
+
+		DropLinks(source, from);
+
+		ArtLink* link;
+		if (source->linkCount < LINK_MAX)
+			link = &source->links[source->linkCount++];
+		else
+		{
+			link = &source->links[0];
+			for (DWORD i = 1; i < LINK_MAX; ++i)
+				if (source->links[i].lastUse < link->lastUse)
+					link = &source->links[i];
+		}
+
+		link->rect = *from;
+		link->frame = frame;
+		link->flipped = flipped;
+		link->placeW = place->right - place->left;
+		link->placeH = place->bottom - place->top;
+		link->cx = to->left - place->left;
+		link->cy = to->top - place->top;
+		link->lastUse = ++art.useClock;
+	}
+
+	BOOL ArtCopy(Record* target, DWORD dstId, const RECT* to, Record* source, DWORD srcId, const RECT* from, Expect* e, LONG x, LONG y, BOOL keyed, DWORD key)
 	{
 		e->used = TRUE;
 		while (art.head < art.count && art.expect[art.head].used)
@@ -1141,44 +1276,35 @@ namespace Twin
 			return FALSE;
 		}
 
-		if (!ImageReplace::ArtReady(image->frame))
-		{
-			++art.notReady;
+		if (!RecordArt(target, dstId, to, srcId, from, image->frame, image->flipped, &image->place, keyed, key, FALSE))
 			return FALSE;
-		}
 
-		Cmd* cmd = Emit(CmdArt);
-		if (!cmd)
-			return FALSE;
-		cmd->dst = dstId;
-		cmd->src = srcId;
-		cmd->rect = *to;
-		cmd->clip = *from;
-		cmd->place = image->place;
-		cmd->value = (DWORD)image->frame;
-		cmd->flags = (image->flipped ? 1 : 0) | (keyed ? 2 : 0);
-		cmd->extra = key;
-
-		++art.draws;
-		art.px += (to->right - to->left) * (to->bottom - to->top);
-		game.lastArtSource = srcId;
-		if (!art.firstTick)
-			art.firstTick = GetTickCount() | 1;
-		if (!art.checked)
-		{
-			art.checked = TRUE;
-			game.checkRequest = TRUE;
-		}
-
-		if (art.artLogs < ART_LOGS && art.frameLogs < LOGS_FRAME)
-		{
-			++art.artLogs;
-			++art.frameLogs;
-			DebugLog("twin art frame=%d src=%p sheet=%d,%d dst=%p %d,%d %dx%d canvas=%d,%d of %dx%d%s%s at frame %u", image->frame, game.twins[srcId].owner, from->left, from->top,
-				target->owner, to->left, to->top, to->right - to->left, to->bottom - to->top, to->left - image->place.left, to->top - image->place.top, placeW, placeH,
-				image->flipped ? " flipped" : "", keyed ? " keyed" : "", game.frameNo);
-		}
+		Remember(source, from, image->frame, image->flipped, &image->place, to);
 		return TRUE;
+	}
+
+	BOOL CachedArt(Record* target, DWORD dstId, const RECT* to, Record* source, DWORD srcId, const RECT* from, BOOL keyed, DWORD key)
+	{
+		if (!source->linkCount)
+			return FALSE;
+
+		ArtLink* link = NULL;
+		for (DWORD i = 0; i < source->linkCount && !link; ++i)
+			if (Contains(&source->links[i].rect, from))
+				link = &source->links[i];
+		if (!link)
+		{
+			++art.cacheMisses;
+			return FALSE;
+		}
+
+		++art.cacheHits;
+		link->lastUse = ++art.useClock;
+
+		LONG cx = link->cx + from->left - link->rect.left;
+		LONG cy = link->cy + from->top - link->rect.top;
+		RECT place = { to->left - cx, to->top - cy, to->left - cx + link->placeW, to->top - cy + link->placeH };
+		return RecordArt(target, dstId, to, srcId, from, link->frame, link->flipped, &place, keyed, key, TRUE);
 	}
 
 	VOID ExpireArt()
@@ -1249,6 +1375,8 @@ namespace Twin
 		twin->keyed = FALSE;
 		twin->key = 0;
 		twin->artCount = 0;
+		twin->links = NULL;
+		twin->linkCount = 0;
 		twin->mirror = (DWORD*)MemoryAlloc(width * height * sizeof(DWORD));
 		if (twin->mirror)
 			MemoryCopy(twin->mirror, twin->base, width * height * sizeof(DWORD));
@@ -1264,11 +1392,81 @@ namespace Twin
 		game.bytes += (LONGLONG)width * height * sizeof(DWORD) * game.scale * game.scale;
 		EmitCreate(twin, id);
 
-		if (game.logged < LOG_TWINS)
+		BOOL screenSized = width == *(LONG*)&config.mode->width && height == *(LONG*)&config.mode->height;
+		if (game.logged < LOG_TWINS || (screenSized && game.screenLogs < SCREEN_LOGS))
 		{
-			++game.logged;
-			DebugLog("twin create %u %dx%d buffer %08X data %08X", id, width, height, buffer, buffer->data);
+			if (game.logged < LOG_TWINS)
+				++game.logged;
+			else
+				++game.screenLogs;
+			DebugLog("twin create %u %dx%d buffer %08X data %08X at frame %u", id, width, height, buffer, buffer->data, game.frameNo);
 		}
+	}
+
+	VOID GroundArt(const VOID* data, LONG pitch, const RECT* rect, DWORD chunk)
+	{
+		if (!Active() || !data || !rect)
+			return;
+
+		Sync();
+
+		DWORD id;
+		Record* twin = FindAddress(data, &id);
+		if (!twin || pitch != twin->pitch)
+		{
+			++art.groundNoTwin;
+			if (art.groundLogs < GROUND_LOGS)
+			{
+				++art.groundLogs;
+				DebugLog("twin ground no twin data=%p pitch %d rect %d,%d %dx%d chunk %u%s", data, pitch, rect->left, rect->top, rect->right - rect->left, rect->bottom - rect->top, chunk,
+					twin ? " (pitch differs from its twin)" : "");
+			}
+			return;
+		}
+
+		LONG start = LONG(((const BYTE*)data - twin->base) / sizeof(DWORD));
+		RECT area = *rect;
+		OffsetRect(&area, start % twin->pitch, start / twin->pitch);
+		if (!Clip(twin, &area))
+			return;
+
+		Cover(twin, &area);
+		FlushRegion(twin, id, &area, TRUE);
+
+		LONG width = area.right - area.left;
+		LONG height = area.bottom - area.top;
+		const DWORD* real = (const DWORD*)twin->base + area.top * twin->pitch + area.left;
+		if (twin->mirror)
+		{
+			const DWORD* src = real;
+			DWORD* mirror = twin->mirror + area.top * twin->width + area.left;
+			for (LONG y = height; y; --y)
+			{
+				MemoryCopy(mirror, src, width * sizeof(DWORD));
+				src += twin->pitch;
+				mirror += twin->width;
+			}
+		}
+
+		DWORD offset;
+		DWORD* pixels = (DWORD*)Reserve(width * height * sizeof(DWORD), &offset);
+		Cmd* cmd = pixels ? Emit(CmdGround) : NULL;
+		if (!cmd)
+		{
+			MarkDirty(twin, area);
+			return;
+		}
+		Convert(twin, pixels, real, width, height);
+
+		cmd->dst = id;
+		cmd->src = offset;
+		cmd->rect = area;
+		cmd->value = chunk;
+
+		DropLinks(twin, &area);
+		CoverArt(twin, &area);
+		AddArt(twin, &area);
+		++art.groundArts;
 	}
 
 	VOID OnRelease(StateBuffer* buffer)
@@ -1332,12 +1530,14 @@ namespace Twin
 		Verify(source, srcId, &from, NULL, 0, FALSE);
 
 		Expect* e = art.count ? Match(x, y, srcRect->right - srcRect->left, srcRect->bottom - srcRect->top, srcRect->left, srcRect->top) : NULL;
-		if (e)
+		if (e || source->linkCount)
 		{
 			FlushRegion(target, dstId, &to, TRUE);
-			if (ArtCopy(target, dstId, &to, srcId, &from, e, x, y, keyed, key))
+			if (e ? ArtCopy(target, dstId, &to, source, srcId, &from, e, x, y, keyed, key) : CachedArt(target, dstId, &to, source, srcId, &from, keyed, key))
 			{
 				MirrorCopy(target, &to, source, &from, keyed, key);
+				if (target != source)
+					DropLinks(target, &to);
 				AddArt(target, &to);
 				return;
 			}
@@ -1354,6 +1554,7 @@ namespace Twin
 				OffsetRect(&arts[artCount++], ox, oy);
 		if (!keyed)
 			CoverArt(target, &to);
+		DropLinks(target, &to);
 		for (DWORD i = 0; i < artCount; ++i)
 			AddArt(target, &arts[i]);
 
@@ -1403,6 +1604,7 @@ namespace Twin
 		Cover(twin, &area);
 		FlushRegion(twin, id, &area, TRUE);
 		CoverArt(twin, &area);
+		DropLinks(twin, &area);
 
 		Cmd* cmd = Emit(CmdFill);
 		if (!cmd)
@@ -1556,18 +1758,25 @@ namespace Twin
 		DWORD artFallbacks = shared.artFallbacks;
 		DWORD artRejected = shared.artRejected;
 		DWORD artCalls = shared.artCalls;
-		shared.artDraws = shared.artFallbacks = shared.artRejected = shared.artCalls = 0;
+		DWORD groundReplayed = shared.groundReplayed;
+		DWORD groundFallbacks = shared.groundFallbacks;
+		shared.artDraws = shared.artFallbacks = shared.artRejected = shared.artCalls = shared.groundReplayed = shared.groundFallbacks = 0;
 		CheckResult check = shared.check;
-		DWORD showOpaque = shared.showOpaque, showBack = shared.showBack, showInvalid = shared.showInvalid, showOffCount = shared.showOff, showOther = shared.showOther;
-		shared.showOpaque = shared.showBack = shared.showInvalid = shared.showOff = shared.showOther = 0;
+		DWORD showOpaque = shared.showOpaque, showBack = shared.showBack, showInvalid = shared.showInvalid, showGone = shared.showGone, showOffCount = shared.showOff, showOther = shared.showOther;
+		shared.showOpaque = shared.showBack = shared.showInvalid = shared.showGone = shared.showOff = shared.showOther = 0;
 		Unlock();
 
 		DebugLog("twin art expected %u dup %u matched %u draws %u px %u notready %u rejected place %u aspect %u unmatched %u overflow %u | replayed %u calls %u fallbacks %u",
 			art.expected, art.duplicates, art.matched, art.draws, art.px, art.notReady, art.rejected, artRejected, art.unmatched, art.overflow, artReplayed, artCalls, artFallbacks);
 		art.expected = art.duplicates = art.matched = art.draws = art.px = art.notReady = art.rejected = art.unmatched = art.overflow = 0;
 
-		DebugLog("twin show shown %u (opaque %u, over background %u) hidden: 1x toggle %u, invalid %u, other %u",
-			showOpaque + showBack, showOpaque, showBack, showOffCount, showInvalid, showOther);
+		DebugLog("twin art cache hits %u misses %u cached draws %u | ground arts %u replayed %u fallbacks %u no twin %u",
+			art.cacheHits, art.cacheMisses, art.cachedDraws, art.groundArts, groundReplayed, groundFallbacks, art.groundNoTwin);
+		art.cacheHits = art.cacheMisses = art.cachedDraws = art.groundArts = art.groundNoTwin = 0;
+
+		DebugLog("twin show shown %u (opaque %u, over background %u) hidden: 1x toggle %u, invalid %u (no twin at present %u, twin gone %u), other %u",
+			showOpaque + showBack, showOpaque, showBack, showOffCount, showInvalid + showGone, showInvalid, showGone, showOther);
+		game.presentNoTwin = 0;
 
 		if (check.valid)
 			DebugLog("twin gpu check %ums ago twin %u bad %u of %u non-art tiles, px %u | art tiles %u (differ from 1x %u)", now - check.tick, check.twin, check.bad, check.tiles, check.px, check.art, check.artDiffer);
@@ -1639,6 +1848,15 @@ namespace Twin
 
 		DWORD id = TWIN_NONE;
 		Record* twin = Find(screen, &id);
+		if (!twin)
+		{
+			++game.presentNoTwin;
+			if (game.presentLogs < GROUND_LOGS)
+			{
+				++game.presentLogs;
+				DebugLog("twin present without twin buffer=%p data=%p at frame %u", screen, screen ? screen->data : NULL, game.frameNo);
+			}
+		}
 		if (twin)
 		{
 			RECT whole = { 0, 0, twin->width, twin->height };
@@ -2454,7 +2672,10 @@ namespace Twin
 		{
 			if (gl.checkData)
 				MemoryFree(gl.checkData);
+			if (gl.checkMask)
+				MemoryFree(gl.checkMask);
 			gl.checkData = (DWORD*)MemoryAlloc(width * height * sizeof(DWORD));
+			gl.checkMask = (BYTE*)MemoryAlloc(width * height);
 			if (gl.check)
 				GLDeleteTextures(1, &gl.check);
 			if (gl.checkFbo)
@@ -2463,7 +2684,7 @@ namespace Twin
 			gl.checkW = gl.checkH = 0;
 		}
 
-		if (!gl.checkData || !EnsureTarget(&gl.check, &gl.checkFbo, &gl.checkW, &gl.checkH, width, height))
+		if (!gl.checkData || !gl.checkMask || !EnsureTarget(&gl.check, &gl.checkFbo, &gl.checkW, &gl.checkH, width, height))
 			return;
 
 		Target(TARGET_CHECK, gl.checkFbo, width, height);
@@ -2487,30 +2708,51 @@ namespace Twin
 		DWORD badTiles = 0, badPixels = 0, artTiles = 0, artBad = 0;
 		const RECT* arts = (const RECT*)(list->arena + cmd->src);
 		DWORD artCount = cmd->extra;
+
+		// art regions often meet inside a tile, so classify per pixel against their union instead of per tile against single rects
+		MemoryZero(gl.checkMask, width * height);
+		for (DWORD k = 0; k < artCount; ++k)
+		{
+			RECT r = arts[k];
+			r.left = max(r.left, 0L);
+			r.top = max(r.top, 0L);
+			r.right = min(r.right, width);
+			r.bottom = min(r.bottom, height);
+			for (LONG y = r.top; y < r.bottom; ++y)
+				if (r.right > r.left)
+					MemorySet(gl.checkMask + y * width + r.left, 1, r.right - r.left);
+		}
+
 		for (LONG ty = 0; ty < tilesY; ++ty)
 		{
 			for (LONG tx = 0; tx < tilesX; ++tx)
 			{
-				DWORD count = 0;
+				DWORD count = 0, artCountPx = 0, artDiffer = 0;
 				LONG x0 = tx * TILE, y0 = ty * TILE;
 				LONG x1 = min(x0 + TILE, width), y1 = min(y0 + TILE, height);
 				for (LONG y = y0; y < y1; ++y)
 				{
 					const DWORD* a = ref + y * width;
 					const DWORD* b = gl.checkData + y * width;
+					const BYTE* m = gl.checkMask + y * width;
 					for (LONG x = x0; x < x1; ++x)
-						if ((a[x] ^ b[x]) & 0x00FFFFFF)
+					{
+						BOOL differ = ((a[x] ^ b[x]) & 0x00FFFFFF) != 0;
+						if (m[x])
+						{
+							++artCountPx;
+							if (differ)
+								++artDiffer;
+						}
+						else if (differ)
 							++count;
+					}
 				}
 
-				BOOL inArt = FALSE;
-				RECT tile = { x0, y0, x1, y1 };
-				for (DWORD k = 0; k < artCount && !inArt; ++k)
-					inArt = Contains(&arts[k], &tile);
-				if (inArt)
+				if (artCountPx == DWORD((x1 - x0) * (y1 - y0)))
 				{
 					++artTiles;
-					if (count)
+					if (artDiffer)
 						++artBad;
 					continue;
 				}
@@ -2553,6 +2795,47 @@ namespace Twin
 		shared.check.art = artTiles;
 		shared.check.artDiffer = artBad;
 		Unlock();
+	}
+
+	VOID ReplayGround(const Cmd* cmd, const List* list)
+	{
+		if (!Valid(cmd->dst))
+			return;
+
+		Gpu* gpu = &gl.twins[cmd->dst];
+		LONG scale = gpu->scale;
+		LONG width = cmd->rect.right - cmd->rect.left;
+		LONG height = cmd->rect.bottom - cmd->rect.top;
+
+		TargetTwin(cmd->dst);
+		GLViewport(cmd->rect.left * scale, cmd->rect.top * scale, width * scale, height * scale);
+		GLEnable(GL_SCISSOR_TEST);
+		glScissor(cmd->rect.left * scale, cmd->rect.top * scale, width * scale, height * scale);
+
+		BOOL drawn = ImageReplace::DrawGround(cmd->value, width, height);
+
+		gl.target = TWIN_NONE;
+		gl.program = 0;
+		GLUseProgram(0);
+		GLBindVertexArray(gl.vao);
+		GLBindBuffer(GL_ARRAY_BUFFER, gl.vbo);
+		GLDisable(GL_BLEND);
+		GLDisable(GL_SCISSOR_TEST);
+		GLActiveTexture(GL_TEXTURE0);
+
+		if (drawn)
+		{
+			++gl.groundReplayed;
+			return;
+		}
+
+		++gl.groundFallbacks;
+		GLBindTexture(GL_TEXTURE_2D, gl.stage);
+		GLPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+		LONG shelf[3] = { 0, 0, 0 };
+		StageUpload(cmd->dst, &cmd->rect, (const DWORD*)(list->arena + cmd->src), shelf);
+		GLPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+		FlushPlaced();
 	}
 
 	VOID WritePng(const CHAR* name, const BYTE* pixels, LONG width, LONG height, LONG stride)
@@ -2702,6 +2985,10 @@ namespace Twin
 				i = ReplayArt(list, i);
 				continue;
 
+			case CmdGround:
+				ReplayGround(cmd, list);
+				break;
+
 			case CmdCopy:
 				i = ReplayCopies(list->cmds, list->count, i);
 				continue;
@@ -2737,9 +3024,15 @@ namespace Twin
 
 	BOOL Show(const Rect* rect, LONG offset, DWORD frameWidth, DWORD frameHeight, GLuint drawFbo)
 	{
-		if (!gl.shown.valid || !Valid(gl.shown.id))
+		if (!gl.shown.valid || gl.shown.id >= TWIN_MAX)
 		{
 			++gl.showInvalid;
+			return FALSE;
+		}
+
+		if (!Valid(gl.shown.id))
+		{
+			++gl.showGone;
 			return FALSE;
 		}
 
@@ -2838,6 +3131,9 @@ namespace Twin
 		GLGetIntegerv(GL_BLEND_SRC, &blendSrc);
 		GLGetIntegerv(GL_BLEND_DST, &blendDst);
 		GLboolean scissorTest = glIsEnabled(GL_SCISSOR_TEST);
+		GLint texture2;
+		GLActiveTexture(GL_TEXTURE2);
+		GLGetIntegerv(GL_TEXTURE_BINDING_2D, &texture2);
 		GLActiveTexture(GL_TEXTURE1);
 		GLGetIntegerv(GL_TEXTURE_BINDING_2D, &texture1);
 		GLActiveTexture(GL_TEXTURE0);
@@ -2856,7 +3152,8 @@ namespace Twin
 			gl.artFallbacks = 0;
 			gl.artRejected = 0;
 			gl.artCalls = 0;
-			gl.showOpaque = gl.showBack = gl.showInvalid = gl.showOther = 0;
+			gl.showOpaque = gl.showBack = gl.showInvalid = gl.showGone = gl.showOther = 0;
+			gl.groundReplayed = gl.groundFallbacks = 0;
 			gl.readFbo = readFbo;
 			GLUseProgram(0);
 			GLBindVertexArray(gl.vao);
@@ -2895,6 +3192,8 @@ namespace Twin
 			GLEnable(GL_SCISSOR_TEST);
 		else
 			GLDisable(GL_SCISSOR_TEST);
+		GLActiveTexture(GL_TEXTURE2);
+		GLBindTexture(GL_TEXTURE_2D, texture2);
 		GLActiveTexture(GL_TEXTURE1);
 		GLBindTexture(GL_TEXTURE_2D, texture1);
 		GLActiveTexture(GL_TEXTURE0);
@@ -2915,9 +3214,13 @@ namespace Twin
 		shared.showOpaque += gl.showOpaque;
 		shared.showBack += gl.showBack;
 		shared.showInvalid += gl.showInvalid;
+		shared.showGone += gl.showGone;
+		shared.groundReplayed += gl.groundReplayed;
+		shared.groundFallbacks += gl.groundFallbacks;
 		shared.showOther += gl.showOther;
 		shared.showOff += showOff;
-		gl.showOpaque = gl.showBack = gl.showInvalid = gl.showOther = 0;
+		gl.showOpaque = gl.showBack = gl.showInvalid = gl.showGone = gl.showOther = 0;
+		gl.groundReplayed = gl.groundFallbacks = 0;
 
 		if (replayed)
 		{
@@ -2965,6 +3268,8 @@ namespace Twin
 
 		if (gl.checkData)
 			MemoryFree(gl.checkData);
+		if (gl.checkMask)
+			MemoryFree(gl.checkMask);
 		if (gl.verts)
 			MemoryFree(gl.verts);
 		if (gl.placed)

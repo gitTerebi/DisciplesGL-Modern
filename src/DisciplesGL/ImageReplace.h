@@ -25,4 +25,6 @@ namespace ImageReplace
 	VOID ReleaseGL();
 	BOOL ArtTexture(LONG frame, GLuint* id, LONG* width, LONG* height);
 	BOOL ArtReady(LONG frame);
+	BOOL GroundReady(DWORD chunk);
+	BOOL DrawGround(DWORD chunk, LONG width, LONG height);
 }

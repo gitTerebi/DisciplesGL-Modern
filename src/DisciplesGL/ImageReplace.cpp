@@ -318,8 +318,9 @@ namespace ImageReplace
 
 	#define GROUND_OBJECTS 4096
 	#define GROUND_CHUNKS 64
+	#define GROUND_ID_SHIFT 6
 	#define GROUND_OPS 512
-	#define GROUND_SCALE 2
+	#define GROUND_LOG 16
 	#define GROUND_UNRESOLVED -2
 
 	struct GroundObject {
@@ -345,6 +346,8 @@ namespace ImageReplace
 		DWORD pubColor, pubVersion, pubCount;
 		LONG w, h;
 		GroundOp pub[GROUND_OPS];
+		LONG pitch;
+		BOOL pending;
 	};
 
 	struct GroundMask {
@@ -358,22 +361,16 @@ namespace ImageReplace
 		DWORD chunkCount;
 		GroundMask masks[2];
 		DWORD builds, ops, unnamed, unmasked, rejected;
+		DWORD published, arts, notReady, retried, mismatched;
+		LONG retryFrame;
 	} ground;
 
 	DWORD sub_TileFactory, sub_BorderFactory, sub_MaskData, sub_RaceCode, sub_GroundUpdate;
 
-	struct GroundTarget {
-		GLuint texture;
-		DWORD version;
-		LONG w, h;
-	};
-
 	struct {
 		GLuint program;
-		GLuint fbo;
 		GLint mode, two;
 		GroundOp ops[GROUND_OPS];
-		GroundTarget chunks[GROUND_CHUNKS];
 	} groundGL;
 
 	BOOL TakeFlag()
@@ -1931,6 +1928,7 @@ namespace ImageReplace
 		c->valid = valid;
 		c->color = color;
 		c->count = 0;
+		c->pending = FALSE;
 		++c->version;
 	}
 
@@ -2095,6 +2093,82 @@ namespace ImageReplace
 		++c->version;
 	}
 
+	BOOL GroundReady(DWORD chunk)
+	{
+		chunk &= GROUND_CHUNKS - 1;
+		if (!game.initialized || chunk >= ground.chunkCount)
+			return FALSE;
+
+		GroundChunk* c = &ground.chunks[chunk];
+		if (!c->data || !c->valid || !c->count)
+			return FALSE;
+
+		BOOL ready = TRUE;
+		for (DWORD i = 0; i < c->count; ++i)
+		{
+			const GroundOp* op = &c->ops[i];
+			LONG list[] = { op->tex, op->mask1, op->mask2 };
+			for (DWORD k = 0; k < 3; ++k)
+				if (list[k] >= 0)
+				{
+					Tex* tex = &pack.texs[list[k]];
+					Touch(tex, list[k]);
+					ready = ready && tex->state == TexUploaded;
+				}
+		}
+		return ready;
+	}
+
+	VOID SendGround(GroundChunk* c)
+	{
+		EnterCriticalSection(&game.cs);
+		MemoryCopy(c->pub, c->ops, c->count * sizeof(GroundOp));
+		c->pubCount = c->count;
+		c->pubColor = c->color;
+		c->pubVersion = c->version;
+		c->w = c->cw;
+		c->h = c->ch;
+		LeaveCriticalSection(&game.cs);
+		++ground.published;
+		c->pending = FALSE;
+
+		DWORD index = c - ground.chunks;
+		if (ground.arts < GROUND_LOG)
+			DebugLog("image ground art chunk=%d data=%08X size=%dx%d ops=%d", index, c->data, c->cw, c->ch, c->count);
+		++ground.arts;
+
+		// the id carries the published version so a replay that runs after a newer publish keeps 1x instead of drawing the newer ops
+		RECT rect = { 0, 0, c->cw, c->ch };
+		Twin::GroundArt(c->data, c->pitch, &rect, (c->pubVersion << GROUND_ID_SHIFT) | index);
+	}
+
+	VOID RetryGround()
+	{
+		ground.retryFrame = game.frameNo;
+		for (DWORD i = 0; i < ground.chunkCount; ++i)
+		{
+			GroundChunk* c = &ground.chunks[i];
+			if (!c->pending)
+				continue;
+			if (!c->data || !c->valid || !c->count)
+			{
+				c->pending = FALSE;
+				continue;
+			}
+			if (!GroundReady(i))
+				continue;
+			if (HashRegion((const DWORD*)c->data, c->pitch, 0, 0, c->cw, c->ch) != c->hash)
+			{
+				c->pending = FALSE;
+				++ground.mismatched;
+				continue;
+			}
+
+			++ground.retried;
+			SendGround(c);
+		}
+	}
+
 	VOID OnRelease(OpenDrawSurface* surface)
 	{
 		if (game.initialized && ground.chunkCount && surface->indexBuffer && surface->indexBuffer->data)
@@ -2246,7 +2320,6 @@ namespace ImageReplace
 		GLUniform1i(GLGetUniformLocation(groundGL.program, "tex03"), 2);
 		groundGL.mode = GLGetUniformLocation(groundGL.program, "mode");
 		groundGL.two = GLGetUniformLocation(groundGL.program, "two");
-		GLGenFramebuffers(1, &groundGL.fbo);
 
 		GLGenVertexArrays(1, &gl.vao);
 		GLBindVertexArray(gl.vao);
@@ -2261,7 +2334,7 @@ namespace ImageReplace
 		GLEnableVertexAttribArray(3);
 		GLVertexAttribPointer(3, 1, GL_FLOAT, GL_FALSE, sizeof(Vertex), (GLvoid*)24);
 
-		gl.ready = gl.vao && gl.vbo && groundGL.program && groundGL.fbo;
+		gl.ready = gl.vao && gl.vbo && groundGL.program;
 		gl.failed = !gl.ready;
 		if (gl.failed)
 			DebugLog("image GL setup failed, 4K sprites off");
@@ -2432,68 +2505,55 @@ namespace ImageReplace
 		return TRUE;
 	}
 
-	VOID RenderGround(DWORD index)
+	BOOL DrawGround(DWORD chunk, LONG width, LONG height)
 	{
-		GroundChunk* c = &ground.chunks[index];
-		GroundTarget* g = &groundGL.chunks[index];
-		DWORD count = 0, color = 0;
-		LONG w = 0, h = 0;
+		if (!game.initialized || width <= 0 || height <= 0 || !InitGL())
+			return FALSE;
 
+		GroundChunk* c = &ground.chunks[chunk & (GROUND_CHUNKS - 1)];
 		EnterCriticalSection(&game.cs);
-		BOOL stale = !g->texture || g->version != c->pubVersion;
-		if (stale)
-		{
-			count = c->pubCount;
-			MemoryCopy(groundGL.ops, c->pub, count * sizeof(GroundOp));
-			color = c->pubColor;
-			w = c->w;
-			h = c->h;
-			g->version = c->pubVersion;
-		}
+		DWORD count = (c->pubVersion << GROUND_ID_SHIFT) == (chunk & ~(DWORD)(GROUND_CHUNKS - 1)) ? c->pubCount : 0;
+		DWORD color = c->pubColor;
+		MemoryCopy(groundGL.ops, c->pub, count * sizeof(GroundOp));
 		LeaveCriticalSection(&game.cs);
-		if (!stale || w <= 0 || h <= 0)
-			return;
-
-		GLActiveTexture(GL_TEXTURE0);
-		if (!g->texture || g->w != w || g->h != h)
-		{
-			if (!g->texture)
-				GLGenTextures(1, &g->texture);
-			GLBindTexture(GL_TEXTURE_2D, g->texture);
-			GLTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-			GLTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-			GLTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-			GLTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-			GLTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, w * GROUND_SCALE, h * GROUND_SCALE, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
-			g->w = w;
-			g->h = h;
-		}
-
-		GLBindFramebuffer(GL_DRAW_FRAMEBUFFER, groundGL.fbo);
-		GLFramebufferTexture2D(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, g->texture, 0);
-		GLViewport(0, 0, w * GROUND_SCALE, h * GROUND_SCALE);
-		FLOAT alpha = (FLOAT)(color >> 24) / 255.0f;
-		GLClearColor((FLOAT)(color & 0xFF) / 255.0f * alpha, (FLOAT)((color >> 8) & 0xFF) / 255.0f * alpha, (FLOAT)((color >> 16) & 0xFF) / 255.0f * alpha, alpha);
-		GLClear(GL_COLOR_BUFFER_BIT);
-
-		GLUseProgram(groundGL.program);
-		GLBindVertexArray(gl.vao);
-		GLBindBuffer(GL_ARRAY_BUFFER, gl.vbo);
-		glEnable(GL_SCISSOR_TEST);
+		if (!count)
+			return FALSE;
 
 		for (DWORD i = 0; i < count; ++i)
 		{
 			const GroundOp* op = &groundGL.ops[i];
 			LONG list[] = { op->tex, op->mask1, op->mask2 };
-			BOOL ready = TRUE;
 			for (DWORD k = 0; k < 3; ++k)
-				ready = ready && (list[k] < 0 || pack.texs[list[k]].state == TexUploaded);
-			if (!ready)
-			{
-				g->version = 0;
-				continue;
-			}
+				if (list[k] >= 0 && pack.texs[list[k]].state != TexUploaded)
+					return FALSE;
+		}
 
+		GLint view[4], box[4];
+		GLfloat clear[4];
+		GLGetIntegerv(GL_VIEWPORT, view);
+		GLGetIntegerv(GL_SCISSOR_BOX, box);
+		glGetFloatv(GL_COLOR_CLEAR_VALUE, clear);
+
+		FLOAT alpha = (FLOAT)(color >> 24) / 255.0f;
+		GLClearColor((FLOAT)(color & 0xFF) / 255.0f * alpha, (FLOAT)((color >> 8) & 0xFF) / 255.0f * alpha, (FLOAT)((color >> 16) & 0xFF) / 255.0f * alpha, alpha);
+		GLClear(GL_COLOR_BUFFER_BIT);
+		GLClearColor(clear[0], clear[1], clear[2], clear[3]);
+
+		GLUseProgram(groundGL.program);
+		GLBindVertexArray(gl.vao);
+		GLBindBuffer(GL_ARRAY_BUFFER, gl.vbo);
+
+		for (DWORD i = 0; i < count; ++i)
+		{
+			const GroundOp* op = &groundGL.ops[i];
+			LONG l = max(view[0] + op->left * view[2] / width, box[0]);
+			LONG t = max(view[1] + op->top * view[3] / height, box[1]);
+			LONG r = min(view[0] + op->right * view[2] / width, box[0] + box[2]);
+			LONG b = min(view[1] + op->bottom * view[3] / height, box[1] + box[3]);
+			if (l >= r || t >= b)
+				continue;
+
+			LONG list[] = { op->tex, op->mask1, op->mask2 };
 			for (DWORD k = 0; k < 3; ++k)
 			{
 				GLActiveTexture(GL_TEXTURE0 + k);
@@ -2511,7 +2571,7 @@ namespace ImageReplace
 				GLEnable(GL_BLEND);
 				GLBlendFunc(op->kind == GroundBlend ? GL_DST_ALPHA : GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
 			}
-			glScissor(op->left * GROUND_SCALE, op->top * GROUND_SCALE, (op->right - op->left) * GROUND_SCALE, (op->bottom - op->top) * GROUND_SCALE);
+			glScissor(l, t, r - l, b - t);
 
 			FLOAT fw = 1.0f, fh = 1.0f;
 			if (op->tex >= 0 && op->kind != GroundBorder)
@@ -2519,8 +2579,8 @@ namespace ImageReplace
 				fw = (FLOAT)pack.frames[op->tex].w;
 				fh = (FLOAT)pack.frames[op->tex].h;
 			}
-			FLOAT nx0 = (FLOAT)op->dx / w * 2.0f - 1.0f, nx1 = (FLOAT)(op->dx + 64) / w * 2.0f - 1.0f;
-			FLOAT ny0 = (FLOAT)op->dy / h * 2.0f - 1.0f, ny1 = (FLOAT)(op->dy + 32) / h * 2.0f - 1.0f;
+			FLOAT nx0 = (FLOAT)op->dx / width * 2.0f - 1.0f, nx1 = (FLOAT)(op->dx + 64) / width * 2.0f - 1.0f;
+			FLOAT ny0 = (FLOAT)op->dy / height * 2.0f - 1.0f, ny1 = (FLOAT)(op->dy + 32) / height * 2.0f - 1.0f;
 			FLOAT u0 = op->sx / fw, u1 = (op->sx + 64) / fw;
 			FLOAT v0 = op->sy / fh, v1 = (op->sy + 32) / fh;
 
@@ -2536,8 +2596,10 @@ namespace ImageReplace
 			GLDrawArrays(GL_TRIANGLES, 0, 6);
 		}
 
-		glDisable(GL_SCISSOR_TEST);
+		glScissor(box[0], box[1], box[2], box[3]);
 		GLDisable(GL_BLEND);
+		GLActiveTexture(GL_TEXTURE0);
+		return TRUE;
 	}
 
 	VOID Draw(const Rect* /*rect*/, LONG /*offset*/, DWORD /*frameWidth*/, DWORD /*frameHeight*/)
@@ -2574,15 +2636,9 @@ namespace ImageReplace
 
 			GLDeleteBuffers(1, &gl.vbo);
 			GLDeleteVertexArrays(1, &gl.vao);
-
-			for (DWORD i = 0; i < GROUND_CHUNKS; ++i)
-				if (groundGL.chunks[i].texture)
-					GLDeleteTextures(1, &groundGL.chunks[i].texture);
-			GLDeleteFramebuffers(1, &groundGL.fbo);
 			GLDeleteProgram(groundGL.program);
 		}
-		MemoryZero(groundGL.chunks, sizeof(groundGL.chunks));
-		groundGL.program = groundGL.fbo = 0;
+		groundGL.program = 0;
 
 		gl.ready = FALSE;
 		gl.failed = FALSE;
@@ -2881,7 +2937,20 @@ namespace ImageReplace
 
 		GroundChunk* c = obj && ground.chunkCount ? FindChunk(obj->data) : NULL;
 		if (c && c->valid)
-			c->hash = HashRegion((const DWORD*)obj->data, obj->pitch >> 1, 0, 0, c->cw, c->ch);
+		{
+			c->pitch = obj->pitch >> 1;
+			c->hash = HashRegion((const DWORD*)obj->data, c->pitch, 0, 0, c->cw, c->ch);
+			if (Enabled() && c->count)
+			{
+				if (GroundReady(c - ground.chunks))
+					SendGround(c);
+				else
+				{
+					c->pending = TRUE;
+					++ground.notReady;
+				}
+			}
+		}
 	}
 
 	const VOID* __fastcall MaskData(const VOID* thisObj, DWORD /*edx*/)
@@ -2981,6 +3050,7 @@ namespace ImageReplace
 
 		DebugLog("image stats builds=%d draws=%d unknown=%d ground chunks=%d builds=%d ops=%d unnamed=%d unmasked=%d rejected=%d",
 			stats.builds, stats.draws, stats.unknown, ground.chunkCount, ground.builds, ground.ops, ground.unnamed, ground.unmasked, ground.rejected);
+		DebugLog("image ground published=%d arts=%d notReady=%d retried=%d mismatched=%d", ground.published, ground.arts, ground.notReady, ground.retried, ground.mismatched);
 		DebugLog("image store drawLinks=%d faceLinks=%d faceLoads=%d faceCopies=%d faceMisses=%d faceRejects=%d takes=%d takeLinks=%d takeFrames=%d",
 			storeStats.drawLinks, storeStats.faceLinks, storeStats.faceLoads, storeStats.faceCopies, storeStats.faceMisses, storeStats.faceRejects, storeStats.takes, storeStats.takeLinks, storeStats.takeFrames);
 		DebugLog("image art begins=%d notReady=%d noFrame=%d zoomed=%d truncated=%d", art.begins, art.notReady, art.noFrame, art.zoomed, art.truncated);
@@ -2992,6 +3062,8 @@ namespace ImageReplace
 	VOID __fastcall Render(VOID* thisObj, DWORD /*edx*/, VOID* renderer, const POINT* start, const POINT* offset, const POINT* size, const RECT* area)
 	{
 		++stats.draws;
+		if (ground.retryFrame != game.frameNo && Enabled())
+			RetryGround();
 
 		DWORD rec = GetRecord(thisObj);
 		Entry* entry = rec ? Find(rec, FALSE) : NULL;
