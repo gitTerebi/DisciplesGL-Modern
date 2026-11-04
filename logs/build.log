@@ -1,16 +1,16 @@
 MSBuild version 17.14.40+3e7442088 for .NET Framework
 
-  OpenDrawSurface.cpp
+  Twin.cpp
 LINK : warning LNK4108: /ALIGN specified without /DRIVER; image may not run [C:\Users\somtam\repo\DisciplesGL-Modern\src\DisciplesGL\DisciplesGL.vcxproj]
      Creating library C:\Users\somtam\repo\DisciplesGL-Modern\build\C4dll-R.lib and object C:\Users\somtam\repo\DisciplesGL-Modern\build\C4dll-R.exp
 C4dll-R.exp : warning LNK4070: /OUT:C4DLL.dll directive in .EXP differs from output filename 'C:\Users\somtam\repo\DisciplesGL-Modern\build\C4dll-R.dll'; ignoring directive [C:\Users\somtam\repo\DisciplesGL-Modern\src\DisciplesGL\DisciplesGL.vcxproj]
   Generating code
-  2 of 2341 functions (<0.1%) were compiled, the rest were copied from previous compilation.
-    0 functions were new in current compilation
-    54 functions had inline decision re-evaluated but remain unchanged
+  111 of 2342 functions ( 4.7%) were compiled, the rest were copied from previous compilation.
+    5 functions were new in current compilation
+    32 functions had inline decision re-evaluated but remain unchanged
   Finished generating code
 C4dll-R.exp : warning LNK4070: /OUT:C4DLL.dll directive in .EXP differs from output filename 'C:\Users\somtam\repo\DisciplesGL-Modern\build\C4dll-R.dll'; ignoring directive [C:\Users\somtam\repo\DisciplesGL-Modern\src\DisciplesGL\DisciplesGL.vcxproj]
   DisciplesGL.vcxproj -> C:\Users\somtam\repo\DisciplesGL-Modern\build\C4dll-R.dll
   CRC32
-    old 0x00471CC6
-    new 0x0046FAB9
+    old 0x004771E2
+    new 0x00474FD5
