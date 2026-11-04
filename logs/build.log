@@ -1,5 +1,6 @@
 MSBuild version 17.14.40+3e7442088 for .NET Framework
 
+  Allocation.cpp
   BattleSpeed.cpp
   Config.cpp
   DllMain.cpp
@@ -8,6 +9,11 @@ MSBuild version 17.14.40+3e7442088 for .NET Framework
   GDIRenderer.cpp
   GLib.cpp
   Hooks.cpp
+  IDraw7.cpp
+  IDrawClipper.cpp
+  IDrawPalette.cpp
+  IDrawSurface7.cpp
+  IDrawUnknown.cpp
   ImageReplace.cpp
   Main.cpp
   MapOrder.cpp
@@ -21,11 +27,16 @@ MSBuild version 17.14.40+3e7442088 for .NET Framework
   OpenDrawPalette.cpp
   OpenDrawSurface.cpp
   PixelBuffer.cpp
+  PngLib.cpp
   Renderer.cpp
+  SaveList.cpp
   ShaderGroup.cpp
+  ShaderProgram.cpp
+  ShopFrame.cpp
   StateBuffer.cpp
   StdAfx.cpp
   TextReplace.cpp
+  TurnArt.cpp
   TurnIncome.cpp
   TurnOrder.cpp
   TurnSummary.cpp
@@ -36,12 +47,12 @@ LINK : warning LNK4108: /ALIGN specified without /DRIVER; image may not run [C:\
      Creating library C:\Users\somtam\repo\DisciplesGL-Modern\build\C4dll-R.lib and object C:\Users\somtam\repo\DisciplesGL-Modern\build\C4dll-R.exp
 C4dll-R.exp : warning LNK4070: /OUT:C4DLL.dll directive in .EXP differs from output filename 'C:\Users\somtam\repo\DisciplesGL-Modern\build\C4dll-R.dll'; ignoring directive [C:\Users\somtam\repo\DisciplesGL-Modern\src\DisciplesGL\DisciplesGL.vcxproj]
   Generating code
-  205 of 2484 functions ( 8.3%) were compiled, the rest were copied from previous compilation.
-    19 functions were new in current compilation
-    63 functions had inline decision re-evaluated but remain unchanged
+  203 of 2523 functions ( 8.0%) were compiled, the rest were copied from previous compilation.
+    42 functions were new in current compilation
+    93 functions had inline decision re-evaluated but remain unchanged
   Finished generating code
 C4dll-R.exp : warning LNK4070: /OUT:C4DLL.dll directive in .EXP differs from output filename 'C:\Users\somtam\repo\DisciplesGL-Modern\build\C4dll-R.dll'; ignoring directive [C:\Users\somtam\repo\DisciplesGL-Modern\src\DisciplesGL\DisciplesGL.vcxproj]
   DisciplesGL.vcxproj -> C:\Users\somtam\repo\DisciplesGL-Modern\build\C4dll-R.dll
   CRC32
-    old 0x0048518A
-    new 0x00482F7D
+    old 0x0048F0E4
+    new 0x0048CED7
