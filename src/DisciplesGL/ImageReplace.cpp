@@ -218,6 +218,8 @@ namespace ImageReplace
 		DWORD dims[4];
 		const BYTE* data;
 		LONG left, top;
+		const BYTE* first;
+		LONG pitch;
 		Entry* entry;
 		ArchiveFile* file;
 		DWORD nextFree;
@@ -234,6 +236,21 @@ namespace ImageReplace
 		DWORD free;
 		DWORD count;
 	} stores;
+
+	#define RANGE_SCAN 256
+
+	struct Range {
+		const BYTE* start;
+		const BYTE* end;
+		DWORD store;
+	};
+
+	struct {
+		Range list[STORE_SIZE * 3 / 4];
+		DWORD count;
+		DWORD span;
+		DWORD hits, misses, learnStore, learnFace, dropped;
+	} memory;
 
 	struct {
 		CHAR name[NAME_LENGTH];
@@ -1676,8 +1693,136 @@ namespace ImageReplace
 			stores.byData[slot] = (DWORD)(s - stores.list) + 1;
 	}
 
+	LONG StoreFrame(StoreImage* s)
+	{
+		if (!s->entry)
+			return -1;
+
+		LONG index = Resolve(s->entry, (DWORD)s->dims);
+		if (index < 0 || pack.frames[index].w != (LONG)s->dims[0] || pack.frames[index].h != (LONG)s->dims[1])
+			return -1;
+		return index;
+	}
+
+	BOOL RangeHolds(const StoreImage* s, const BYTE* ptr)
+	{
+		if (ptr < s->first)
+			return FALSE;
+		DWORD offset = (DWORD)(ptr - s->first) / sizeof(DWORD);
+		return (LONG)(offset % s->pitch) < (LONG)s->dims[0] && (LONG)(offset / s->pitch) < (LONG)s->dims[1];
+	}
+
+	BOOL RangesOverlap(const StoreImage* a, const StoreImage* b)
+	{
+		if (a->pitch != b->pitch)
+			return TRUE;
+
+		LONG d = (LONG)(b->first - a->first) / (LONG)sizeof(DWORD);
+		LONG p = a->pitch;
+		LONG y = d >= 0 ? d / p : -((p - 1 - d) / p);
+		LONG x = d - y * p;
+		return x < (LONG)a->dims[0] && x + (LONG)b->dims[0] > 0 && y < (LONG)a->dims[1] && y + (LONG)b->dims[1] > 0;
+	}
+
+	DWORD RangeLower(const BYTE* ptr)
+	{
+		DWORD lo = 0, hi = memory.count;
+		while (lo < hi)
+		{
+			DWORD mid = (lo + hi) / 2;
+			if (memory.list[mid].start < ptr)
+				lo = mid + 1;
+			else
+				hi = mid;
+		}
+		return lo;
+	}
+
+	VOID DropRange(StoreImage* s)
+	{
+		if (!s->first)
+			return;
+
+		DWORD value = s - stores.list;
+		for (DWORD i = RangeLower(s->first); i < memory.count && memory.list[i].start == s->first; ++i)
+			if (memory.list[i].store == value)
+			{
+				memmove(&memory.list[i], &memory.list[i + 1], (memory.count - i - 1) * sizeof(Range));
+				--memory.count;
+				break;
+			}
+
+		Twin::OnMemoryFree(s->first);
+		s->first = NULL;
+		++memory.dropped;
+	}
+
+	VOID AddRange(StoreImage* s, const BYTE* first, LONG pitch, DWORD* learned)
+	{
+		DropRange(s);
+		LONG w = (LONG)s->dims[0], h = (LONG)s->dims[1];
+		if (!config.bpp32Hooked || !first || w <= 0 || h <= 0 || pitch < w || memory.count >= sizeof(memory.list) / sizeof(*memory.list))
+			return;
+
+		s->first = first;
+		s->pitch = pitch;
+		const BYTE* end = first + ((h - 1) * pitch + w) * sizeof(DWORD);
+		for (DWORD i = 0; i < memory.count;)
+		{
+			const Range* r = &memory.list[i];
+			StoreImage* other = &stores.list[r->store];
+			if (r->start < end && r->end > first && RangesOverlap(s, other))
+				DropRange(other);
+			else
+				++i;
+		}
+
+		DWORD at = RangeLower(first);
+		memmove(&memory.list[at + 1], &memory.list[at], (memory.count - at) * sizeof(Range));
+		memory.list[at].start = first;
+		memory.list[at].end = end;
+		memory.list[at].store = s - stores.list;
+		++memory.count;
+		memory.span = max(memory.span, (DWORD)(end - first));
+
+		LONG frame = StoreFrame(s);
+		if (frame >= 0)
+		{
+			RECT rect = { 0, 0, w, h };
+			Twin::LearnArt(first, pitch, &rect, frame, &rect, w, h, FALSE);
+			++*learned;
+		}
+	}
+
+	BOOL FindMemory(const VOID* ptr, const VOID** base, LONG* pitch, LONG* width, LONG* height, LONG* frame, BOOL* flipped)
+	{
+		const BYTE* at = (const BYTE*)ptr;
+		DWORD i = memory.count ? RangeLower(at + 1) : 0;
+		for (DWORD n = 0; i && n < RANGE_SCAN; --i, ++n)
+		{
+			const Range* r = &memory.list[i - 1];
+			if ((DWORD)(at - r->start) >= memory.span)
+				break;
+			StoreImage* s = &stores.list[r->store];
+			if (at < r->end && RangeHolds(s, at))
+			{
+				++memory.hits;
+				*base = s->first;
+				*pitch = s->pitch;
+				*width = (LONG)s->dims[0];
+				*height = (LONG)s->dims[1];
+				*frame = StoreFrame(s);
+				*flipped = FALSE;
+				return TRUE;
+			}
+		}
+		++memory.misses;
+		return FALSE;
+	}
+
 	VOID ResetStore(StoreImage* s, ArchiveFile* file)
 	{
+		DropRange(s);
 		UnlinkStoreData(s);
 		s->printed = FALSE;
 		Release(s->entry);
@@ -1991,6 +2136,8 @@ namespace ImageReplace
 		}
 		if (!linked)
 			NoteFace(s, src, srcPitch, width, bottom);
+		if (s && !linked && s->first == (const BYTE*)src && s->pitch != srcPitch && srcPitch > 0)
+			AddRange(s, s->first, srcPitch, &memory.learnFace);
 
 		if (top || !plain)
 			return;
@@ -2824,6 +2971,7 @@ namespace ImageReplace
 		s->top = rect[1];
 		s->dims[0] = rect[2] - rect[0];
 		s->dims[1] = rect[3] - rect[1];
+		LONG pitch = *(const LONG*)(desc + 0x18) >> 1;
 
 		if (!s->entry)
 		{
@@ -2842,6 +2990,8 @@ namespace ImageReplace
 				s->entry = entry;
 			}
 		}
+
+		AddRange(s, data + (s->top * pitch + s->left) * sizeof(DWORD), pitch, &memory.learnStore);
 	}
 
 	// Discipl2.exe v2.02b 0x005A5F21: the face cache reads Faces.ff itself, so faces never pass through the image store; their odd key cannot match a game image pointer
@@ -2873,6 +3023,11 @@ namespace ImageReplace
 		s->left = s->top = 0;
 		s->dims[0] = size[0];
 		s->dims[1] = size[1];
+
+		LONG pitch = *(const LONG*)(buffer + 0x18) >> 1;
+		if (pitch < (LONG)size[0] || pitch > (LONG)size[0] * 8)
+			pitch = size[0];
+		AddRange(s, data, pitch, &memory.learnFace);
 		return ok;
 	}
 
@@ -3040,6 +3195,7 @@ namespace ImageReplace
 		DebugLog("image stats builds=%d draws=%d unknown=%d ground chunks=%d builds=%d ops=%d unnamed=%d unmasked=%d rejected=%d",
 			stats.builds, stats.draws, stats.unknown, ground.chunkCount, ground.builds, ground.ops, ground.unnamed, ground.unmasked, ground.rejected);
 		DebugLog("image ground published=%d arts=%d notReady=%d retried=%d mismatched=%d", ground.published, ground.arts, ground.notReady, ground.retried, ground.mismatched);
+		DebugLog("image memory ranges=%d hits=%d misses=%d dropped=%d learn store=%d face=%d", memory.count, memory.hits, memory.misses, memory.dropped, memory.learnStore, memory.learnFace);
 		DebugLog("image store drawLinks=%d faceLinks=%d faceLoads=%d faceCopies=%d faceMisses=%d faceRejects=%d takes=%d takeLinks=%d takeFrames=%d",
 			storeStats.drawLinks, storeStats.faceLinks, storeStats.faceLoads, storeStats.faceCopies, storeStats.faceMisses, storeStats.faceRejects, storeStats.takes, storeStats.takeLinks, storeStats.takeFrames);
 		DebugLog("image art begins=%d notReady=%d noFrame=%d zoomed=%d truncated=%d", art.begins, art.notReady, art.noFrame, art.zoomed, art.truncated);
