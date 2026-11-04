@@ -34,6 +34,31 @@ namespace Twin
 	VOID LearnArt(const VOID* data, LONG pitch, const RECT* rect, LONG frame, const RECT* canvas, LONG canvasWidth, LONG canvasHeight, BOOL flipped);
 	VOID LogStats();
 
+	// seed mode: 4K art is written into a twin where the game decodes 1x art whose name is known; every later operation is a plain replay
+	BOOL SeedMode();
+	enum SeedKind { SeedStore, SeedSheet, SeedFace, SeedKinds };
+	// rects are local to the decoded image; place is where the whole pack frame lands in those coordinates
+	struct SeedPiece {
+		RECT to;
+		RECT place;
+		LONG frame;
+	};
+	struct SeedConflict {
+		RECT to;
+		RECT placeA;
+		RECT placeB;
+		LONG frameA;
+		LONG frameB;
+	};
+	struct SeedSheetStats {
+		DWORD frames;
+		DWORD unmapped;
+		DWORD additive;
+		DWORD outside;
+		DWORD shared;
+	};
+	VOID SeedArt(const VOID* first, LONG pitch, LONG width, LONG height, SeedKind kind, const CHAR* name, const SeedPiece* pieces, DWORD count, const SeedConflict* conflicts, DWORD conflictCount, const SeedSheetStats* sheet);
+
 	// render thread
 	BOOL Prepare();
 	BOOL Draw(const Rect* rect, LONG offset, DWORD frameWidth, DWORD frameHeight);

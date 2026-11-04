@@ -199,10 +199,35 @@ namespace ImageReplace
 		CHAR name[NAME_LENGTH];
 	};
 
+	struct SheetItem {
+		DWORD id;
+		DWORD offset;
+		DWORD next;
+	};
+
+	struct SheetLink {
+		DWORD hash;
+		const CHAR* frame;
+		const CHAR* anim;
+		DWORD index;
+	};
+
 	struct Archive {
 		CHAR path[MAX_PATH];
 		ArchiveFile* files;
 		DWORD mask;
+		BOOL sheetsLoaded;
+		BYTE* indexData;
+		BYTE* images;
+		DWORD imagesSize;
+		BYTE* animsData;
+		SheetItem* items;
+		DWORD itemCount;
+		DWORD* itemHeads;
+		DWORD itemMask;
+		SheetLink* links;
+		DWORD linkMask;
+		DWORD linkCount;
 	};
 
 	struct {
@@ -220,6 +245,7 @@ namespace ImageReplace
 		LONG left, top;
 		const BYTE* first;
 		LONG pitch;
+		LONG rangeW, rangeH;
 		Entry* entry;
 		ArchiveFile* file;
 		DWORD nextFree;
@@ -1456,25 +1482,20 @@ namespace ImageReplace
 		pack.thread = CreateThread(NULL, 0, Worker, NULL, 0, NULL);
 	}
 
-	LONG Resolve(Entry* entry, DWORD rec)
+	LONG PackFrameFor(const CHAR* owner, DWORD index, LONG canvasW, LONG canvasH, Origin* origin, const PackAnim** found)
 	{
-		if (entry->resolved)
-			return entry->packFrame;
-		if (!pack.ready)
-			return -1;
-
-		entry->resolved = TRUE;
-		entry->packFrame = -1;
-
+		*found = NULL;
 		CHAR name[NAME_LENGTH + 8];
-		StrCopy(name, entry->owner);
+		DWORD length = min((DWORD)StrLength(owner), (DWORD)NAME_LENGTH - 1);
+		MemoryCopy(name, owner, length);
+		name[length] = '\0';
 		Upper(name);
 		const PackAnim* anim = FindAnim(name);
 		if (!anim)
 		{
-			DWORD length = StrLength(name);
-			if (length > 4 && !StrCompare(name + length - 4, ".PNG"))
-				name[length - 4] = '\0';
+			DWORD size = StrLength(name);
+			if (size > 4 && !StrCompare(name + size - 4, ".PNG"))
+				name[size - 4] = '\0';
 			else
 				StrCat(name, ".PNG");
 			anim = FindAnim(name);
@@ -1487,18 +1508,31 @@ namespace ImageReplace
 		if (!anim)
 			return -1;
 
-		entry->anim = anim;
-		entry->origin = anim->origin;
-		const DWORD* dims = (const DWORD*)rec;
+		*found = anim;
+		*origin = anim->origin;
 		const PackFrame* frame = &pack.frames[anim->first];
 		if (anim->origin == OriginSprite)
-		{
-			if ((LONG)dims[0] == frame->w && (LONG)dims[1] == frame->h)
-				entry->packFrame = anim->first;
-		}
-		else if (entry->frame < anim->count)
-			entry->packFrame = anim->first + entry->frame;
+			return canvasW == frame->w && canvasH == frame->h ? (LONG)anim->first : -1;
+		return index < anim->count ? (LONG)(anim->first + index) : -1;
+	}
 
+	LONG Resolve(Entry* entry, DWORD rec)
+	{
+		if (entry->resolved)
+			return entry->packFrame;
+		if (!pack.ready)
+			return -1;
+
+		entry->resolved = TRUE;
+		const DWORD* dims = (const DWORD*)rec;
+		Origin origin = OriginCanvas;
+		const PackAnim* anim;
+		entry->packFrame = PackFrameFor(entry->owner, entry->frame, (LONG)dims[0], (LONG)dims[1], &origin, &anim);
+		if (anim)
+		{
+			entry->anim = anim;
+			entry->origin = origin;
+		}
 		return entry->packFrame;
 	}
 
@@ -1534,6 +1568,25 @@ namespace ImageReplace
 		}
 		tex->lastUse = game.frameNo;
 		return TRUE;
+	}
+
+	// -1 never, 0 requested, 1 decoded (the twins upload it at replay), 2 on the GPU
+	LONG ArtState(LONG frame)
+	{
+		if (!pack.ready || frame < 0 || (DWORD)frame >= pack.frameCount)
+			return -1;
+
+		Tex* tex = &pack.texs[frame];
+		LONG state = tex->state;
+		if (state == TexUploaded)
+		{
+			tex->lastUse = game.frameNo;
+			return 2;
+		}
+		if (state == TexFailed)
+			return -1;
+		Touch(tex, frame);
+		return tex->state == TexDecoded ? 1 : 0;
 	}
 
 	LONG Queue(Entry* entry, DWORD rec)
@@ -1774,8 +1827,18 @@ namespace ImageReplace
 		++memory.dropped;
 	}
 
+	BOOL SeedStore(StoreImage* s, const BYTE* first, LONG pitch);
+
 	VOID AddRange(StoreImage* s, const BYTE* first, LONG pitch, DWORD* learned)
 	{
+		// the same image decoded again over its own range keeps the range and its twin; only the seed is redone
+		if (Twin::SeedMode() && s->first && s->first == first && s->pitch == pitch && s->rangeW == (LONG)s->dims[0] && s->rangeH == (LONG)s->dims[1])
+		{
+			if (Twin::Active() && SeedStore(s, first, pitch))
+				++*learned;
+			return;
+		}
+
 		DropRange(s);
 		LONG w = (LONG)s->dims[0], h = (LONG)s->dims[1];
 		if (!config.bpp32Hooked || !first || w <= 0 || h <= 0 || pitch < w || pitch > RANGE_PITCH || memory.count >= sizeof(memory.list) / sizeof(*memory.list))
@@ -1790,6 +1853,8 @@ namespace ImageReplace
 
 		s->first = first;
 		s->pitch = pitch;
+		s->rangeW = w;
+		s->rangeH = h;
 		for (DWORD i = 0; i < memory.count;)
 		{
 			const Range* r = &memory.list[i];
@@ -1808,6 +1873,13 @@ namespace ImageReplace
 		++memory.count;
 		memory.span = max(memory.span, (DWORD)(end - first));
 
+		if (Twin::SeedMode())
+		{
+			if (Twin::Active() && SeedStore(s, first, pitch))
+				++*learned;
+			return;
+		}
+
 		LONG frame = StoreFrame(s);
 		if (frame >= 0)
 		{
@@ -1817,9 +1889,8 @@ namespace ImageReplace
 		}
 	}
 
-	BOOL FindMemory(const VOID* ptr, const VOID** base, LONG* pitch, LONG* width, LONG* height, LONG* frame, BOOL* flipped)
+	StoreImage* RangeStore(const BYTE* at)
 	{
-		const BYTE* at = (const BYTE*)ptr;
 		DWORD i = memory.count ? RangeLower(at + 1) : 0;
 		for (DWORD n = 0; i && n < RANGE_SCAN; --i, ++n)
 		{
@@ -1828,19 +1899,36 @@ namespace ImageReplace
 				break;
 			StoreImage* s = &stores.list[r->store];
 			if (at < r->end && RangeHolds(s, at))
-			{
-				++memory.hits;
-				*base = s->first;
-				*pitch = s->pitch;
-				*width = (LONG)s->dims[0];
-				*height = (LONG)s->dims[1];
-				*frame = StoreFrame(s);
-				*flipped = FALSE;
-				return TRUE;
-			}
+				return s;
 		}
-		++memory.misses;
-		return FALSE;
+		return NULL;
+	}
+
+	BOOL FindMemory(const VOID* ptr, const VOID** base, LONG* pitch, LONG* width, LONG* height, LONG* frame, BOOL* flipped)
+	{
+		StoreImage* s = RangeStore((const BYTE*)ptr);
+		if (!s)
+		{
+			++memory.misses;
+			return FALSE;
+		}
+
+		++memory.hits;
+		*base = s->first;
+		*pitch = s->pitch;
+		*width = (LONG)s->dims[0];
+		*height = (LONG)s->dims[1];
+		*frame = StoreFrame(s);
+		*flipped = FALSE;
+		return TRUE;
+	}
+
+	const CHAR* MemoryName(const VOID* ptr)
+	{
+		StoreImage* s = game.initialized && ptr ? RangeStore((const BYTE*)ptr) : NULL;
+		if (!s)
+			return NULL;
+		return s->entry && s->entry->name[0] ? s->entry->name : s->file ? s->file->name : "?";
 	}
 
 	VOID ResetStore(StoreImage* s, ArchiveFile* file)
@@ -1871,7 +1959,7 @@ namespace ImageReplace
 	}
 
 	struct {
-		DWORD drawLinks, faceLinks, faceLoads, faceCopies, faceMisses, faceRejects, takes, takeLinks, takeFrames;
+		DWORD draws, drawLinks, faceLinks, faceLoads, faceCopies, faceMisses, faceRejects, takes, takeLinks, takeFrames;
 	} storeStats;
 
 	#define FACE_LINKS 1024
@@ -2691,6 +2779,29 @@ namespace ImageReplace
 		return TRUE;
 	}
 
+	// render thread, inside the twin replay: a seed recorded once its art was decoded needs it on the GPU now
+	BOOL ArtUpload(LONG frame)
+	{
+		if (!pack.ready || frame < 0 || (DWORD)frame >= pack.frameCount || !InitGL())
+			return FALSE;
+
+		Tex* tex = &pack.texs[frame];
+		if (tex->state == TexUploaded)
+			return TRUE;
+
+		BOOL take = FALSE;
+		EnterCriticalSection(&requests.cs);
+		if (tex->state == TexDecoded && tex->list == ListDecoded)
+		{
+			ChainRemove(&pack.decodedList, frame);
+			take = TRUE;
+		}
+		LeaveCriticalSection(&requests.cs);
+		if (take)
+			Upload(frame);
+		return take;
+	}
+
 	BOOL DrawGround(const VOID* ops, DWORD bytes, LONG width, LONG height)
 	{
 		const GroundBlob* blob = (const GroundBlob*)ops;
@@ -2985,6 +3096,390 @@ namespace ImageReplace
 		return NULL;
 	}
 
+	#define SHEET_RECORD_LIMIT (64 * 1024 * 1024)
+	#define SHEET_BLOCKS 32
+	#define SHEET_LOGS 32
+
+	struct {
+		DWORD archives, logs;
+	} sheets;
+
+	DWORD HashUpper(const CHAR* text)
+	{
+		DWORD hash = 2166136261u;
+		for (; *text; ++text)
+		{
+			BYTE c = (BYTE)*text;
+			if (c >= 'a' && c <= 'z')
+				c -= 32;
+			hash = (hash ^ c) * 16777619u;
+		}
+		return hash ? hash : 1;
+	}
+
+	Archive* FileArchive(const ArchiveFile* file)
+	{
+		for (DWORD i = 0; i < archives.count; ++i)
+		{
+			Archive* a = &archives.list[i];
+			if (a->files && file >= a->files && file <= a->files + a->mask)
+				return a;
+		}
+		return NULL;
+	}
+
+	const CHAR* TextAt(const BYTE* p, const BYTE* end, const BYTE** next)
+	{
+		const BYTE* zero = p < end ? (const BYTE*)MemoryChar(p, '\0', end - p) : NULL;
+		if (!zero)
+			return NULL;
+		*next = zero + 1;
+		return (const CHAR*)p;
+	}
+
+	// -INDEX.OPT maps each frame name to the sheet file and its block in -IMAGES.OPT; -ANIMS.OPT lists each animation's frames in order (Gallean ImagesExtractor)
+	VOID LoadSheets(Archive* a)
+	{
+		a->sheetsLoaded = TRUE;
+		if (!a->files)
+			return;
+
+		const CHAR* names[3] = { "-INDEX.OPT", "-IMAGES.OPT", "-ANIMS.OPT" };
+		DWORD ids[3] = { 0, 0, 0 };
+		for (DWORD i = 0; i <= a->mask; ++i)
+			for (DWORD k = 0; k < 3; ++k)
+				if (a->files[i].id && !StrCompareInsensitive(a->files[i].name, names[k]))
+					ids[k] = a->files[i].id;
+		if (!ids[0] || !ids[1])
+			return;
+
+		HANDLE handle = CreateFile(a->path, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+		if (handle == INVALID_HANDLE_VALUE)
+			return;
+
+		BYTE* data[3] = { NULL, NULL, NULL };
+		DWORD sizes[3] = { 0, 0, 0 };
+		DWORD want = ids[2] ? 3 : 2, found = 0;
+		BYTE head[28];
+		for (LONGLONG offset = 28; found < want && ReadAt(handle, offset, head, sizeof(head)) && !MemoryCompare(head, "MQRC", 4); offset += sizeof(head) + *(const DWORD*)(head + 16))
+		{
+			DWORD id = *(const DWORD*)(head + 8);
+			DWORD size = *(const DWORD*)(head + 12);
+			for (DWORD k = 0; k < 3; ++k)
+				if (ids[k] && id == ids[k] && !data[k] && size && size <= SHEET_RECORD_LIMIT)
+				{
+					data[k] = (BYTE*)MemoryAlloc(size + 1);
+					if (data[k] && ReadAt(handle, offset + sizeof(head), data[k], size))
+					{
+						data[k][size] = 0;
+						sizes[k] = size;
+						++found;
+					}
+					else if (data[k])
+					{
+						MemoryFree(data[k]);
+						data[k] = NULL;
+					}
+				}
+		}
+		CloseHandle(handle);
+
+		if (!data[0] || !data[1] || sizes[0] < 4)
+		{
+			for (DWORD k = 0; k < 3; ++k)
+				if (data[k])
+					MemoryFree(data[k]);
+			DebugLog("image sheets %s: index or images record not read", a->path);
+			return;
+		}
+
+		a->indexData = data[0];
+		a->images = data[1];
+		a->imagesSize = sizes[1];
+		a->animsData = data[2];
+
+		const BYTE* p = data[0] + 4;
+		const BYTE* end = data[0] + sizes[0];
+		DWORD count = *(const DWORD*)data[0];
+		count = min(count, sizes[0] / 13);
+		a->items = (SheetItem*)MemoryAlloc(max(count, 1u) * sizeof(SheetItem));
+		const CHAR** animNames = (const CHAR**)MemoryAlloc(max(count, 1u) * sizeof(CHAR*));
+		DWORD animCount = 0;
+		a->itemMask = 15;
+		while (a->itemMask + 1 < count * 2)
+			a->itemMask = a->itemMask * 2 + 1;
+		a->itemHeads = (DWORD*)MemoryAlloc((a->itemMask + 1) * sizeof(DWORD));
+		if (!a->items || !animNames || !a->itemHeads)
+		{
+			if (animNames)
+				MemoryFree(animNames);
+			return;
+		}
+		MemoryZero(a->itemHeads, (a->itemMask + 1) * sizeof(DWORD));
+
+		for (DWORD i = 0; i < count && p + 4 <= end; ++i)
+		{
+			DWORD id = *(const DWORD*)p;
+			const BYTE* next;
+			const CHAR* name = TextAt(p + 4, end, &next);
+			if (!name || next + 8 > end)
+				break;
+			p = next + 8;
+			if (id == 0xFFFFFFFF)
+			{
+				animNames[animCount++] = name;
+				continue;
+			}
+
+			SheetItem* item = &a->items[a->itemCount];
+			item->id = id;
+			item->offset = *(const DWORD*)next;
+			DWORD* head = &a->itemHeads[(id * 2654435761u) & a->itemMask];
+			item->next = *head;
+			*head = ++a->itemCount;
+		}
+
+		if (a->animsData && animCount)
+		{
+			DWORD frames = 0;
+			p = a->animsData;
+			end = a->animsData + sizes[2];
+			for (DWORD k = 0; k < animCount && p + 4 <= end; ++k)
+			{
+				DWORD n = *(const DWORD*)p;
+				p += 4;
+				for (DWORD j = 0; j < n && p < end; ++j)
+				{
+					const BYTE* next;
+					if (!TextAt(p, end, &next))
+						break;
+					p = next;
+					++frames;
+				}
+			}
+
+			a->linkMask = 15;
+			while (a->linkMask + 1 < frames * 2)
+				a->linkMask = a->linkMask * 2 + 1;
+			a->links = (SheetLink*)MemoryAlloc((a->linkMask + 1) * sizeof(SheetLink));
+			if (a->links)
+			{
+				MemoryZero(a->links, (a->linkMask + 1) * sizeof(SheetLink));
+				p = a->animsData;
+				for (DWORD k = 0; k < animCount && p + 4 <= end; ++k)
+				{
+					DWORD n = *(const DWORD*)p;
+					p += 4;
+					for (DWORD j = 0; j < n && p < end; ++j)
+					{
+						const BYTE* next;
+						const CHAR* frame = TextAt(p, end, &next);
+						if (!frame)
+							break;
+						p = next;
+
+						DWORD hash = HashUpper(frame);
+						DWORD slot = hash & a->linkMask;
+						while (a->links[slot].hash && (a->links[slot].hash != hash || StrCompareInsensitive(a->links[slot].frame, frame)))
+							slot = (slot + 1) & a->linkMask;
+						if (a->links[slot].hash)
+							continue;
+						a->links[slot].hash = hash;
+						a->links[slot].frame = frame;
+						a->links[slot].anim = animNames[k];
+						a->links[slot].index = j;
+						++a->linkCount;
+					}
+				}
+			}
+		}
+		MemoryFree(animNames);
+
+		++sheets.archives;
+		DebugLog("image sheets %s: %u frame entries, %u animations (%u frames), images %u bytes", a->path, a->itemCount, animCount, a->linkCount, a->imagesSize);
+	}
+
+	const SheetLink* FindLink(const Archive* a, const CHAR* frame)
+	{
+		if (!a->links)
+			return NULL;
+		DWORD hash = HashUpper(frame);
+		for (DWORD slot = hash & a->linkMask; a->links[slot].hash; slot = (slot + 1) & a->linkMask)
+			if (a->links[slot].hash == hash && !StrCompareInsensitive(a->links[slot].frame, frame))
+				return &a->links[slot];
+		return NULL;
+	}
+
+	// the packer's frames sit in deduped blocks of one sheet; each block gets the 4K of the first frame that uses it, at that frame's canvas position
+	BOOL SeedSheet(StoreImage* s, Archive* a, const BYTE* first, LONG pitch, BOOL* seeded)
+	{
+		*seeded = FALSE;
+		DWORD offsets[SHEET_BLOCKS];
+		DWORD blocks = 0;
+		DWORD fileId = s->file->id;
+		for (DWORD value = a->itemHeads[(fileId * 2654435761u) & a->itemMask]; value; value = a->items[value - 1].next)
+		{
+			const SheetItem* item = &a->items[value - 1];
+			if (item->id != fileId)
+				continue;
+			BOOL seen = FALSE;
+			for (DWORD k = 0; k < blocks && !seen; ++k)
+				seen = offsets[k] == item->offset;
+			if (!seen && blocks < SHEET_BLOCKS)
+				offsets[blocks++] = item->offset;
+		}
+		if (!blocks)
+			return FALSE;
+
+		static Twin::SeedPiece pieces[4096];
+		static Twin::SeedConflict conflicts[256];
+		static BYTE shared[4096];
+		const DWORD pieceLimit = sizeof(pieces) / sizeof(*pieces), conflictLimit = sizeof(conflicts) / sizeof(*conflicts);
+		DWORD count = 0, conflictCount = 0;
+		Twin::SeedSheetStats stats;
+		MemoryZero(&stats, sizeof(stats));
+		LONG w = (LONG)s->dims[0], h = (LONG)s->dims[1];
+		const BYTE* end = a->images + a->imagesSize;
+
+		for (DWORD b = 0; b < blocks; ++b)
+		{
+			if (offsets[b] > a->imagesSize || a->imagesSize - offsets[b] < 1 + 2 + 4 + 4 + 1024 + 4)
+				continue;
+			const BYTE* p = a->images + offsets[b] + 1 + 2 + 4 + 4 + 1024;
+			DWORD frames = *(const DWORD*)p;
+			p += 4;
+			for (DWORD f = 0; f < frames; ++f)
+			{
+				const BYTE* next;
+				const CHAR* name = TextAt(p, end, &next);
+				if (!name || next + 12 > end)
+					break;
+				DWORD parts = *(const DWORD*)next;
+				LONG cw = *(const LONG*)(next + 4), ch = *(const LONG*)(next + 8);
+				p = next + 12;
+				if (parts > (DWORD)(end - p) / 24)
+					break;
+				const LONG* part = (const LONG*)p;
+				p += parts * 24;
+				++stats.frames;
+
+				const SheetLink* link = FindLink(a, name);
+				Origin origin = OriginCanvas;
+				const PackAnim* anim;
+				LONG frame = PackFrameFor(link ? link->anim : name, link ? link->index : 0, cw, ch, &origin, &anim);
+				if (frame < 0)
+				{
+					++stats.unmapped;
+					continue;
+				}
+				const PackFrame* pf = &pack.frames[frame];
+				if (pf->additive)
+				{
+					++stats.additive;
+					continue;
+				}
+
+				LONG ox = pf->ox, oy = pf->oy;
+				if (origin == OriginCentre)
+				{
+					ox += cw / 2;
+					oy += ch / 2;
+				}
+				else if (origin == OriginSprite)
+					ox = oy = 0;
+
+				for (DWORD i = 0; i < parts; ++i, part += 6)
+				{
+					LONG cx = part[0], cy = part[1], sx = part[2], sy = part[3], pw = part[4], ph = part[5];
+					if (pw <= 0 || ph <= 0)
+						continue;
+					if (sx < 0 || sy < 0 || sx + pw > w || sy + ph > h)
+					{
+						++stats.outside;
+						continue;
+					}
+
+					RECT to = { sx, sy, sx + pw, sy + ph };
+					RECT place = { sx - cx + ox, sy - cy + oy, sx - cx + ox + pf->w, sy - cy + oy + pf->h };
+					DWORD k = 0;
+					while (k < count && !EqualRect(&pieces[k].to, &to))
+						++k;
+					if (k < count)
+					{
+						if (pieces[k].frame == frame)
+							continue;
+						if (!shared[k])
+						{
+							shared[k] = TRUE;
+							++stats.shared;
+						}
+						if (conflictCount < conflictLimit)
+						{
+							Twin::SeedConflict* c = &conflicts[conflictCount++];
+							c->to = to;
+							c->placeA = pieces[k].place;
+							c->placeB = place;
+							c->frameA = pieces[k].frame;
+							c->frameB = frame;
+						}
+						continue;
+					}
+					if (count >= pieceLimit)
+						continue;
+					pieces[count].to = to;
+					pieces[count].place = place;
+					pieces[count].frame = frame;
+					shared[count++] = FALSE;
+				}
+			}
+		}
+
+		const CHAR* label = s->file->name;
+		if (sheets.logs < SHEET_LOGS)
+		{
+			++sheets.logs;
+			DebugLog("image seed sheet %s file %u %dx%d: blocks %u frames %u (unmapped %u, additive %u) pieces %u shared blocks %u conflicts %u parts outside %u", label, fileId, w, h,
+				blocks, stats.frames, stats.unmapped, stats.additive, count, stats.shared, conflictCount, stats.outside);
+		}
+		Twin::SeedArt(first, pitch, w, h, Twin::SeedSheet, label, count ? pieces : NULL, count, conflicts, conflictCount, &stats);
+		*seeded = count != 0;
+		return TRUE;
+	}
+
+	VOID LogSeedSources()
+	{
+		DebugLog("image seed sources since start: store draws %d (new memory %d) | faces loaded %d, face copies %d | ranges %d, decodes with art store %d face %d | archives with sheet tables %u | ground chunks %d builds %d published %d",
+			storeStats.draws, storeStats.drawLinks, storeStats.faceLoads, storeStats.faceCopies, memory.count, memory.learnStore, memory.learnFace, sheets.archives,
+			ground.chunkCount, ground.builds, ground.published);
+	}
+
+	BOOL SeedStore(StoreImage* s, const BYTE* first, LONG pitch)
+	{
+		Archive* a = s->file ? FileArchive(s->file) : NULL;
+		if (a && !a->sheetsLoaded)
+			LoadSheets(a);
+		BOOL seeded;
+		if (a && a->itemCount && pack.ready && SeedSheet(s, a, first, pitch, &seeded))
+			return seeded;
+
+		LONG w = (LONG)s->dims[0], h = (LONG)s->dims[1];
+		const CHAR* label = s->entry && s->entry->name[0] ? s->entry->name : s->file ? s->file->name : "?";
+		Twin::SeedKind kind = IsFace(s) ? Twin::SeedFace : Twin::SeedStore;
+		LONG frame = StoreFrame(s);
+		if (frame < 0 || pack.frames[frame].additive)
+		{
+			Twin::SeedArt(first, pitch, w, h, kind, label, NULL, 0, NULL, 0, NULL);
+			return FALSE;
+		}
+
+		Twin::SeedPiece piece;
+		SetRect(&piece.to, 0, 0, w, h);
+		piece.place = piece.to;
+		piece.frame = frame;
+		Twin::SeedArt(first, pitch, w, h, kind, label, &piece, 1, NULL, 0, NULL);
+		return TRUE;
+	}
+
 	VOID* __fastcall StoreLoad(VOID* thisObj, DWORD /*edx*/, DWORD id, DWORD flag, VOID* out)
 	{
 		VOID* image = ((VOID*(__thiscall*)(VOID*, DWORD, DWORD, VOID*))sub_StoreLoad)(thisObj, id, flag, out);
@@ -3009,7 +3504,9 @@ namespace ImageReplace
 
 		const LONG* rect = (const LONG*)(desc + 8);
 		const BYTE* data = *(const BYTE* const*)(desc + 4);
-		if (!data || s->data == data)
+		++storeStats.draws;
+		// a repeat decode into the same memory rewrote it, which dropped its seed; it is seeded again
+		if (!data || (s->data == data && !Twin::SeedMode()))
 			return;
 
 		++storeStats.drawLinks;
@@ -3245,8 +3742,8 @@ namespace ImageReplace
 			stats.builds, stats.draws, stats.unknown, ground.chunkCount, ground.builds, ground.ops, ground.unnamed, ground.unmasked, ground.rejected);
 		DebugLog("image ground published=%d arts=%d flushes=%d notReady=%d retried=%d mismatched=%d", ground.published, ground.arts, ground.flushes, ground.notReady, ground.retried, ground.mismatched);
 		DebugLog("image memory ranges=%d hits=%d misses=%d dropped=%d rejected=%d learn store=%d face=%d", memory.count, memory.hits, memory.misses, memory.dropped, memory.rejected, memory.learnStore, memory.learnFace);
-		DebugLog("image store drawLinks=%d faceLinks=%d faceLoads=%d faceCopies=%d faceMisses=%d faceRejects=%d takes=%d takeLinks=%d takeFrames=%d",
-			storeStats.drawLinks, storeStats.faceLinks, storeStats.faceLoads, storeStats.faceCopies, storeStats.faceMisses, storeStats.faceRejects, storeStats.takes, storeStats.takeLinks, storeStats.takeFrames);
+		DebugLog("image store draws=%d drawLinks=%d faceLinks=%d faceLoads=%d faceCopies=%d faceMisses=%d faceRejects=%d takes=%d takeLinks=%d takeFrames=%d",
+			storeStats.draws, storeStats.drawLinks, storeStats.faceLinks, storeStats.faceLoads, storeStats.faceCopies, storeStats.faceMisses, storeStats.faceRejects, storeStats.takes, storeStats.takeLinks, storeStats.takeFrames);
 		DebugLog("image art begins=%d notReady=%d noFrame=%d zoomed=%d truncated=%d", art.begins, art.notReady, art.noFrame, art.zoomed, art.truncated);
 		DebugLog("image tables entries=%d/%d full=%d stores=%d/%d archives=%d queue demand=%d prefetch=%d decoded=%d (%d MB) gpu=%d (%d MB of %d MB budget)",
 			entries.count, entries.used, stats.full, stores.count, stores.used, archives.count, demand, prefetch,
@@ -3266,9 +3763,14 @@ namespace ImageReplace
 		else
 		{
 			++entry->draws;
-			LONG index = Queue(entry, rec);
-			if (!art.depth && Enabled())
-				ExpectArt(entry, index, rec, start, offset, size, area);
+			if (Twin::SeedMode())
+				Resolve(entry, rec);
+			else
+			{
+				LONG index = Queue(entry, rec);
+				if (!art.depth && Enabled())
+					ExpectArt(entry, index, rec, start, offset, size, area);
+			}
 		}
 
 		++art.depth;

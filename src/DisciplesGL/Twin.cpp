@@ -62,6 +62,7 @@
 #define TWIN_NONE 0xFFFFFFFF
 #define TARGET_SCRATCH 0x10000
 #define TARGET_CHECK 0x10001
+#define TARGET_CONFLICT 0x10002
 #define DIRTY_MAX 32
 #define ARENA_LIMIT (64 * 1024 * 1024)
 #define TWIN_BUDGET (512LL * 1024 * 1024)
@@ -80,7 +81,7 @@
 #define REPAIR_LOGS 32
 #define REPAIR_LOGS_FRAME 4
 #define REPAIR_TOP 3
-#define ART_MAX 64
+#define ART_MAX 128
 #define MAX_EXPECT 32768
 #define MAX_IMAGES 8192
 #define EXPECT_BUCKETS 8192
@@ -125,12 +126,27 @@
 #define ART_CHECK_LOGS 32
 #define ART_CHECK_MAD 48
 #define ART_CHECK_MEAN 32
+#define SEED_RECORDS 1024
+#define SEED_PIECES 4096
+#define SEED_CONFLICTS 256
+#define SEED_LOGS 50
+#define SEED_PENDING_FRAMES 3600
+#define SEED_WAIT_DEFAULT 100
+#define SEED_CONFLICT_CELL 16
+#define SEED_CONFLICT_BATCH 16
+#define SEED_CONFLICT_DIFF 12
+#define SEED_CONFLICT_LOGS 24
+#define COVER_TOP 20
+#define SEED_POLL_BYTES (24 * 1024 * 1024)
+#define TAG_GROUND -3
+#define TAG_SEED_SHEET -4
+#define TAG_MERGED_4K -5
 
 typedef VOID(__stdcall* GLBLENDEQUATION)(GLenum mode);
 
 namespace Twin
 {
-	enum CmdType { CmdCreate, CmdDestroy, CmdCopy, CmdFill, CmdUpload, CmdPresent, CmdReset, CmdArt, CmdGround, CmdPixel, CmdTint, CmdMask, CmdLighter };
+	enum CmdType { CmdCreate, CmdDestroy, CmdCopy, CmdFill, CmdUpload, CmdPresent, CmdReset, CmdArt, CmdGround, CmdPixel, CmdTint, CmdMask, CmdLighter, CmdSeed };
 
 	enum PresentFlags { PresentMapZoom = 1, PresentBack = 2, PresentZoomed = 4, PresentCheck = 8, PresentShot = 16 };
 
@@ -283,6 +299,9 @@ namespace Twin
 		DWORD regionCount;
 		DWORD count;
 		RECT dirty[DIRTY_MAX];
+		DWORD seedCount;
+		DWORD coverPx;
+		DWORD coverCopies;
 	};
 
 	struct Vertex {
@@ -466,6 +485,77 @@ namespace Twin
 		DWORD artDraws;
 	} memory;
 
+	struct SeedRecord {
+		StateBuffer* owner;
+		DWORD id;
+		RECT rect;
+		DWORD kind;
+		CHAR name[32];
+		SeedPiece* pieces;
+		BYTE* done;
+		DWORD count;
+		SeedConflict* conflicts;
+		DWORD conflictCount;
+		BOOL conflictsSent;
+		BOOL pending;
+		BOOL deferred;
+		BOOL based;
+		DWORD frameNo;
+	};
+
+	enum SeedPieceState { PieceWaiting, PieceSent, PieceFailed, PieceReady };
+
+	struct SeedCounters {
+		DWORD events;
+		DWORD done;
+		DWORD deferred;
+		DWORD later;
+		DWORD dropped;
+		DWORD released;
+		DWORD expired;
+		DWORD overwritten;
+		DWORD noTwin;
+		DWORD noArt;
+		DWORD pieces;
+		DWORD emits;
+		LONGLONG px;
+	};
+
+	struct {
+		BOOL chosen;
+		BOOL seed;
+		DWORD waitMs;
+		SeedRecord list[SEED_RECORDS];
+		DWORD top;
+		DWORD active;
+		DWORD logs;
+		SeedCounters kinds[SeedKinds];
+		DWORD sheets;
+		DWORD sheetFrames;
+		DWORD sheetUnmapped;
+		DWORD sheetAdditive;
+		DWORD sheetOutside;
+		DWORD sheetPieces;
+		DWORD sheetShared;
+		DWORD conflicts;
+		DWORD conflictsUnchecked;
+		DWORD repends;
+		DWORD evicted;
+		DWORD skippedPieces;
+		LONGLONG waitUs;
+		DWORD waits;
+		DWORD waitMaxUs;
+		DWORD coverSeeded;
+		DWORD coverUnseeded;
+		DWORD coverUntwinned;
+		LONGLONG coverSeededPx;
+		LONGLONG coverUnseededPx;
+		LONGLONG coverUntwinnedPx;
+		DWORD maskedCopies;
+		DWORD maskedSkipped;
+		DWORD repeats;
+	} seeds;
+
 	struct {
 		const CHAR* name;
 		DWORD mode;
@@ -586,6 +676,13 @@ namespace Twin
 		DWORD showOff;
 		DWORD showOther;
 		CheckResult check;
+		DWORD seedReplayed;
+		DWORD seedPieces;
+		DWORD seedMissing;
+		DWORD conflictsChecked;
+		DWORD conflictsDiffer;
+		DWORD conflictsSkipped;
+		DWORD conflictBlocks;
 	} shared = { {}, 0, 0, TRUE, FALSE };
 
 	struct {
@@ -672,6 +769,19 @@ namespace Twin
 		DWORD showMaxUs;
 		DWORD readFbo;
 		LARGE_INTEGER frequency;
+		DWORD seedReplayed;
+		DWORD seedPieces;
+		DWORD seedMissing;
+		DWORD conflictsChecked;
+		DWORD conflictsDiffer;
+		DWORD conflictsSkipped;
+		DWORD conflictBlocks;
+		DWORD conflictLogs;
+		GLuint conflict;
+		GLuint conflictFbo;
+		LONG conflictW;
+		LONG conflictH;
+		DWORD* conflictData;
 		struct {
 			BOOL valid;
 			DWORD id;
@@ -860,8 +970,11 @@ namespace Twin
 		SetRect(&twin->dirty[0], 0, 0, twin->width, twin->height);
 	}
 
-	VOID Upload(Record* twin, DWORD id, const RECT* rect);
+	VOID Upload(Record* twin, DWORD id, const RECT* rect, BOOL seed = FALSE);
 	VOID DropRegions(Record* twin, const RECT* rect);
+	VOID SeedWrite(Record* twin, const RECT* rect);
+	VOID SeedDropTwin(Record* twin, DWORD id);
+	VOID SeedRepend(const CHAR* reason);
 
 	VOID Append(Record* twin, const RECT* rect)
 	{
@@ -884,6 +997,7 @@ namespace Twin
 		if (!Clip(twin, &rect))
 			return;
 
+		SeedWrite(twin, &rect);
 		if (twin->regionCount)
 			DropRegions(twin, &rect);
 
@@ -919,7 +1033,7 @@ namespace Twin
 				twin->dirty[i - 1] = twin->dirty[--twin->count];
 	}
 
-	VOID Convert(const Record* twin, DWORD* dst, const DWORD* src, LONG width, LONG height)
+	VOID Convert(const Record* twin, DWORD* dst, const DWORD* src, LONG width, LONG height, BOOL seed = FALSE)
 	{
 		BOOL keyed = twin->keyed;
 		DWORD key = twin->key;
@@ -929,13 +1043,19 @@ namespace Twin
 			{
 				DWORD pixel = src[x];
 				// key pixels become transparent black so premultiplied art blends over them; alpha 254 marks a 1x alpha byte other than 255, so keyed copies keep the CPU's exact DWORD compare
-				if (keyed && pixel == key)
+				// a seeded rect always takes the decode's key, so its alpha is the 1x key mask the 4K art is cut by
+				if ((keyed && pixel == key) || (seed && pixel == COLORKEY_CHECK))
 					*dst++ = 0;
 				else
 					*dst++ = pixel >= ALPHA_COMPONENT ? pixel : (pixel & 0x00FFFFFF) | 0xFE000000;
 			}
 			src += twin->pitch;
 		}
+	}
+
+	BOOL Is4K(const ArtTag* tag)
+	{
+		return tag->frame >= 0 || tag->frame == TAG_GROUND || tag->frame == TAG_SEED_SHEET || tag->frame == TAG_MERGED_4K;
 	}
 
 	BOOL SameTag(const ArtTag* a, const ArtTag* b)
@@ -973,11 +1093,26 @@ namespace Twin
 		}
 
 		RECT bound = *rect;
+		BOOL any4K = Is4K(tag);
 		for (DWORD i = 0; i < twin->artCount; ++i)
+		{
 			UnionRect(&bound, &bound, &twin->art[i]);
+			any4K = any4K || Is4K(&twin->artTag[i]);
+		}
 		twin->artCount = 1;
 		twin->art[0] = bound;
 		twin->artTag[0] = none;
+		if (any4K)
+			twin->artTag[0].frame = TAG_MERGED_4K;
+	}
+
+	BOOL Carries4K(const Record* twin, const RECT* rect)
+	{
+		RECT part;
+		for (DWORD i = 0; i < twin->artCount; ++i)
+			if (Is4K(&twin->artTag[i]) && IntersectRect(&part, &twin->art[i], rect))
+				return TRUE;
+		return FALSE;
 	}
 
 	VOID CoverArt(Record* twin, const RECT* rect)
@@ -999,7 +1134,7 @@ namespace Twin
 				twin->regions[i - 1] = twin->regions[--twin->regionCount];
 	}
 
-	VOID Upload(Record* twin, DWORD id, const RECT* rect)
+	VOID Upload(Record* twin, DWORD id, const RECT* rect, BOOL seed)
 	{
 		LONG width = rect->right - rect->left;
 		LONG height = rect->bottom - rect->top;
@@ -1010,7 +1145,7 @@ namespace Twin
 			return;
 
 		const DWORD* src = (const DWORD*)twin->base + rect->top * twin->pitch + rect->left;
-		Convert(twin, dst, src, width, height);
+		Convert(twin, dst, src, width, height, seed);
 
 		Cmd* cmd = Emit(CmdUpload);
 		if (!cmd)
@@ -1064,6 +1199,7 @@ namespace Twin
 
 	VOID Repair(Record* twin, DWORD id, const RECT* rect, DWORD tiles, BOOL present)
 	{
+		SeedWrite(twin, rect);
 		DropRegions(twin, rect);
 		Upload(twin, id, rect);
 
@@ -1313,6 +1449,7 @@ namespace Twin
 		for (DWORD i = 0; i < game.top; ++i)
 			if (game.twins[i].owner)
 				EmitCreate(&game.twins[i], i);
+		SeedRepend(reset ? "queue overflow" : "GL release");
 	}
 
 	VOID DrainSync()
@@ -1409,7 +1546,8 @@ namespace Twin
 		game.scale = scale;
 		game.lastArtSource = TWIN_NONE;
 
-		LoadIndex();
+		if (!SeedMode())
+			LoadIndex();
 
 		CHAR env[8];
 		DWORD length = GetEnvironmentVariable("DGL_TWIN_TILECHECK", env, sizeof(env));
@@ -1441,6 +1579,8 @@ namespace Twin
 			DebugLog("twin destroy %u %dx%d buffer %08X at frame %u", id, twin->width, twin->height, twin->owner, game.frameNo);
 		}
 
+		SeedDropTwin(twin, id);
+		twin->coverPx = twin->coverCopies = 0;
 		--game.alive;
 		game.bytes -= (LONGLONG)twin->width * twin->height * sizeof(DWORD) * game.scale * game.scale;
 		if (twin->memory)
@@ -1586,7 +1726,7 @@ namespace Twin
 
 	VOID ExpectArt(LONG frame, BOOL flipped, const RECT* place, const RECT* clip, const ArtPart* parts, DWORD count)
 	{
-		if (!Active() || !place || !parts || !count)
+		if (!Active() || !place || !parts || !count || SeedMode())
 			return;
 
 		Timed timed("ExpectArt");
@@ -2572,7 +2712,7 @@ namespace Twin
 	VOID LearnArt(const VOID* data, LONG pitch, const RECT* rect, LONG frame, const RECT* canvas, LONG canvasWidth, LONG canvasHeight, BOOL flipped)
 	{
 		Timed timed("LearnArt");
-		if (!Active())
+		if (!Active() || SeedMode())
 			return;
 
 		++index.learnCalls;
@@ -2766,7 +2906,8 @@ namespace Twin
 				flipped ? " flipped" : "", uploaded ? "recorded" : "MISSING");
 		}
 
-		if (frame >= 0)
+		// in seed mode the art is written only at a decode; memory met later may have been rewritten since
+		if (frame >= 0 && !SeedMode())
 		{
 			RECT canvas = whole;
 			LearnBlock(base, pitch, &whole, frame, &canvas, width, height, flipped);
@@ -2803,6 +2944,8 @@ namespace Twin
 		delete owner;
 	}
 
+	VOID DropOverlapping(const VOID* base, LONG pitch, LONG width, LONG height);
+
 	VOID OnMemory(const VOID* base, LONG pitch, LONG width, LONG height)
 	{
 		Timed timed("OnMemory");
@@ -2822,7 +2965,20 @@ namespace Twin
 			return;
 		}
 
-		// another memory twin over any part of this region describes stale geometry
+		DropOverlapping(base, pitch, width, height);
+
+		twin = FindAddress(first, &id);
+		if (twin)
+			return;
+
+		CreateMemoryTwin(base, pitch, width, height, -1, FALSE, TRUE, &id);
+	}
+
+	// another memory twin over any part of this region describes stale geometry
+	VOID DropOverlapping(const VOID* base, LONG pitch, LONG width, LONG height)
+	{
+		const DWORD* first = (const DWORD*)base;
+		const DWORD* last = first + (height - 1) * pitch + width - 1;
 		const BYTE* begin = (const BYTE*)first;
 		const BYTE* end = (const BYTE*)(last + 1);
 		for (DWORD i = 0; i < game.top; ++i)
@@ -2848,12 +3004,6 @@ namespace Twin
 				DestroyMemoryTwin(other, i);
 			}
 		}
-
-		twin = FindAddress(first, &id);
-		if (twin)
-			return;
-
-		CreateMemoryTwin(base, pitch, width, height, -1, FALSE, TRUE, &id);
 	}
 
 	Record* FindByData(StateBuffer* buffer, DWORD* id, LONG* ox, LONG* oy)
@@ -2890,6 +3040,572 @@ namespace Twin
 			}
 		}
 	}
+
+#pragma region Seed
+	const CHAR* const seedKindNames[SeedKinds] = { "store", "sheet", "face" };
+
+	BOOL SeedMode()
+	{
+		if (!seeds.chosen)
+		{
+			seeds.chosen = TRUE;
+			CHAR value[16], fallback[] = "seed";
+			Config::Get("Twin", "Mode", fallback, value, sizeof(value));
+			const CHAR* origin = "Twin.Mode";
+			CHAR env[16];
+			DWORD length = GetEnvironmentVariable("DGL_TWIN_MODE", env, sizeof(env));
+			if (length && length < sizeof(env))
+			{
+				StrCopy(value, env);
+				origin = "DGL_TWIN_MODE";
+			}
+			seeds.seed = StrCompareInsensitive(value, "match") != 0;
+			INT wait = Config::Get("Twin", "SeedWait", SEED_WAIT_DEFAULT);
+			seeds.waitMs = (DWORD)max(0, min(wait, 2000));
+			DebugLog("twin mode %s (%s=%s, seed wait %u ms): %s", seeds.seed ? "seed" : "match", origin, value, seeds.waitMs,
+				seeds.seed ? "4K art is written where named 1x art is decoded; no expectations, regions, hash lookups or twin-index.bin" : "expectations, regions and the hash index identify art");
+		}
+		return seeds.seed;
+	}
+
+	VOID SeedFree(SeedRecord* r)
+	{
+		if (r->pieces)
+			MemoryFree(r->pieces);
+		if (r->done)
+			MemoryFree(r->done);
+		if (r->conflicts)
+			MemoryFree(r->conflicts);
+		MemoryZero(r, sizeof(SeedRecord));
+		--seeds.active;
+		while (seeds.top && !seeds.list[seeds.top - 1].owner)
+			--seeds.top;
+	}
+
+	VOID SeedForget(SeedRecord* r, BOOL written)
+	{
+		Record* twin = &game.twins[r->id];
+		if (twin->owner == r->owner && twin->seedCount)
+			--twin->seedCount;
+
+		SeedCounters* c = &seeds.kinds[r->kind];
+		if (r->pending)
+		{
+			if (written)
+				++c->dropped;
+			else
+				++c->released;
+		}
+		else if (written)
+			++c->overwritten;
+		SeedFree(r);
+	}
+
+	VOID SeedWrite(Record* twin, const RECT* rect)
+	{
+		if (!twin->seedCount)
+			return;
+
+		RECT part;
+		for (DWORD i = 0; i < seeds.top; ++i)
+		{
+			SeedRecord* r = &seeds.list[i];
+			if (r->owner && r->owner == twin->owner && IntersectRect(&part, &r->rect, rect))
+				SeedForget(r, TRUE);
+		}
+	}
+
+	VOID SeedDropTwin(Record* twin, DWORD id)
+	{
+		if (!twin->seedCount)
+			return;
+
+		for (DWORD i = 0; i < seeds.top; ++i)
+		{
+			SeedRecord* r = &seeds.list[i];
+			if (r->owner && r->owner == twin->owner && r->id == id)
+				SeedForget(r, FALSE);
+		}
+		twin->seedCount = 0;
+	}
+
+	// the GPU copy was rebuilt from 1x; a seed whose 1x was not written since is still true and is drawn again
+	VOID SeedRepend(const CHAR* reason)
+	{
+		DWORD count = 0;
+		for (DWORD i = 0; i < seeds.top; ++i)
+		{
+			SeedRecord* r = &seeds.list[i];
+			if (!r->owner)
+				continue;
+			for (DWORD k = 0; k < r->count; ++k)
+				if (r->done[k] != PieceFailed)
+					r->done[k] = PieceWaiting;
+			r->based = FALSE;
+			r->pending = TRUE;
+			r->frameNo = game.frameNo;
+			++count;
+		}
+
+		if (count)
+		{
+			seeds.repends += count;
+			DebugLog("twin seed %u intact seeds queued for redraw after %s at frame %u", count, reason, game.frameNo);
+		}
+	}
+
+	DWORD SeedEmit(SeedRecord* r)
+	{
+		Record* twin = &game.twins[r->id];
+		if (twin->owner != r->owner)
+		{
+			SeedForget(r, FALSE);
+			return 0;
+		}
+
+		DWORD fresh = 0, waiting = 0;
+		LONG last = -2, state = 0;
+		for (DWORD i = 0; i < r->count; ++i)
+		{
+			if (r->done[i] == PieceSent || r->done[i] == PieceFailed)
+				continue;
+			if (r->pieces[i].frame != last)
+			{
+				last = r->pieces[i].frame;
+				state = ImageReplace::ArtState(last);
+			}
+			if (state < 0)
+				r->done[i] = PieceFailed;
+			else if (state > 0)
+			{
+				r->done[i] = PieceReady;
+				++fresh;
+			}
+			else
+			{
+				r->done[i] = PieceWaiting;
+				++waiting;
+			}
+		}
+		if (!fresh)
+			return waiting;
+
+		RECT rect = r->rect;
+		SeedCounters* c = &seeds.kinds[r->kind];
+		if (!r->based)
+		{
+			// the decode is still pending as dirty 1x; it is replaced by a key-alpha upload the 4K is cut by
+			DrainSyncIn(twin, &rect);
+			Cover(twin, &rect);
+			FlushRegion(twin, r->id, &rect, TRUE);
+			Upload(twin, r->id, &rect, TRUE);
+			r->based = TRUE;
+			c->px += Area(&rect);
+		}
+
+		DWORD conflictCount = 0;
+		if (!waiting && !r->conflictsSent)
+		{
+			r->conflictsSent = TRUE;
+			for (DWORD i = 0; i < r->conflictCount; ++i)
+				if (ImageReplace::ArtState(r->conflicts[i].frameA) > 0 && ImageReplace::ArtState(r->conflicts[i].frameB) > 0)
+					++conflictCount;
+			seeds.conflictsUnchecked += r->conflictCount - conflictCount;
+		}
+
+		DWORD offset;
+		SeedPiece* out = (SeedPiece*)Reserve(fresh * sizeof(SeedPiece) + conflictCount * sizeof(SeedConflict), &offset);
+		Cmd* cmd = out ? Emit(CmdSeed) : NULL;
+		if (!cmd)
+		{
+			for (DWORD i = 0; i < r->count; ++i)
+				if (r->done[i] == PieceReady)
+					r->done[i] = PieceWaiting;
+			return waiting + fresh;
+		}
+
+		for (DWORD i = 0; i < r->count; ++i)
+			if (r->done[i] == PieceReady)
+			{
+				*out = r->pieces[i];
+				OffsetRect(&out->to, rect.left, rect.top);
+				OffsetRect(&out->place, rect.left, rect.top);
+				++out;
+				r->done[i] = PieceSent;
+			}
+
+		SeedConflict* conflict = (SeedConflict*)out;
+		for (DWORD i = 0; i < r->conflictCount && conflictCount; ++i)
+		{
+			const SeedConflict* in = &r->conflicts[i];
+			if (ImageReplace::ArtState(in->frameA) <= 0 || ImageReplace::ArtState(in->frameB) <= 0)
+				continue;
+			*conflict = *in;
+			OffsetRect(&conflict->to, rect.left, rect.top);
+			OffsetRect(&conflict->placeA, rect.left, rect.top);
+			OffsetRect(&conflict->placeB, rect.left, rect.top);
+			++conflict;
+			--conflictCount;
+			++seeds.conflicts;
+		}
+		conflictCount = DWORD(conflict - (SeedConflict*)out);
+
+		cmd->dst = r->id;
+		cmd->rect = rect;
+		cmd->value = offset;
+		cmd->x = (LONG)fresh;
+		cmd->y = (LONG)conflictCount;
+		cmd->flags = r->kind;
+
+		DropRegions(twin, &rect);
+		ArtTag tag = { r->kind != SeedSheet && r->count == 1 ? r->pieces[0].frame : TAG_SEED_SHEET, 0, 0, rect.right - rect.left, rect.bottom - rect.top, r->id };
+		AddArt(twin, &rect, &tag);
+
+		c->pieces += fresh;
+		++c->emits;
+		game.lastArtSource = r->id;
+		if (!art.firstTick)
+			art.firstTick = GetTickCount() | 1;
+		if (!art.checked)
+		{
+			art.checked = TRUE;
+			game.checkRequest = TRUE;
+		}
+		return waiting;
+	}
+
+	VOID SeedLog(const CHAR* what, DWORD kind, const CHAR* name, const Record* twin, DWORD id, const RECT* rect, LONG pitch, const SeedRecord* r, DWORD waitUs)
+	{
+		if (seeds.logs >= SEED_LOGS)
+			return;
+		++seeds.logs;
+
+		DWORD sent = 0, waiting = 0, failed = 0;
+		LONG low = 0x7FFFFFFF, high = -1;
+		for (DWORD i = 0; r && i < r->count; ++i)
+		{
+			sent += r->done[i] == PieceSent;
+			waiting += r->done[i] == PieceWaiting;
+			failed += r->done[i] == PieceFailed;
+			low = min(low, r->pieces[i].frame);
+			high = max(high, r->pieces[i].frame);
+		}
+
+		DebugLog("twin seed #%u %s %s name=%.32s twin %u %s buf=%p base=%p rect %d,%d %dx%d pitch %d | pieces %u sent %u waiting %u no art %u | frames %d..%d pairs %u | wait %u us frame %u",
+			seeds.logs, seedKindNames[kind], what, name, twin ? id : TWIN_NONE, twin ? TwinKind(twin) : "none", twin ? twin->owner : NULL, twin ? twin->base : NULL,
+			rect->left, rect->top, rect->right - rect->left, rect->bottom - rect->top, pitch, r ? r->count : 0, sent, waiting, failed,
+			r && r->count ? low : -1, high, r ? r->conflictCount : 0, waitUs, game.frameNo);
+	}
+
+	VOID SeedPoll()
+	{
+		for (DWORD i = 0; i < seeds.top; ++i)
+		{
+			SeedRecord* r = &seeds.list[i];
+			if (!r->owner || !r->pending)
+				continue;
+			// after a rebuild every intact seed comes back; spreading them over frames keeps the queue under its limit
+			if (game.list && game.list->size > SEED_POLL_BYTES)
+				break;
+
+			DWORD waiting = SeedEmit(r);
+			if (!r->owner)
+				continue;
+
+			if (!waiting)
+			{
+				r->pending = FALSE;
+				if (r->deferred)
+				{
+					r->deferred = FALSE;
+					++seeds.kinds[r->kind].later;
+					RECT local = r->rect;
+					SeedLog("completed later", r->kind, r->name, &game.twins[r->id], r->id, &local, game.twins[r->id].pitch, r, 0);
+				}
+			}
+			else if (game.frameNo - r->frameNo > SEED_PENDING_FRAMES)
+			{
+				r->pending = FALSE;
+				r->deferred = FALSE;
+				++seeds.kinds[r->kind].expired;
+			}
+		}
+	}
+
+	VOID SeedArt(const VOID* first, LONG pitch, LONG width, LONG height, SeedKind kind, const CHAR* name, const SeedPiece* pieces, DWORD count, const SeedConflict* conflicts, DWORD conflictCount, const SeedSheetStats* sheet)
+	{
+		Timed timed("SeedArt");
+		if (!Active() || !SeedMode() || !first || width <= 0 || height <= 0 || pitch < width || (DWORD)kind >= SeedKinds)
+			return;
+
+		Sync();
+		const CHAR* label = name ? name : "?";
+		SeedCounters* c = &seeds.kinds[kind];
+		++c->events;
+		if (sheet)
+		{
+			++seeds.sheets;
+			seeds.sheetFrames += sheet->frames;
+			seeds.sheetUnmapped += sheet->unmapped;
+			seeds.sheetAdditive += sheet->additive;
+			seeds.sheetOutside += sheet->outside;
+			seeds.sheetShared += sheet->shared;
+			seeds.sheetPieces += count;
+		}
+
+		RECT local = { 0, 0, width, height };
+		if (!pieces || !count)
+		{
+			++c->noArt;
+			SeedLog("skipped: no piece maps to a pack frame", kind, label, NULL, TWIN_NONE, &local, pitch, NULL, 0);
+			return;
+		}
+
+		DWORD id = TWIN_NONE;
+		LONG x = 0, y = 0;
+		Record* twin = FindAddress(first, &id);
+		BOOL fits = twin && PixelPos(twin, first, pitch, width, height, &x, &y);
+		if (twin && !fits && twin->memory)
+		{
+			DropOverlapping(first, pitch, width, height);
+			twin = NULL;
+		}
+		if (!twin)
+		{
+			twin = Adopt(first, &id);
+			fits = twin && PixelPos(twin, first, pitch, width, height, &x, &y);
+		}
+		if (!twin || !fits)
+		{
+			++c->noTwin;
+			SeedLog(twin ? "skipped: pitch or rect does not fit its twin" : "skipped: no twin for this memory", kind, label, twin, id, &local, pitch, NULL, 0);
+			return;
+		}
+
+		RECT rect = { x, y, x + width, y + height };
+		if (twin->seedCount)
+			for (DWORD i = 0; i < seeds.top; ++i)
+			{
+				SeedRecord* other = &seeds.list[i];
+				// no hook saw a write since the last seed of this image here, so the twin still holds it
+				if (other->owner == twin->owner && EqualRect(&other->rect, &rect) && other->kind == (DWORD)kind && !StrCompareNum(other->name, label, sizeof(other->name) - 1))
+				{
+					++seeds.repeats;
+					return;
+				}
+			}
+		SeedWrite(twin, &rect);
+
+		SeedRecord* r = NULL;
+		for (DWORD i = 0; i < SEED_RECORDS && !r; ++i)
+			if (!seeds.list[i].owner)
+				r = &seeds.list[i];
+		if (!r)
+		{
+			SeedRecord* oldest = NULL;
+			for (DWORD i = 0; i < SEED_RECORDS; ++i)
+			{
+				SeedRecord* other = &seeds.list[i];
+				if (!oldest || (oldest->pending && !other->pending) || (!oldest->pending == !other->pending && other->frameNo < oldest->frameNo))
+					oldest = other;
+			}
+			SeedForget(oldest, FALSE);
+			++seeds.evicted;
+			r = oldest;
+		}
+
+		count = min(count, (DWORD)SEED_PIECES);
+		conflictCount = conflicts ? min(conflictCount, (DWORD)SEED_CONFLICTS) : 0;
+		r->pieces = (SeedPiece*)MemoryAlloc(count * sizeof(SeedPiece));
+		r->done = (BYTE*)MemoryAlloc(count);
+		r->conflicts = conflictCount ? (SeedConflict*)MemoryAlloc(conflictCount * sizeof(SeedConflict)) : NULL;
+		if (!r->pieces || !r->done || (conflictCount && !r->conflicts))
+		{
+			if (r->pieces)
+				MemoryFree(r->pieces);
+			if (r->done)
+				MemoryFree(r->done);
+			if (r->conflicts)
+				MemoryFree(r->conflicts);
+			MemoryZero(r, sizeof(SeedRecord));
+			++c->noTwin;
+			return;
+		}
+
+		for (DWORD i = 0; i < count; ++i)
+		{
+			const SeedPiece* p = &pieces[i];
+			if (p->to.left < 0 || p->to.top < 0 || p->to.right > width || p->to.bottom > height || p->to.left >= p->to.right || p->to.top >= p->to.bottom ||
+				p->place.left >= p->place.right || p->place.top >= p->place.bottom || p->frame < 0)
+			{
+				++seeds.skippedPieces;
+				continue;
+			}
+			r->pieces[r->count] = *p;
+			r->done[r->count++] = PieceWaiting;
+		}
+		for (DWORD i = 0; i < conflictCount; ++i)
+			r->conflicts[i] = conflicts[i];
+		r->conflictCount = conflictCount;
+
+		r->owner = twin->owner;
+		r->id = id;
+		r->rect = rect;
+		r->kind = kind;
+		DWORD length = min((DWORD)StrLength(label), (DWORD)sizeof(r->name) - 1);
+		MemoryCopy(r->name, label, length);
+		r->name[length] = 0;
+		r->frameNo = game.frameNo;
+		++seeds.active;
+		if ((DWORD)(r - seeds.list) >= seeds.top)
+			seeds.top = DWORD(r - seeds.list) + 1;
+		++twin->seedCount;
+		if (!r->count)
+		{
+			SeedForget(r, FALSE);
+			++c->noArt;
+			SeedLog("skipped: every piece fell outside the image", kind, label, twin, id, &rect, pitch, NULL, 0);
+			return;
+		}
+
+		// the decode worker usually finishes within a frame; waiting here lets memory the game copies out and reuses at once get its 4K
+		DWORD waitUs = 0;
+		if (seeds.waitMs)
+		{
+			LARGE_INTEGER start, now;
+			QueryPerformanceCounter(&start);
+			LONGLONG frequency = game.frequency.QuadPart ? game.frequency.QuadPart : 1000;
+			for (;;)
+			{
+				BOOL all = TRUE;
+				LONG last = -2;
+				for (DWORD i = 0; i < r->count; ++i)
+					if (r->pieces[i].frame != last)
+					{
+						last = r->pieces[i].frame;
+						if (!ImageReplace::ArtState(last))
+							all = FALSE;
+					}
+
+				QueryPerformanceCounter(&now);
+				waitUs = DWORD((now.QuadPart - start.QuadPart) * 1000000 / frequency);
+				if (all || waitUs >= seeds.waitMs * 1000)
+					break;
+				Sleep(1);
+			}
+			seeds.waitUs += waitUs;
+			++seeds.waits;
+			if (waitUs > seeds.waitMaxUs)
+				seeds.waitMaxUs = waitUs;
+		}
+
+		DWORD waiting = SeedEmit(r);
+		if (!r->owner)
+			return;
+		if (waiting)
+		{
+			r->pending = TRUE;
+			r->deferred = TRUE;
+			++c->deferred;
+		}
+		else
+			++c->done;
+		SeedLog(waiting ? "deferred" : "done", kind, label, twin, id, &rect, pitch, r, waitUs);
+	}
+
+	VOID CountCoverage(Record* source, const RECT* from)
+	{
+		LONG px = Area(from);
+		if (!source)
+		{
+			++seeds.coverUntwinned;
+			seeds.coverUntwinnedPx += px;
+		}
+		else if (Carries4K(source, from))
+		{
+			++seeds.coverSeeded;
+			seeds.coverSeededPx += px;
+		}
+		else
+		{
+			++seeds.coverUnseeded;
+			seeds.coverUnseededPx += px;
+			source->coverPx += px;
+			++source->coverCopies;
+		}
+	}
+
+	VOID LogSeeds()
+	{
+		DWORD mbScale = game.scale * game.scale * sizeof(DWORD);
+		for (DWORD k = 0; k < SeedKinds; ++k)
+		{
+			const SeedCounters* c = &seeds.kinds[k];
+			DWORD mb10 = DWORD(c->px * mbScale * 10 / (1024 * 1024));
+			DebugLog("twin seed %s since start: events %u done %u deferred %u (completed later %u, expired %u) dropped %u (memory written %u, freed %u) | overwritten after seeding %u | no twin %u no art %u | pieces %u emits %u px %u (%u.%u MB at N)",
+				seedKindNames[k], c->events, c->done, c->deferred, c->later, c->expired, c->dropped + c->released, c->dropped, c->released, c->overwritten, c->noTwin, c->noArt,
+				c->pieces, c->emits, (DWORD)c->px, mb10 / 10, mb10 % 10);
+		}
+
+		DWORD pending = 0;
+		for (DWORD i = 0; i < seeds.top; ++i)
+			pending += seeds.list[i].owner && seeds.list[i].pending;
+
+		Lock();
+		DWORD replayed = shared.seedReplayed, replayedPieces = shared.seedPieces, missing = shared.seedMissing;
+		DWORD checked = shared.conflictsChecked, differ = shared.conflictsDiffer, skipped = shared.conflictsSkipped, blocks = shared.conflictBlocks;
+		Unlock();
+
+		DWORD waitAvg = seeds.waits ? DWORD(seeds.waitUs / seeds.waits) : 0;
+		DebugLog("twin seed sheets since start %u: frames %u (unmapped %u, additive skipped %u) parts outside the sheet %u | pieces %u | blocks shared by several frames %u, of those with 4K differing by mean>%u: %u | frame pairs sent %u checked %u differ %u (gpu skipped %u, art not ready %u)",
+			seeds.sheets, seeds.sheetFrames, seeds.sheetUnmapped, seeds.sheetAdditive, seeds.sheetOutside, seeds.sheetPieces, seeds.sheetShared, SEED_CONFLICT_DIFF, blocks,
+			seeds.conflicts, checked, differ, skipped, seeds.conflictsUnchecked);
+		DebugLog("twin seed records %u (pending %u, evicted %u, redraws queued %u, repeat decodes still intact %u, invalid pieces %u) | wait avg %u us max %u us (%u waits) | replayed %u commands %u pieces, art missing at replay %u | keyed copies on another key from 4K masked by 1x %u (too big %u)",
+			seeds.active, pending, seeds.evicted, seeds.repends, seeds.repeats, seeds.skippedPieces, waitAvg, seeds.waitMaxUs, seeds.waits, replayed, replayedPieces, missing, seeds.maskedCopies, seeds.maskedSkipped);
+
+		ImageReplace::LogSeedSources();
+		DebugLog("twin coverage 5s: copies from sources carrying 4K %u (px %u) | from 1x-only twins %u (px %u) | from untwinned memory %u (px %u)",
+			seeds.coverSeeded, (DWORD)seeds.coverSeededPx, seeds.coverUnseeded, (DWORD)seeds.coverUnseededPx, seeds.coverUntwinned, (DWORD)seeds.coverUntwinnedPx);
+		seeds.coverSeeded = seeds.coverUnseeded = seeds.coverUntwinned = 0;
+		seeds.coverSeededPx = seeds.coverUnseededPx = seeds.coverUntwinnedPx = 0;
+
+		DWORD top[COVER_TOP];
+		DWORD found = 0;
+		for (DWORD i = 0; i < game.top; ++i)
+		{
+			const Record* twin = &game.twins[i];
+			if (!twin->owner || !twin->coverPx)
+				continue;
+			DWORD slot = found < COVER_TOP ? found++ : COVER_TOP;
+			while (slot && game.twins[top[slot - 1]].coverPx < twin->coverPx)
+			{
+				if (slot < COVER_TOP)
+					top[slot] = top[slot - 1];
+				--slot;
+			}
+			if (slot < COVER_TOP)
+				top[slot] = i;
+		}
+
+		for (DWORD line = 0; line * 5 < found; ++line)
+		{
+			CHAR text[5 * 80 + 1];
+			CHAR* ptr = text;
+			*ptr = 0;
+			for (DWORD k = line * 5; k < found && k < line * 5 + 5; ++k)
+			{
+				const Record* twin = &game.twins[top[k]];
+				const CHAR* store = ImageReplace::MemoryName(twin->base);
+				ptr += StrPrint(ptr, " [%u] %u %s %08X %dx%d px %u n %u %.20s", k + 1, top[k], twin->anonymous ? "anon" : twin->memory ? "mem" : "surf", (DWORD)twin->owner,
+					twin->width, twin->height, twin->coverPx, twin->coverCopies, store ? store : "-");
+			}
+			DebugLog("twin coverage top 1x-only copy sources (rank twin kind buffer size px copies store):%s", text);
+		}
+
+		for (DWORD i = 0; i < game.top; ++i)
+			game.twins[i].coverPx = game.twins[i].coverCopies = 0;
+	}
+#pragma endregion
 
 	VOID ExpireArt()
 	{
@@ -2969,6 +3685,8 @@ namespace Twin
 		twin->memory = FALSE;
 		twin->anonymous = FALSE;
 		twin->lastUse = game.frameNo;
+		twin->seedCount = 0;
+		twin->coverPx = twin->coverCopies = 0;
 		twin->mirror = (DWORD*)MemoryAlloc(width * height * sizeof(DWORD));
 		if (twin->mirror)
 			MemoryCopy(twin->mirror, twin->base, width * height * sizeof(DWORD));
@@ -3024,6 +3742,7 @@ namespace Twin
 		if (!Clip(twin, &area))
 			return;
 
+		SeedWrite(twin, &area);
 		DrainSyncIn(twin, &area);
 		Cover(twin, &area);
 		FlushRegion(twin, id, &area, TRUE);
@@ -3156,6 +3875,7 @@ namespace Twin
 		{
 			if (game.list || CurrentList())
 				++game.list->counters.unknown;
+			CountCoverage(NULL, &whole);
 			MarkDirty(target, whole);
 			return;
 		}
@@ -3184,15 +3904,18 @@ namespace Twin
 			source->key = key | ALPHA_COMPONENT;
 		}
 
+		SeedWrite(target, &to);
+
 		// a ground block still being built must get its 4K command recorded before anything copies out of it
 		ImageReplace::GroundFlush((const DWORD*)source->base + from.top * source->pitch + from.left);
 
 		FlushRegion(source, srcId, &from);
 		Verify(source, srcId, &from, NULL, 0, FALSE);
+		CountCoverage(source, &from);
 
 		FlushRegion(target, dstId, &to, TRUE);
 		ArtPlan plan;
-		BOOL hasArt = IdentifyArt(target, dstId, &to, source, srcId, &from, x, y, srcRect, keyed, key, FALSE, FALSE, &plan);
+		BOOL hasArt = !SeedMode() && IdentifyArt(target, dstId, &to, source, srcId, &from, x, y, srcRect, keyed, key, FALSE, FALSE, &plan);
 		if (hasArt && keyed)
 		{
 			if (RecordArt(target, dstId, &to, srcId, &from, plan.frame, plan.flipped, &plan.place, keyed, key, plan.cached, FALSE))
@@ -3227,7 +3950,35 @@ namespace Twin
 		for (DWORD i = 0; i < artCount; ++i)
 			AddArt(target, &arts[i], &tags[i]);
 
-		Cmd* cmd = Emit(CmdCopy);
+		// 4K texels never equal another key exactly, so a copy keyed on anything but the decode key takes its coverage from the 1x pixels, as the CPU does
+		Cmd* cmd = NULL;
+		DWORD maskOffset = 0;
+		BOOL masked = keyed && source != target && (key | ALPHA_COMPONENT) != COLORKEY_CHECK && SeedMode() && Carries4K(source, &from);
+		if (masked)
+		{
+			LONG cw = to.right - to.left, ch = to.bottom - to.top;
+			BYTE* mask = cw <= MASK_SIZE && ch <= MASK_SIZE ? Reserve(cw * ch, &maskOffset) : NULL;
+			if (mask)
+			{
+				DWORD skip = key | ALPHA_COMPONENT;
+				for (LONG row = 0; row < ch; ++row)
+				{
+					const DWORD* line = (const DWORD*)source->base + (from.top + row) * source->pitch + from.left;
+					for (LONG col = 0; col < cw; ++col)
+						*mask++ = line[col] != skip ? 255 : 0;
+				}
+				cmd = Emit(CmdMask);
+			}
+			if (cmd)
+				++seeds.maskedCopies;
+			else
+			{
+				++seeds.maskedSkipped;
+				masked = FALSE;
+			}
+		}
+		if (!cmd)
+			cmd = Emit(CmdCopy);
 		if (!cmd)
 		{
 			MarkDirty(target, to);
@@ -3240,7 +3991,9 @@ namespace Twin
 		cmd->x = to.left;
 		cmd->y = to.top;
 		cmd->value = key;
-		cmd->flags = keyed ? 1 : 0;
+		cmd->flags = masked ? 2 : keyed ? 1 : 0;
+		if (masked)
+			cmd->extra = maskOffset;
 
 		++game.list->counters.copies;
 		if (keyed)
@@ -3292,6 +4045,7 @@ namespace Twin
 		if (!Clip(twin, &area))
 			return;
 
+		SeedWrite(twin, &area);
 		Cover(twin, &area);
 		FlushRegion(twin, id, &area, TRUE);
 		CoverArt(twin, &area);
@@ -3380,7 +4134,11 @@ namespace Twin
 		DWORD id;
 		Record* twin = Find(buffer, &id);
 		if (twin)
+		{
+			RECT whole = { 0, 0, twin->width, twin->height };
+			SeedWrite(twin, &whole);
 			MarkAll(twin);
+		}
 	}
 
 	BOOL PixelPos(const Record* twin, const VOID* ptr, LONG pitch, LONG width, LONG height, LONG* x, LONG* y)
@@ -3430,6 +4188,7 @@ namespace Twin
 		}
 		RECT to = { dx, dy, dx + width, dy + height };
 		trace.to = to;
+		SeedWrite(target, &to);
 
 		DWORD srcId;
 		Record* source = Adopt(src, &srcId);
@@ -3450,6 +4209,7 @@ namespace Twin
 				DebugLog("twin untwinned src mode %u src=%p pitch %d %dx%d -> dst %u %s | %s | FindMemory %s base=%p pitch %d %dx%d frame %d at frame %u", mode, src, srcPitch, width, height,
 					dstId, TwinKind(target), trace.outcome, known ? "knows it" : "doesn't know it", base, pitch, w, h, frame, game.frameNo);
 			}
+			CountCoverage(NULL, &to);
 			MarkDirty(target, to);
 			return;
 		}
@@ -3474,6 +4234,7 @@ namespace Twin
 
 		FlushRegion(source, srcId, &from);
 		Verify(source, srcId, &from, NULL, 0, FALSE);
+		CountCoverage(source, &from);
 		FlushRegion(target, dstId, &to, TRUE);
 		DropRegions(target, &to);
 
@@ -3481,7 +4242,7 @@ namespace Twin
 		{
 			source->keyed = TRUE;
 			source->key = key | ALPHA_COMPONENT;
-			if (IdentifyArt(target, dstId, &to, source, srcId, &from, dx, dy, &from, TRUE, key, TRUE, FALSE))
+			if (!SeedMode() && IdentifyArt(target, dstId, &to, source, srcId, &from, dx, dy, &from, TRUE, key, TRUE, FALSE))
 			{
 				++game.pixelArt;
 				AddArt(target, &to, &art.lastTag);
@@ -3491,7 +4252,7 @@ namespace Twin
 		}
 
 		ArtPlan plan;
-		BOOL hasArt = mode == PixelCopy && IdentifyArt(target, dstId, &to, source, srcId, &from, dx, dy, &from, FALSE, 0, FALSE, TRUE, &plan);
+		BOOL hasArt = mode == PixelCopy && !SeedMode() && IdentifyArt(target, dstId, &to, source, srcId, &from, dx, dy, &from, FALSE, 0, FALSE, TRUE, &plan);
 
 		Cmd* cmd = Emit(CmdPixel);
 		if (!cmd)
@@ -3586,6 +4347,7 @@ namespace Twin
 		if (!twin)
 			return;
 
+		SeedWrite(twin, &rect);
 		FlushRegion(twin, id, &rect, TRUE);
 		DropRegions(twin, &rect);
 
@@ -3627,6 +4389,7 @@ namespace Twin
 			return;
 		}
 		RECT to = { dx, dy, dx + length, dy + 1 };
+		SeedWrite(target, &to);
 
 		DWORD srcId;
 		Record* source = Adopt(src, &srcId);
@@ -3634,6 +4397,8 @@ namespace Twin
 		if (!source || source == target || !PixelPos(source, src, source->pitch, length, 1, &sx, &sy))
 		{
 			++game.pixelUntwinned;
+			if (!source)
+				CountCoverage(NULL, &to);
 			MarkDirty(target, to);
 			return;
 		}
@@ -3643,6 +4408,7 @@ namespace Twin
 		DrainSyncIn(source, &from);
 		FlushRegion(source, srcId, &from);
 		Verify(source, srcId, &from, NULL, 0, FALSE);
+		CountCoverage(source, &from);
 		FlushRegion(target, dstId, &to, TRUE);
 		DropRegions(target, &to);
 
@@ -3705,6 +4471,7 @@ namespace Twin
 		if (!twin)
 			return;
 
+		SeedWrite(twin, &rect);
 		FlushRegion(twin, id, &rect, TRUE);
 		DropRegions(twin, &rect);
 
@@ -3878,6 +4645,7 @@ namespace Twin
 		game.fillRects = game.fillMerged = game.tints = game.blendRows = game.blendMerged = game.lighters = 0;
 
 		DebugLog("twin ground arts %u replayed %u fallbacks %u no twin %u", art.groundArts, groundReplayed, groundFallbacks, art.groundNoTwin);
+		LogSeeds();
 		art.cachedDraws = art.groundArts = art.groundNoTwin = 0;
 
 		DebugLog("twin show shown %u (opaque %u, over background %u) hidden: 1x toggle %u, invalid %u (no twin at present %u, twin gone %u), other %u | show gpu avg %u us max %u us (%u samples)",
@@ -3927,9 +4695,12 @@ namespace Twin
 			game.tileCheck = !game.tileCheck;
 			DebugLog("twin tile check %s", game.tileCheck ? "on" : "off");
 			if (game.tileCheck)
+			{
 				for (DWORD i = 0; i < game.top; ++i)
 					if (game.twins[i].owner)
 						MarkAll(&game.twins[i]);
+				SeedRepend("tile check on");
+			}
 		}
 		game.tileKeyDown = down;
 
@@ -3938,6 +4709,9 @@ namespace Twin
 		{
 			shared.tint = !shared.tint;
 			DebugLog("twin art tint %s", shared.tint ? "magenta" : "off");
+			// seeds are drawn once at the decode; redrawing the intact ones lets the tint show what came from seeds
+			if (SeedMode())
+				SeedRepend("tint toggle");
 		}
 		game.tintKeyDown = down;
 
@@ -3952,6 +4726,9 @@ namespace Twin
 			game.shotRequest = FALSE;
 			game.checkRequest = TRUE;
 		}
+
+		if (seeds.active)
+			SeedPoll();
 
 		DWORD id = TWIN_NONE;
 		Record* twin = Find(screen, &id);
@@ -4083,7 +4860,7 @@ namespace Twin
 		if (now - game.logTick >= LOG_PERIOD)
 			LogInterval(now);
 
-		if (index.dirty && now - index.saveTick >= INDEX_SAVE_PERIOD && !InterlockedCompareExchange(&learn.saving, 1, 0))
+		if (!SeedMode() && index.dirty && now - index.saveTick >= INDEX_SAVE_PERIOD && !InterlockedCompareExchange(&learn.saving, 1, 0))
 		{
 			index.saveTick = now;
 			HANDLE thread = CreateThread(NULL, 0, SaveWorker, NULL, 0, NULL);
@@ -4999,8 +5776,12 @@ namespace Twin
 	{
 		if (!tag)
 			StrPrint(text, "%s", "no art rect");
-		else if (tag->frame == -3)
+		else if (tag->frame == TAG_GROUND)
 			StrPrint(text, "ground twin %u", tag->src);
+		else if (tag->frame == TAG_SEED_SHEET)
+			StrPrint(text, "seeded sheet twin %u at %d,%d of %dx%d", tag->src, tag->cx, tag->cy, tag->canvasW, tag->canvasH);
+		else if (tag->frame == TAG_MERGED_4K)
+			StrPrint(text, "%s", "merged art rects, some 4K");
 		else if (tag->frame < 0)
 			StrPrint(text, "%s", "effect or merged art");
 		else
@@ -5473,8 +6254,11 @@ namespace Twin
 		LONG height = cmd->rect.bottom - cmd->rect.top;
 		RECT to = { cmd->x, cmd->y, cmd->x + width, cmd->y + height };
 
+		// flag 1: the destination key test; flag 2: a keyed copy whose coverage is the source's exact 1x key mask
+		BOOL dstKeyed = (cmd->flags & 1) != 0;
+		BOOL exact = (cmd->flags & 2) != 0;
 		FLOAT ew = 0.0f, eh = 0.0f;
-		if (cmd->flags && !ToScratch(dst, &to, &ew, &eh))
+		if (dstKeyed && !ToScratch(dst, &to, &ew, &eh))
 			return;
 
 		if (!gl.maskTexture)
@@ -5493,7 +6277,9 @@ namespace Twin
 		GLTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, GL_RED, GL_UNSIGNED_BYTE, list->arena + cmd->extra);
 		GLPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
 		GLPixelStorei(GL_UNPACK_ALIGNMENT, 4);
-		if (cmd->flags)
+		if (exact)
+			SetNearest(GL_NEAREST);
+		if (dstKeyed)
 		{
 			GLActiveTexture(GL_TEXTURE2);
 			GLBindTexture(GL_TEXTURE_2D, gl.scratch);
@@ -5504,7 +6290,7 @@ namespace Twin
 		TargetTwin(cmd->dst);
 		gl.program = gl.maskProgram;
 		GLUseProgram(gl.maskProgram);
-		GLUniform1i(gl.maskKeyedLoc, cmd->flags ? 1 : 0);
+		GLUniform1i(gl.maskKeyedLoc, dstKeyed ? 1 : 0);
 		KeyUniform(gl.maskKeyLoc, cmd->value);
 		GLUniform4f(gl.maskFrameLoc, (FLOAT)(to.left * scale), (FLOAT)(to.top * scale), (FLOAT)(width * scale), (FLOAT)(height * scale));
 		GLUniform4f(gl.maskExtentLoc, (FLOAT)width / MASK_SIZE, (FLOAT)height / MASK_SIZE, ew, eh);
@@ -5516,6 +6302,195 @@ namespace Twin
 		DrawVerts();
 		Blend(FALSE);
 		++gl.pixelCalls;
+		if (exact)
+		{
+			GLActiveTexture(GL_TEXTURE1);
+			SetNearest(GL_LINEAR);
+			GLActiveTexture(GL_TEXTURE0);
+		}
+	}
+
+	BOOL SeedTexture(LONG frame, GLuint* texture, LONG* width, LONG* height)
+	{
+		if (ImageReplace::ArtTexture(frame, texture, width, height) && *texture)
+			return TRUE;
+		if (!ImageReplace::ArtUpload(frame))
+			return FALSE;
+
+		// the upload ran ImageReplace's GL; restore what the twin draws cache
+		gl.program = 0;
+		gl.target = TWIN_NONE;
+		GLBindVertexArray(gl.vao);
+		GLBindBuffer(GL_ARRAY_BUFFER, gl.vbo);
+		GLActiveTexture(GL_TEXTURE0);
+		return ImageReplace::ArtTexture(frame, texture, width, height) && *texture;
+	}
+
+	VOID PieceUv(const RECT* to, const RECT* place, FLOAT* u0, FLOAT* v0, FLOAT* u1, FLOAT* v1)
+	{
+		FLOAT pw = (FLOAT)(place->right - place->left), ph = (FLOAT)(place->bottom - place->top);
+		*u0 = (to->left - place->left) / pw;
+		*u1 = (to->right - place->left) / pw;
+		*v0 = (to->top - place->top) / ph;
+		*v1 = (to->bottom - place->top) / ph;
+	}
+
+	// a block the packer shares between frames carries the first frame's 4K; this measures how far the other frames' 4K for it is from that
+	VOID CheckConflicts(DWORD dst, const SeedConflict* conflicts, DWORD count)
+	{
+		LONG cell = SEED_CONFLICT_CELL;
+		LONG width = cell * 2 * SEED_CONFLICT_BATCH, height = cell;
+		if (!gl.conflictData)
+			gl.conflictData = (DWORD*)MemoryAlloc(width * height * sizeof(DWORD));
+		if (!gl.conflictData || !EnsureTarget(&gl.conflict, &gl.conflictFbo, &gl.conflictW, &gl.conflictH, width, height))
+		{
+			gl.conflictsSkipped += count;
+			return;
+		}
+
+		RECT differing[SEED_CONFLICTS];
+		DWORD differingCount = 0;
+
+		for (DWORD base = 0; base < count; base += SEED_CONFLICT_BATCH)
+		{
+			DWORD n = min(count - base, (DWORD)SEED_CONFLICT_BATCH);
+			GLuint textures[SEED_CONFLICT_BATCH][2];
+			BOOL ok[SEED_CONFLICT_BATCH];
+			for (DWORD k = 0; k < n; ++k)
+			{
+				LONG w, h;
+				const SeedConflict* c = &conflicts[base + k];
+				ok[k] = SeedTexture(c->frameA, &textures[k][0], &w, &h) && SeedTexture(c->frameB, &textures[k][1], &w, &h);
+			}
+
+			Target(TARGET_CONFLICT, gl.conflictFbo, gl.conflictW, gl.conflictH);
+			GLClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+			GLClear(GL_COLOR_BUFFER_BIT);
+			UseCopy(FALSE, 0);
+			GLUniform1i(gl.artLoc, 1);
+			GLUniform1i(gl.tintLoc, 0);
+			for (DWORD k = 0; k < n; ++k)
+			{
+				if (!ok[k])
+					continue;
+				const SeedConflict* c = &conflicts[base + k];
+				for (DWORD side = 0; side < 2; ++side)
+				{
+					FLOAT u0, v0, u1, v1;
+					PieceUv(&c->to, side ? &c->placeB : &c->placeA, &u0, &v0, &u1, &v1);
+					FLOAT x0 = (FLOAT)((k * 2 + side) * cell);
+					GLBindTexture(GL_TEXTURE_2D, textures[k][side]);
+					gl.vertCount = 0;
+					AddQuad((FLOAT)gl.conflictW, (FLOAT)gl.conflictH, x0, 0.0f, x0 + cell, (FLOAT)cell, u0, v0, u1, v1);
+					DrawVerts();
+				}
+			}
+			GLUniform1i(gl.artLoc, 0);
+
+			GLBindFramebuffer(GL_READ_FRAMEBUFFER, gl.conflictFbo);
+			GLPixelStorei(GL_PACK_ALIGNMENT, 4);
+			GLReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, gl.conflictData);
+			GLBindFramebuffer(GL_READ_FRAMEBUFFER, gl.readFbo);
+
+			for (DWORD k = 0; k < n; ++k)
+			{
+				if (!ok[k])
+				{
+					++gl.conflictsSkipped;
+					continue;
+				}
+
+				DWORD diff = 0;
+				for (LONG y = 0; y < cell; ++y)
+				{
+					const BYTE* a = (const BYTE*)(gl.conflictData + y * width + k * 2 * cell);
+					const BYTE* b = a + cell * sizeof(DWORD);
+					for (LONG i = 0; i < cell * 4; ++i)
+						diff += a[i] > b[i] ? a[i] - b[i] : b[i] - a[i];
+				}
+				diff /= cell * cell * 4;
+				++gl.conflictsChecked;
+				if (diff <= SEED_CONFLICT_DIFF)
+					continue;
+
+				++gl.conflictsDiffer;
+				const SeedConflict* c = &conflicts[base + k];
+				BOOL known = FALSE;
+				for (DWORD d = 0; d < differingCount && !known; ++d)
+					known = EqualRect(&differing[d], &c->to);
+				if (!known && differingCount < SEED_CONFLICTS)
+				{
+					differing[differingCount++] = c->to;
+					++gl.conflictBlocks;
+				}
+				if (gl.conflictLogs < SEED_CONFLICT_LOGS)
+				{
+					++gl.conflictLogs;
+					DebugLog("twin seed conflict twin %u block %d,%d %dx%d holds frame %d, frame %d's 4K for it differs by mean %u (limit %u)", dst, c->to.left, c->to.top,
+						c->to.right - c->to.left, c->to.bottom - c->to.top, c->frameA, c->frameB, diff, SEED_CONFLICT_DIFF);
+				}
+			}
+		}
+	}
+
+	VOID ReplaySeed(const Cmd* cmd, const List* list)
+	{
+		if (!Valid(cmd->dst))
+			return;
+
+		const SeedPiece* pieces = (const SeedPiece*)(list->arena + cmd->value);
+		DWORD count = (DWORD)cmd->x;
+		const SeedConflict* conflicts = (const SeedConflict*)(pieces + count);
+		DWORD conflictCount = (DWORD)cmd->y;
+
+		Gpu* gpu = &gl.twins[cmd->dst];
+		LONG scale = gpu->scale;
+		FLOAT tw = (FLOAT)(gpu->width * scale), th = (FLOAT)(gpu->height * scale);
+		++gl.seedReplayed;
+
+		for (DWORD i = 0; i < count;)
+		{
+			LONG frame = pieces[i].frame;
+			DWORD end = i + 1;
+			while (end < count && pieces[end].frame == frame)
+				++end;
+
+			GLuint texture = 0;
+			LONG w, h;
+			if (!SeedTexture(frame, &texture, &w, &h))
+			{
+				gl.seedMissing += end - i;
+				i = end;
+				continue;
+			}
+
+			TargetTwin(cmd->dst);
+			UseCopy(FALSE, 0);
+			GLUniform1i(gl.artLoc, 1);
+			GLUniform1i(gl.tintLoc, shared.tint ? 1 : 0);
+			GLBindTexture(GL_TEXTURE_2D, texture);
+			// the key-alpha upload recorded just before is the cut: key texels stay transparent black, the rest take the 4K texel and its alpha
+			GLEnable(GL_BLEND);
+			GLBlendFunc(GL_DST_ALPHA, GL_ZERO);
+			gl.vertCount = 0;
+			for (DWORD k = i; k < end; ++k)
+			{
+				const SeedPiece* p = &pieces[k];
+				FLOAT u0, v0, u1, v1;
+				PieceUv(&p->to, &p->place, &u0, &v0, &u1, &v1);
+				AddQuad(tw, th, (FLOAT)(p->to.left * scale), (FLOAT)(p->to.top * scale), (FLOAT)(p->to.right * scale), (FLOAT)(p->to.bottom * scale), u0, v0, u1, v1);
+			}
+			DrawVerts();
+			GLBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+			GLDisable(GL_BLEND);
+			gl.seedPieces += end - i;
+			i = end;
+		}
+		GLUniform1i(gl.artLoc, 0);
+		GLUniform1i(gl.tintLoc, 0);
+
+		if (conflictCount)
+			CheckConflicts(cmd->dst, conflicts, conflictCount);
 	}
 
 	VOID ReplayGround(const Cmd* cmd, const List* list)
@@ -5735,6 +6710,10 @@ namespace Twin
 
 			case CmdGround:
 				ReplayGround(cmd, list);
+				break;
+
+			case CmdSeed:
+				ReplaySeed(cmd, list);
 				break;
 
 			case CmdPixel:
@@ -6006,6 +6985,14 @@ namespace Twin
 		shared.pixelCalls += gl.pixelCalls;
 		shared.showOther += gl.showOther;
 		shared.showOff += showOff;
+		shared.seedReplayed += gl.seedReplayed;
+		shared.seedPieces += gl.seedPieces;
+		shared.seedMissing += gl.seedMissing;
+		shared.conflictsChecked += gl.conflictsChecked;
+		shared.conflictsDiffer += gl.conflictsDiffer;
+		shared.conflictsSkipped += gl.conflictsSkipped;
+		shared.conflictBlocks += gl.conflictBlocks;
+		gl.seedReplayed = gl.seedPieces = gl.seedMissing = gl.conflictsChecked = gl.conflictsDiffer = gl.conflictsSkipped = gl.conflictBlocks = 0;
 		gl.showOpaque = gl.showBack = gl.showInvalid = gl.showGone = gl.showOther = 0;
 		gl.groundReplayed = gl.groundFallbacks = 0;
 		gl.pixelReplayed = gl.pixelCalls = 0;
@@ -6052,6 +7039,10 @@ namespace Twin
 				GLDeleteTextures(1, &gl.check);
 			if (gl.checkFbo)
 				GLDeleteFramebuffers(1, &gl.checkFbo);
+			if (gl.conflict)
+				GLDeleteTextures(1, &gl.conflict);
+			if (gl.conflictFbo)
+				GLDeleteFramebuffers(1, &gl.conflictFbo);
 			GLDeleteBuffers(1, &gl.vbo);
 			GLDeleteVertexArrays(1, &gl.vao);
 			GLDeleteProgram(gl.copyProgram);
@@ -6072,6 +7063,8 @@ namespace Twin
 			MemoryFree(gl.verts);
 		if (gl.placed)
 			MemoryFree(gl.placed);
+		if (gl.conflictData)
+			MemoryFree(gl.conflictData);
 		MemoryZero(&gl, sizeof(gl));
 
 		if (shared.state == 2)

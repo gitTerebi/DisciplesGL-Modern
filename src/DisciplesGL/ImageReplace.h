@@ -25,6 +25,10 @@ namespace ImageReplace
 	VOID ReleaseGL();
 	BOOL ArtTexture(LONG frame, GLuint* id, LONG* width, LONG* height);
 	BOOL ArtReady(LONG frame);
+	LONG ArtState(LONG frame);
+	BOOL ArtUpload(LONG frame);
+	const CHAR* MemoryName(const VOID* ptr);
+	VOID LogSeedSources();
 	BOOL FindMemory(const VOID* ptr, const VOID** base, LONG* pitch, LONG* width, LONG* height, LONG* frame, BOOL* flipped);
 	VOID GroundFlush(const VOID* ptr);
 	BOOL GroundReady(DWORD chunk);
