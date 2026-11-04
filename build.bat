@@ -9,13 +9,17 @@ if not exist "%MSBUILD%" (
   exit /b 1
 )
 
+if not exist "%ROOT%logs" mkdir "%ROOT%logs"
+
 "%MSBUILD%" "%ROOT%src\DisciplesGL\DisciplesGL.vcxproj" ^
   /p:Configuration=Release ^
   /p:Platform=Win32 ^
   /p:OutDir="%ROOT%build\\" ^
-  /m
+  /m /v:minimal > "%ROOT%logs\build.log" 2>&1
+set "BUILDERR=%ERRORLEVEL%"
+type "%ROOT%logs\build.log"
 
-if errorlevel 1 exit /b %ERRORLEVEL%
+if not "%BUILDERR%"=="0" exit /b %BUILDERR%
 
 for %%G in ("Disciples 2" "Disciples 2 - Rise of the Elves" "Disciples 2 - Dzieje" "Disciples 2 - Semga") do (
   if not exist "G:\games\%%~G" (
@@ -25,6 +29,7 @@ for %%G in ("Disciples 2" "Disciples 2 - Rise of the Elves" "Disciples 2 - Dziej
 )
 
 for %%G in ("Disciples 2" "Disciples 2 - Rise of the Elves" "Disciples 2 - Dzieje" "Disciples 2 - Semga") do (
+  if exist "G:\games\%%~G\DisciplesGL-debug.log" move /Y "G:\games\%%~G\DisciplesGL-debug.log" "G:\games\%%~G\DisciplesGL-debug.prev.log" >nul
   copy /Y "%ROOT%build\C4dll-R.dll" "G:\games\%%~G\C4dll-R.dll"
   if errorlevel 1 exit /b 1
 )
