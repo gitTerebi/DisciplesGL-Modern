@@ -21,3 +21,6 @@
 *.recipe
 *.user
 *.suo
+
+# agent worktrees (temporary)
+.claude/worktrees/
