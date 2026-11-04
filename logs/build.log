@@ -1,6 +1,58 @@
 MSBuild version 17.14.40+3e7442088 for .NET Framework
 
+  Allocation.cpp
+  BattleSpeed.cpp
+  Config.cpp
+  DllMain.cpp
+  FastAI.cpp
+  FasterEndTurn.cpp
+  GDIRenderer.cpp
+  GLib.cpp
+  Hooks.cpp
+  IDraw7.cpp
+  IDrawClipper.cpp
+  IDrawPalette.cpp
+  IDrawSurface7.cpp
+  IDrawUnknown.cpp
+  ImageReplace.cpp
+  Main.cpp
+  MapOrder.cpp
+  MidRenderer.cpp
+  Mods.cpp
+  NewRenderer.cpp
+  OGLRenderer.cpp
+  OldRenderer.cpp
+  OpenDraw.cpp
+  OpenDrawClipper.cpp
+  OpenDrawPalette.cpp
+  OpenDrawSurface.cpp
+  PixelBuffer.cpp
+  PngLib.cpp
+  Renderer.cpp
+  SaveList.cpp
+  ShaderGroup.cpp
+  ShaderProgram.cpp
+  ShopFrame.cpp
+  StateBuffer.cpp
+  StdAfx.cpp
+  TextReplace.cpp
+  TurnArt.cpp
+  TurnIncome.cpp
+  TurnOrder.cpp
+  TurnSummary.cpp
+  Twin.cpp
+  WalkSpeed.cpp
+  Window.cpp
+LINK : warning LNK4108: /ALIGN specified without /DRIVER; image may not run [C:\Users\somtam\repo\DisciplesGL-Modern\src\DisciplesGL\DisciplesGL.vcxproj]
+     Creating library C:\Users\somtam\repo\DisciplesGL-Modern\build\C4dll-R.lib and object C:\Users\somtam\repo\DisciplesGL-Modern\build\C4dll-R.exp
+C4dll-R.exp : warning LNK4070: /OUT:C4DLL.dll directive in .EXP differs from output filename 'C:\Users\somtam\repo\DisciplesGL-Modern\build\C4dll-R.dll'; ignoring directive [C:\Users\somtam\repo\DisciplesGL-Modern\src\DisciplesGL\DisciplesGL.vcxproj]
+  Generating code
+  5 of 2376 functions ( 0.2%) were compiled, the rest were copied from previous compilation.
+    3 functions were new in current compilation
+    23 functions had inline decision re-evaluated but remain unchanged
+  Finished generating code
+C4dll-R.exp : warning LNK4070: /OUT:C4DLL.dll directive in .EXP differs from output filename 'C:\Users\somtam\repo\DisciplesGL-Modern\build\C4dll-R.dll'; ignoring directive [C:\Users\somtam\repo\DisciplesGL-Modern\src\DisciplesGL\DisciplesGL.vcxproj]
   DisciplesGL.vcxproj -> C:\Users\somtam\repo\DisciplesGL-Modern\build\C4dll-R.dll
   CRC32
-    old 0x004801DD
-    new 0x004801DD
+    old 0x0047935B
+    new 0x0047714E
