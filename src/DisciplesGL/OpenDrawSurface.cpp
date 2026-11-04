@@ -421,9 +421,8 @@ VOID OpenDrawSurface::SwapBuffers()
 			lpBuffer = (WORD*)stateBuffer->data + offset;
 		}
 
+		// whatever a mod draws here is found and repaired by the twin tile check at present; marking the whole frame dirty would re-upload 1x over all 4K art every frame
 		Mods::DrawFrame((config.mode->width - stateBuffer->size.width) >> 1, (config.mode->height - stateBuffer->size.height) >> 1, stateBuffer->size.width, stateBuffer->size.height, *(LONG*)&pitch, fomat, lpBuffer);
-		if (config.bpp32Hooked)
-			Twin::OnWrite(lpBuffer, config.mode->width, stateBuffer->size.width, stateBuffer->size.height);
 	}
 
 	Twin::OnPresent(stateBuffer, (config.mode->width - stateBuffer->size.width) >> 1, (config.mode->height - stateBuffer->size.height) >> 1);
