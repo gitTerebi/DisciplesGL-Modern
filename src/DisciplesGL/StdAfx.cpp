@@ -151,8 +151,8 @@ LONG __stdcall CrashFilter(EXCEPTION_POINTERS* info)
 		if (file != INVALID_HANDLE_VALUE)
 		{
 			CrashDumpInfo dump = { GetCurrentThreadId(), info, FALSE };
-			// MiniDumpWithIndirectlyReferencedMemory | MiniDumpWithDataSegs: enough to walk the stack and read the globals the hooks use
-			BOOL ok = write(GetCurrentProcess(), GetCurrentProcessId(), file, 0x41, &dump, NULL, NULL);
+			// MiniDumpWithIndirectlyReferencedMemory: stacks plus the memory they point at, small enough to send with the logs
+			BOOL ok = write(GetCurrentProcess(), GetCurrentProcessId(), file, 0x40, &dump, NULL, NULL);
 			CloseHandle(file);
 			DebugLog("CRASH minidump %s", ok ? "written" : "failed");
 		}
