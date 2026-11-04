@@ -361,6 +361,7 @@ namespace ImageReplace
 		GroundOp ops[GROUND_OPS];
 		LONG pitch;
 		BOOL pending;
+		DWORD sentVersion;
 	};
 
 	struct GroundBlob {
@@ -381,6 +382,10 @@ namespace ImageReplace
 		DWORD builds, ops, unnamed, unmasked, rejected;
 		DWORD published, arts, notReady, retried, mismatched;
 		LONG retryFrame;
+		GroundChunk* flush;
+		const BYTE* flushStart;
+		const BYTE* flushEnd;
+		DWORD flushes;
 	} ground;
 
 	DWORD sub_TileFactory, sub_BorderFactory, sub_MaskData, sub_RaceCode, sub_GroundUpdate;
@@ -2185,8 +2190,13 @@ namespace ImageReplace
 			return;
 		c->cw = obj->rect.right;
 		c->ch = obj->rect.bottom;
+		c->pitch = obj->pitch >> 1;
 		ResetChunk(c, TRUE, 0);
 		++ground.builds;
+
+		ground.flush = c;
+		ground.flushStart = (const BYTE*)c->data;
+		ground.flushEnd = c->cw > 0 && c->ch > 0 ? ground.flushStart + ((c->ch - 1) * c->pitch + c->cw) * sizeof(DWORD) : ground.flushStart;
 	}
 
 	VOID OnGround(GroundKind kind, const VOID* tile, const Hooks::BlitObject* obj, const POINT* src, const POINT* dst, const RECT* rect, const BYTE* blendMask, const DWORD* alphaMask)
@@ -2290,6 +2300,7 @@ namespace ImageReplace
 		MemoryCopy(blob.ops, c->ops, c->count * sizeof(GroundOp));
 		++ground.published;
 		c->pending = FALSE;
+		c->sentVersion = c->version;
 
 		if (ground.arts < GROUND_LOG)
 			DebugLog("image ground art chunk=%d data=%08X size=%dx%d ops=%d", c - ground.chunks, c->data, c->cw, c->ch, c->count);
@@ -2297,6 +2308,24 @@ namespace ImageReplace
 
 		RECT rect = { 0, 0, c->cw, c->ch };
 		Twin::GroundArt(c->data, c->pitch, &rect, &blob, sizeof(blob) - sizeof(blob.ops) + c->count * sizeof(GroundOp));
+	}
+
+	VOID GroundFlush(const VOID* ptr)
+	{
+		const BYTE* at = (const BYTE*)ptr;
+		if (at < ground.flushStart || at >= ground.flushEnd)
+			return;
+
+		GroundChunk* c = ground.flush;
+		if (!c->data || at < (const BYTE*)c->data || c->pitch <= 0 || !c->valid || !c->count || c->sentVersion == c->version || !Enabled())
+			return;
+
+		DWORD offset = (DWORD)(at - (const BYTE*)c->data) / sizeof(DWORD);
+		if ((LONG)(offset % c->pitch) >= c->cw || (LONG)(offset / c->pitch) >= c->ch || !GroundReady(c - ground.chunks))
+			return;
+
+		++ground.flushes;
+		SendGround(c);
 	}
 
 	VOID RetryGround()
@@ -3072,6 +3101,11 @@ namespace ImageReplace
 		else
 			StrPrint(o->name, "%s_%02d_%02d.PNG", code, border % 100, variant % 100);
 		o->frame = GROUND_UNRESOLVED;
+
+		// tiles are named when the map loads; asking for their art now has it uploaded before the first ground build needs it
+		LONG frame = GroundFrame(obj);
+		if (frame >= 0)
+			Touch(&pack.texs[frame], frame);
 	}
 
 	VOID* __fastcall TileFactory(VOID* thisObj, DWORD /*edx*/, DWORD race, DWORD variant)
@@ -3099,7 +3133,7 @@ namespace ImageReplace
 		{
 			c->pitch = obj->pitch >> 1;
 			c->hash = HashRegion((const DWORD*)obj->data, c->pitch, 0, 0, c->cw, c->ch);
-			if (Enabled() && c->count)
+			if (Enabled() && c->count && c->sentVersion != c->version)
 			{
 				if (GroundReady(c - ground.chunks))
 					SendGround(c);
@@ -3209,7 +3243,7 @@ namespace ImageReplace
 
 		DebugLog("image stats builds=%d draws=%d unknown=%d ground chunks=%d builds=%d ops=%d unnamed=%d unmasked=%d rejected=%d",
 			stats.builds, stats.draws, stats.unknown, ground.chunkCount, ground.builds, ground.ops, ground.unnamed, ground.unmasked, ground.rejected);
-		DebugLog("image ground published=%d arts=%d notReady=%d retried=%d mismatched=%d", ground.published, ground.arts, ground.notReady, ground.retried, ground.mismatched);
+		DebugLog("image ground published=%d arts=%d flushes=%d notReady=%d retried=%d mismatched=%d", ground.published, ground.arts, ground.flushes, ground.notReady, ground.retried, ground.mismatched);
 		DebugLog("image memory ranges=%d hits=%d misses=%d dropped=%d rejected=%d learn store=%d face=%d", memory.count, memory.hits, memory.misses, memory.dropped, memory.rejected, memory.learnStore, memory.learnFace);
 		DebugLog("image store drawLinks=%d faceLinks=%d faceLoads=%d faceCopies=%d faceMisses=%d faceRejects=%d takes=%d takeLinks=%d takeFrames=%d",
 			storeStats.drawLinks, storeStats.faceLinks, storeStats.faceLoads, storeStats.faceCopies, storeStats.faceMisses, storeStats.faceRejects, storeStats.takes, storeStats.takeLinks, storeStats.takeFrames);

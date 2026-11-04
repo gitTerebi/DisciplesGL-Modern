@@ -93,6 +93,7 @@
 #define IDENTITIES 4
 #define SOURCE_WEIGHT 100
 #define TRACE_LOGS 24
+#define SEEN_SLOTS 65536
 #define INDEX_MIN_SIZE 8
 #define INDEX_SAVE_PERIOD 60000
 #define INDEX_LOGS 32
@@ -428,6 +429,28 @@ namespace Twin
 		RECT to;
 		const CHAR* outcome;
 	} trace;
+
+	struct Seen {
+		DWORD stamp;
+		LONG frame;
+		LONG flipped;
+		LONG dx;
+		LONG dy;
+		LONG sx;
+		LONG sy;
+		LONG w;
+		LONG h;
+		DWORD expect;
+	};
+
+	struct {
+		Seen slots[SEEN_SLOTS];
+		DWORD stamp;
+		ULONGLONG frameCycles;
+		ULONGLONG sumCycles;
+		ULONGLONG maxCycles;
+		DWORD frames;
+	} seen;
 
 	struct {
 		Expect expect[MAX_EXPECT];
@@ -1351,26 +1374,39 @@ namespace Twin
 
 	DWORD* FrameLearned(LONG frame, BOOL create);
 
-	VOID ExpectArt(LONG frame, BOOL flipped, const RECT* place, const RECT* clip, const ArtPart* parts, DWORD count)
+	Seen* SeenSlot(LONG frame, BOOL flipped, const ArtPart* part, BOOL* found)
 	{
-		if (!Active() || !place || !parts || !count)
-			return;
-
-		// expectations only teach the index now; once every part of this frame is known there is nothing to learn
-		DWORD* learned = FrameLearned(frame, FALSE);
-		if (learned && *learned >= count && !learn.multi[learned - learn.learned])
+		DWORD mask = SEEN_SLOTS - 1;
+		DWORD slot = ((DWORD)frame * 2654435761u ^ (DWORD)part->dx * 73856093u ^ (DWORD)part->dy * 19349663u ^ (DWORD)part->sx * 83492791u ^
+			(DWORD)part->sy * 2246822519u ^ (DWORD)part->w * 3266489917u ^ (DWORD)part->h ^ (flipped ? 0x9E3779B9u : 0)) & mask;
+		for (DWORD probes = 0; probes < SEEN_SLOTS; ++probes, slot = (slot + 1) & mask)
 		{
-			// let one call through every LEARN_PASS frames so a part the count missed can still learn
-			DWORD* pass = &learn.pass[learned - learn.learned];
-			if (game.frameNo - *pass < LEARN_PASS)
+			Seen* entry = &seen.slots[slot];
+			if (entry->stamp != seen.stamp)
 			{
-				++learn.skipped;
-				return;
+				*found = FALSE;
+				return entry;
 			}
-			*pass = game.frameNo;
+			if (entry->frame == frame && !entry->flipped == !flipped && entry->dx == part->dx && entry->dy == part->dy && entry->sx == part->sx && entry->sy == part->sy && entry->w == part->w && entry->h == part->h)
+			{
+				*found = TRUE;
+				return entry;
+			}
 		}
+		*found = FALSE;
+		return NULL;
+	}
 
-		Timed timed("ExpectArt");
+	VOID ExpectParts(LONG frame, BOOL flipped, const RECT* place, const RECT* clip, const ArtPart* parts, DWORD count)
+	{
+		BOOL found;
+		Seen* first = SeenSlot(frame, flipped, &parts[0], &found);
+		// the game renders the same image at the same spot many times a frame; while that registration is still pending the whole call is a repeat
+		if (found && first && !art.expect[first->expect].used)
+		{
+			++art.duplicates;
+			return;
+		}
 
 		if (art.imageCount >= MAX_IMAGES || art.count >= MAX_EXPECT)
 		{
@@ -1384,10 +1420,7 @@ namespace Twin
 		image->frame = frame;
 		image->flipped = flipped;
 		image->place = *place;
-		if (clip)
-			image->clip = *clip;
-		else
-			image->clip = *place;
+		image->clip = clip ? *clip : *place;
 
 		for (DWORD i = 0; i < count; ++i)
 		{
@@ -1395,25 +1428,26 @@ namespace Twin
 			if (part->w <= 0 || part->h <= 0)
 				continue;
 
+			Seen* slot = SeenSlot(frame, flipped, part, &found);
+			if (!slot)
+			{
+				++art.overflow;
+				continue;
+			}
+			if (found)
+			{
+				// a second copy of a repeated image still needs its context
+				art.expect[slot->expect].used = FALSE;
+				if (slot->expect < art.head)
+					art.head = slot->expect;
+				++art.duplicates;
+				continue;
+			}
+
 			if (art.count >= MAX_EXPECT)
 			{
 				art.overflow += count - i;
 				break;
-			}
-
-			DWORD* bucket = &art.bucket[ExpectBucket(part->dx, part->dy)];
-			BOOL duplicate = FALSE;
-			for (DWORD next = *bucket; next && !duplicate; next = art.expect[next - 1].next)
-			{
-				const Expect* old = &art.expect[next - 1];
-				const Image* oldImage = &art.images[old->image];
-				duplicate = !old->used && old->dx == part->dx && old->dy == part->dy && old->sx == part->sx && old->sy == part->sy && old->w == part->w && old->h == part->h
-					&& oldImage->frame == frame && !oldImage->flipped == !flipped;
-			}
-			if (duplicate)
-			{
-				++art.duplicates;
-				continue;
 			}
 
 			DWORD index = art.count++;
@@ -1426,14 +1460,38 @@ namespace Twin
 			e->h = part->h;
 			e->image = imageIndex;
 			e->used = FALSE;
+			DWORD* bucket = &art.bucket[ExpectBucket(e->dx, e->dy)];
 			e->next = *bucket;
 			*bucket = index + 1;
+
+			slot->stamp = seen.stamp;
+			slot->frame = frame;
+			slot->flipped = flipped ? 1 : 0;
+			slot->dx = part->dx;
+			slot->dy = part->dy;
+			slot->sx = part->sx;
+			slot->sy = part->sy;
+			slot->w = part->w;
+			slot->h = part->h;
+			slot->expect = index;
+
 			++art.expected;
 			++added;
 		}
 
 		if (!added && imageIndex == art.imageCount - 1)
 			--art.imageCount;
+	}
+
+	VOID ExpectArt(LONG frame, BOOL flipped, const RECT* place, const RECT* clip, const ArtPart* parts, DWORD count)
+	{
+		if (!Active() || !place || !parts || !count)
+			return;
+
+		Timed timed("ExpectArt");
+		ULONGLONG start = __rdtsc();
+		ExpectParts(frame, flipped, place, clip, parts, count);
+		seen.frameCycles += __rdtsc() - start;
 	}
 
 	BOOL Inside(const Expect* e, LONG x, LONG y, LONG w, LONG h, LONG sx, LONG sy)
@@ -1965,11 +2023,12 @@ namespace Twin
 
 			const Image* image = &art.images[e->image];
 			BOOL whole = EqualRect(from, srcRect) && x == e->dx && y == e->dy && width == e->w && height == e->h;
+			ULONGLONG blockHash = region && EqualRect(&region->rect, from) ? region->hash : 0;
 			if (whole)
 			{
 				ULONGLONG hash = 0;
 				BOOL have = FALSE;
-				if (region && EqualRect(&region->rect, from))
+				if (region && EqualRect(&region->rect, from) && region->hash)
 				{
 					hash = region->hash;
 					have = TRUE;
@@ -1982,6 +2041,8 @@ namespace Twin
 					have = !solid;
 				}
 
+				if (have)
+					blockHash = hash;
 				IndexEntry* entry = have ? IndexCreate(hash, width, height) : NULL;
 				if (entry)
 				{
@@ -1994,14 +2055,15 @@ namespace Twin
 					seen.flipped = image->flipped ? 1 : 0;
 					seen.count = 0;
 					AddEvidence(entry, &seen, 1);
-
-					const Identity* dominant = Dominant(entry);
-					if (dominant)
-						AddRegion(source, from, hash, dominant->frame, dominant->flipped, dominant->canvasW, dominant->canvasH, dominant->cx, dominant->cy);
-					else
-						AddRegion(source, from, hash, -1, FALSE, 0, 0, 0, 0);
 				}
 			}
+
+			// the game says what this is right now; cached copies that follow without a render call must keep showing it
+			if (!region || region->frame != image->frame || !region->flipped != !image->flipped || region->placeW != image->place.right - image->place.left ||
+				region->placeH != image->place.bottom - image->place.top || region->cx + from->left - region->rect.left != to->left - image->place.left ||
+				region->cy + from->top - region->rect.top != to->top - image->place.top)
+				AddRegion(source, from, blockHash, image->frame, image->flipped,
+					image->place.right - image->place.left, image->place.bottom - image->place.top, to->left - image->place.left, to->top - image->place.top);
 
 			++index.contextDraws;
 			art.reason = "context";
@@ -2368,6 +2430,18 @@ namespace Twin
 		if (art.count)
 			MemoryZero(art.bucket, sizeof(art.bucket));
 		art.count = art.imageCount = art.head = 0;
+
+		if (!++seen.stamp)
+		{
+			MemoryZero(seen.slots, sizeof(seen.slots));
+			seen.stamp = 1;
+		}
+
+		seen.sumCycles += seen.frameCycles;
+		if (seen.frameCycles > seen.maxCycles)
+			seen.maxCycles = seen.frameCycles;
+		seen.frameCycles = 0;
+		++seen.frames;
 	}
 
 	VOID CreateTwin(StateBuffer* buffer, LONG width, LONG height);
@@ -2461,7 +2535,8 @@ namespace Twin
 		if (!Active() || !data || !rect || !ops || !bytes)
 			return;
 
-		Sync();
+		// GroundFlush can call this from inside a pixel hook's sequence, where draining every pending mirror sync would read pixels before their write
+		Sync(FALSE);
 
 		DWORD id;
 		Record* twin = FindAddress(data, &id);
@@ -2483,6 +2558,7 @@ namespace Twin
 		if (!Clip(twin, &area))
 			return;
 
+		DrainSyncIn(twin, &area);
 		Cover(twin, &area);
 		FlushRegion(twin, id, &area, TRUE);
 
@@ -2640,6 +2716,9 @@ namespace Twin
 			source->keyed = TRUE;
 			source->key = key | ALPHA_COMPONENT;
 		}
+
+		// a ground block still being built must get its 4K command recorded before anything copies out of it
+		ImageReplace::GroundFlush((const DWORD*)source->base + from.top * source->pitch + from.left);
 
 		FlushRegion(source, srcId, &from);
 		Verify(source, srcId, &from, NULL, 0, FALSE);
@@ -2847,6 +2926,7 @@ namespace Twin
 		if (!dst || !src || width <= 0 || height <= 0 || (DWORD)mode >= PIXEL_MODES || !Active())
 			return;
 
+		ImageReplace::GroundFlush(src);
 		TraceBegin("pixel", mode, (param & PixelMirror) != 0);
 		PixelCopyInner(mode, src, srcPitch, dst, dstPitch, width, height, key, param);
 		TraceEnd();
@@ -3055,6 +3135,7 @@ namespace Twin
 		if (!src || !dst || !mask || length <= 0 || !Active())
 			return;
 
+		ImageReplace::GroundFlush(src);
 		Sync(FALSE);
 
 		DWORD dstId;
@@ -3281,7 +3362,18 @@ namespace Twin
 			if (elapsedUs)
 				slowUs = DWORD(slow.cycles * elapsedUs / max(tsc - slow.tsc, 1ULL));
 		}
-		DebugLog("twin slowest game-thread call %s %u us | expectation calls skipped as learned %u | slow hashes %u", slow.name ? slow.name : "none", slowUs, learn.skipped, learn.slowHashes);
+		ULONGLONG tscPerUs = 0;
+		if (slow.qpc && qpc.QuadPart > slow.qpc && game.frequency.QuadPart)
+		{
+			ULONGLONG elapsedUs = (ULONGLONG)(qpc.QuadPart - slow.qpc) * 1000000 / game.frequency.QuadPart;
+			if (elapsedUs)
+				tscPerUs = (tsc - slow.tsc) / elapsedUs;
+		}
+		DWORD expectAvgUs = tscPerUs && seen.frames ? DWORD(seen.sumCycles / seen.frames / tscPerUs) : 0;
+		DWORD expectMaxUs = tscPerUs ? DWORD(seen.maxCycles / tscPerUs) : 0;
+		DebugLog("twin slowest game-thread call %s %u us | ExpectArt per frame avg %u us max %u us | slow hashes %u", slow.name ? slow.name : "none", slowUs, expectAvgUs, expectMaxUs, learn.slowHashes);
+		seen.sumCycles = seen.maxCycles = 0;
+		seen.frames = 0;
 		slow.cycles = 0;
 		slow.name = NULL;
 		slow.tsc = tsc;
@@ -4739,6 +4831,21 @@ namespace Twin
 		if (drawn)
 		{
 			++gl.groundReplayed;
+			if (shared.tint)
+			{
+				TargetTwin(cmd->dst);
+				UseCopy(FALSE, 0);
+				GLUniform1i(gl.fillLoc, 1);
+				GLUniform4f(gl.solidLoc, 0.3f, 1.0f, 0.3f, 1.0f);
+				GLEnable(GL_BLEND);
+				GLBlendFunc(GL_DST_COLOR, GL_ZERO);
+				gl.vertCount = 0;
+				AddQuad((FLOAT)(gpu->width * scale), (FLOAT)(gpu->height * scale), (FLOAT)(cmd->rect.left * scale), (FLOAT)(cmd->rect.top * scale),
+					(FLOAT)(cmd->rect.right * scale), (FLOAT)(cmd->rect.bottom * scale), 0.0f, 0.0f, 0.0f, 0.0f);
+				DrawVerts();
+				GLDisable(GL_BLEND);
+				GLUniform1i(gl.fillLoc, 0);
+			}
 			return;
 		}
 

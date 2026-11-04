@@ -3085,7 +3085,10 @@ namespace Hooks
 			if (Clip(&shift, &pt, &size, &obj->rect))
 			{
 				if (obj->isTrueColor)
-					Twin::OnWrite((DWORD*)obj->data + pt.y * (obj->pitch >> 1) + pt.x, obj->pitch >> 1, size.cx, size.cy);
+					Twin::OnPixelCopy(colorKey == 0xFFFFFFFF ? Twin::PixelCopy : Twin::PixelKeyedCopy,
+						(DWORD*)data + shift.y * (pitch >> 1) + shift.x, pitch >> 1,
+						(DWORD*)obj->data + pt.y * (obj->pitch >> 1) + pt.x, obj->pitch >> 1,
+						size.cx, size.cy, colorKey == 0xFFFFFFFF ? 0 : Convert565toRGB(colorKey), 0);
 
 				if (colorKey == 0xFFFFFFFF)
 				{

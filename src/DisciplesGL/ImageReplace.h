@@ -26,6 +26,7 @@ namespace ImageReplace
 	BOOL ArtTexture(LONG frame, GLuint* id, LONG* width, LONG* height);
 	BOOL ArtReady(LONG frame);
 	BOOL FindMemory(const VOID* ptr, const VOID** base, LONG* pitch, LONG* width, LONG* height, LONG* frame, BOOL* flipped);
+	VOID GroundFlush(const VOID* ptr);
 	BOOL GroundReady(DWORD chunk);
 	BOOL DrawGround(const VOID* ops, DWORD bytes, LONG width, LONG height);
 }
