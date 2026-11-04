@@ -610,7 +610,8 @@ Ground in seed mode therefore keeps `GroundArt`/`DrawGround` (`CmdGround`), exac
 | `twin replay per command 5s` / `twin replay slowest command 5s` | every 5 s | dispatches, total and max per command type; the slowest command |
 | `twin slow replay` | each replay over 50 ms, first 64 | the replay's time and its slowest command |
 | `twin off: ...` | once | twins are off: `Twin.Mode=off`, or no 4K pack |
-| `image sheet pieces <file> ...` | first 20 sheet seeds, then sheets with uncertain pieces or file-named frames read differently (64), then Events.ff, Faces.ff and multi-part frames of the sheet's size (96) | frames with their parts union, pack entries and the full piece list (see The unit card portrait) |
+| `image sheet pieces <file> ...` | every Events.ff sheet seed (256, with a `band order` line), the first 20 other sheet seeds, then sheets with uncertain pieces or file-named frames read differently (64), then Faces.ff and multi-part frames of the sheet's size (96) | frames with their parts union, pack entries (with `pixels PWxPH scale S`) and the full piece list, each piece with the entry rect it samples in 1x (`src`) and texels (`tex`) (see The unit card portrait) |
+| `image background seed <file>` / `... placement` | every `Wrapper.ff` `*_BG` seed, once per decode (200) | the entry's geometry against the canvas and the final 4K box (see Battle background shift) |
 | `image sheet checks since start` | every 5 s | pieces left 1x as uncertain, and why |
 | `image pack offset derived` / `full canvas` / `left 1x` | first 128 entries (32 more for a missing 8-bit decode) | a gamenames entry at 0,0 that cannot start there: entry size, parts union, key box, the offset used and how it was derived (see Zeroed offsets) |
 | `image pack offsets zeroed by the repack, since start` | every 5 s | entries placed at the union, at the key box, full-canvas entries kept, left 1x |
@@ -628,6 +629,74 @@ The log is written by its own thread, at most 50 ms after a line (see Seed hitch
 
 The tile check (`twin tiles check`, `twin repair`), the GPU check (`twin check twin ...`, `twin gpu check`) and the art-tile check (`twin art check ...`, which names `seeded sheet twin N` for seeds) run unchanged in both modes.
 
+## Battle background shift and reversed portrait bands (analysis after the 04:33 run)
+
+Two reports, both from screenshots, with no log after the 04:33 run (`e66696c`):
+
+- **Battle background.** In the HD view the battle ground art sits about 40 px further left and about 40 px further up than in 1x, measured against the units, which match. The HD art also seems to show a slightly different region.
+- **Unit portrait** (a dwarf with a green pointy hat). The 4K portrait is coherent but cut into 3 or 4 full-width bands in reversed vertical order: the robe and beard on top, the face in the middle, the hat at the bottom. Each band is upright.
+
+### Which file the battle background is, and how it is seeded
+
+It is `Wrapper.ff`'s `<TERRAIN>_<n>_BG.PNG`, 990x600 at 1x, one `-IMAGES.OPT` frame of one part (`Wrapper.ff: 53 frame entries, 0 animations`). The logs show `HUMAN_2_BG` record 128 (04:33, lines 2348, 2536 and 2693), `HUMAN_0_BG` record 126 and `HUMAN_1_BG` record 127 (18:27 to 19:07, pack frame `#1242`), and `NEUTRAL_0_BG` record 129. It does reach the logs, as `twin decode named ... via loader` lines; the older runs also have the `found by the store decode` line for it. Its piece list was never logged, because it came after the first 20 sheets and has one part. It takes the same path as the main menu background:
+
+1. `StoreDraw` decodes it as 8-bit indices into the 1152x1152 scratch (called from `0052AF88`).
+2. `SeedStore` → `SeedSheet` → `SheetPieces` gives 1 piece (`sheet, pieces 1`).
+3. The piece is seeded through the decode snapshot at 0,0 of twin 4 (`sheet transfer deferred ... rect 0,0 990x600 pitch 1152`). The copy carries it into the 990x600 surface (`sheet completed later ... twin 104 surface ... rect 0,0 990x600 pitch 990`), and the game copies on from that surface.
+
+No other path is involved. The battle-unit code of `7a8b293`/`5e0570d` (expectations, `CmdArt`) is match mode only, `GameName()` has no battle-background category, and no CENTRE or SPRITE origin applies: in the gamenames pack every entry is read as `OriginCanvas` (`ImageReplace.cpp:PackName`).
+
+### Where the pack entry comes from
+
+`repack.py` maps no Gallean `battle-background/...` id: `game_name()` has no branch for it and returns `None, None` (`tools/repack/repack.py:149`), so it is counted under `unmapped by category`. A `HUMAN_n_BG` entry in `gamenames-v1` can therefore only come from the `ui` input, own-v1, which is added as `e['Id'].split('/')[-1].upper()` with its metadata unchanged (`repack.py:277`), so no CENTRE or SPRITE correction is applied. Its Width, Height, Offset and PixelWidth/PixelHeight are not in any log, and no peek of them exists yet.
+
+Gallean's own battle background is a different composition and could not have been filed under the game name unchanged. It is an Umbra repaint with normal, depth and albedo layers (`tools/Packer/BackgroundBuilder.cs`). The scene is `BattleSceneWidth = 950` wide and 600 high. Width and Height come from the image's aspect (reduced by the GCD and scaled to about 600 high), with `OffsetX = 475 - Width/2` and `OffsetY = 0`, and the client draws it as a shader rect at those scene coordinates (`BattleRenderContentProvider.Background.cs`). Its variant counts (`human` 2, `neutral` 4, `heretic` 3) are not the game's either (`HUMAN_0..2_BG`). So the canvas, the anchor and the framing all differ from the game's 990x600 image at 0,0.
+
+### What the DLL applies
+
+`SheetPieces` places a frame's entry at `place = sheet - canvas + offset` (`ImageReplace.cpp`, the `RECT place` line in the parts loop), at the entry's 1x Width/Height. For the one-part background with its part at canvas 0,0 and sheet 0,0, the 4K box is therefore the entry's `OffsetX,OffsetY` with size `Width x Height`, in file coordinates. Every later copy moves it with the 1x.
+
+That placement can only start right of or below the canvas origin. A negative offset, or a box reaching outside the parts union, sets `outsideParts` and leaves the frame 1x. `DeriveOffset` only touches entries at 0,0 whose union does not start at 0,0, or SPRITE names. So no geometry the code applies can draw the HD art 40 px up and left of the 1x:
+
+- a positive offset would move it right and down;
+- a CENTRE or half-size correction does not apply to this entry;
+- no canvas offset is applied twice. `ClipPieces` and `SeedDerive` move `to` and `place` together.
+
+What fits the report is the entry's art itself. Pixel `(X, Y)` of the entry shows the 1x content at about `(X + 40, Y + 40)`, which means the art was framed or cropped differently from the 1x 990x600 frame. Another possibility is that its Width/Height do not match its PixelWidth/PixelHeight aspect, so the texture is stretched over the box. The "different region" observation supports this. Neither can be corrected from code without the entry's geometry, and identity by pixel matching is ruled out. So nothing was changed in the placement, and the next run logs it.
+
+### Why the portrait bands are not a flip, a scale or the canvas mapping
+
+Upright bands in reversed order are a permutation of horizontal strips: each band shows the 4K of another band.
+
+- **(a) Y flip: no.** `WebPDecodeRGBA` returns rows top-down (`DecodeWebP`), and `glTexImage2D` puts row 0, the image's top, at v = 0 (`ImageReplace.cpp:Upload`). `PieceUv` measures v from the box's top (`Twin.cpp:PieceUv`). `AddQuad` puts game row 0 at FBO row 0, and `ReplayCopy` samples `rect.top / height` in that same convention. Nothing in the seed path flips. A flip would also turn each band upside down, and the bands are upright.
+- **(b) PixelScale: no.** Until this change `ParseMetadata` did not even read `PixelScale` or `PixelWidth`. Pieces sample by fractions of the entry's 1x Width/Height (`PieceUv`). `ReplaySeed` ignores the texture's texel size (`SeedTexture`'s `w`/`h` are unused), so a PixelScale-2 entry samples exactly like a PixelScale-4 one. A wrong factor would stretch, not reorder.
+- **(c) Canvas → sheet mapping: no, in `SheetPieces`.** The DLL reads parts as `{SourceX, SourceY, DestX, DestY, Width, Height}` = canvas, sheet, size, which is Gallean's `MqImagePart` order (`ImagesExtractor.ReadImageBlocks`). `place = sheet - canvas + offset` is the inverse of `BuildImage`, which copies sheet `DestX/DestY` to canvas `SourceX/SourceY`. The event portrait's entry is `SpriteOperations.Composite`, the frames at their canvas bounds on a canvas as large as the largest frame, at 0,0, which `DeriveOffset` takes as `full canvas`. Each piece therefore samples its own canvas rect.
+
+What does give exactly the report is an **identity reading**: the entry laid over the sheet in sheet order, on a sheet whose packer stored the bands bottom-up. The plain paths are refused for packed sheets since `64445dc` (see Plain seeds never take a packed sheet), apart from a face whose file is in no tracked archive (`PlainCheck`, `not verified`). If the screenshot is from a build before `64445dc`, it is that bug. If it is from this build, the new band-order line says whether the sheet stores the bands bottom-up. If it does, some path still lays the entry in sheet order, and the `image plain seed check` lines name it.
+
+### New log lines
+
+| Line | When | Content |
+|---|---|---|
+| `image background seed <file>: file <id> WxH, blocks, frames, pieces \| frame [0] <name> canvas WxH, parts union x,y wxh -> pack <entry> #n entry WxH pixels PWxPH scale S[ \| TEXTURE ASPECT DIFFERS ...] offset x,y origin <o>, <derive result or offset as stored>, placed with offset x,y[ \| ENTRY IS NOT THE CANVAS AT 0,0: its 4K covers canvas x,y wxh]` | every seed of a `Wrapper.ff` `*_BG` file, once per decode (200) | the entry's manifest geometry against the frame's canvas |
+| `image background seed <file> placement: [frame] canvas x,y -> file x,y wxh: 1x canvas origin at file x,y, 4K box at file x,y wxh (dx,dy from the canvas origin), samples entry x,y wxh = texels x,y wxh` | the same | the final placement rect in the decoded file. The twin rect is this plus the `twin seed` line's rect origin |
+| `image sheet pieces <file> ... (event portrait)` | every Events.ff sheet seed (256) | as before, the frame line now with `pixels PWxPH scale S`, and each piece with `src` (entry rect in 1x) and `tex` (texels) |
+| `image sheet pieces <file> band order: pairs ..., kept in canvas order by the sheet n, reversed by the sheet n \| frame box tops ...[ \| THE SHEET STORES THE BANDS BOTTOM-UP ...]` | after each event portrait's piece list | whether an identity reading would reverse the bands |
+
+Every `image sheet pieces` piece list now has `src x,y wxh tex x,y wxh` too. `PackFrame` keeps `PixelWidth`, `PixelHeight` and `PixelScale` (`pw`, `ph`, `scale`) for these lines only.
+
+### To settle it
+
+`tools/repack/peek.py` has name sets. On Windows:
+
+```
+python -I tools\repack\peek.py gamenames-v1.galleanpack logs\peek @battle-bg @portraits
+python -I tools\repack\peek.py own-v1.galleanpack logs\peek @battle-bg
+python -I tools\repack\peek.py assets-v1.galleanpack logs\peek @battle-bg
+```
+
+`@battle-bg` is `<TERRAIN>_<n>_BG` for the races, `CITY`, `RUIN`, `BOAT` and `WATER` (n = 0 to 4), plus Gallean's `battle-background/...` ids. Compare the `HUMAN_2_BG` entry's Width/Height/Offset with 990x600 at 0,0, and its image with the 1x. A 40 px margin or crop, or a 950-wide Gallean framing, shows there and in the `image background seed` lines. The fix then follows from that geometry: either an offset or size correction in the repack, or the background left 1x by a size check.
+
 ## Open gaps
 
 1. **The loader match is by pointer into the latest decode.** If other code wrote the scratch between `StoreDraw` and the blit (none is known; the 17:54 log has none), the blit would take the latest decode's name. The 600-frame limit bounds it, and `image loader decodes` counts the matches. The capture-only seed reads the decode as 16 and 8 bpp; a true-colour decode too big for its 32 bpp reading is still not seeded.
@@ -642,5 +711,6 @@ The tile check (`twin tiles check`, `twin repair`), the GPU check (`twin check t
 8. **The seed draw assumes `StoreDraw` overwrites its rect.** If the game ever composites a store image onto existing content through `StoreDraw`, then 4K-transparent texels over opaque background 1x pixels come out transparent.
 9. **Streaming risks.** Pieces of a sheet now land over several presents, so a frame can briefly show a mix of 1x and 4K. A derived seed assumes the unkeyed copy replaced its rect; a later keyed copy or write over it drops the pieces it touches.
 10. **Trap risks.** A write into a trapped page from kernel mode (`ReadFile` into a surface, a GDI call writing it) fails with an error instead of faulting, so the trap would break it. No such path is known. The VEH also sees every exception in the process, but it returns at once for anything that is not a write AV inside a trapped page. Each fault costs a few microseconds; the page budget bounds it at about 2048 a second plus first writes. `WriteTrap=0`, now the default, turns it off and goes back to heap-allocated surfaces.
-11. **Event portraits are still wrong on screen** (`G000UU0013.PNG` in the 19:07 run) for a reason the layout does not explain. See The portrait in terms of this layout. The plain (identity) path did not cause it: every logged event portrait went through `SheetPieces`, and the plain path is now refused for packed sheets anyway (see Plain seeds never take a packed sheet).
+11. **Event portraits are still wrong on screen** (`G000UU0013.PNG` in the 19:07 run; reversed upright bands reported after the 04:33 run) for a reason the layout does not explain. See The portrait in terms of this layout and Battle background shift and reversed portrait bands: a flip and a PixelScale factor are excluded by the code, and the band-order line shows whether an identity reading would explain it. The plain (identity) path is refused for packed sheets (see Plain seeds never take a packed sheet).
+13. **The battle background's 4K is framed differently from the 1x** (about 40 px up and left). The entry comes from own-v1, not from Gallean. Its geometry is logged (`image background seed`) and can be peeked (`@battle-bg`); no correction is applied until it is known.
 12. **No tile check by default.** A CPU write that no hook sees now stays on the GPU twin as stale pixels until the twin is next uploaded. In every logged run the check repaired nothing.

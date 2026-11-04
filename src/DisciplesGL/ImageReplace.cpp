@@ -144,6 +144,9 @@ namespace ImageReplace
 		LONGLONG offset;
 		DWORD length;
 		LONG w, h, ox, oy;
+		// the manifest's PixelWidth/PixelHeight/PixelScale: the WebP's size and its scale over Width/Height (4 for most of Gallean's art, 2 for faces and event
+		// portraits). Seeds sample entries by fractions of Width/Height (Twin.cpp PieceUv), so these only go to the logs, as a check that the texture holds the 1x box
+		LONG pw, ph, scale;
 		BOOL additive;
 		PackFormat format;
 	};
@@ -979,6 +982,12 @@ namespace ImageReplace
 				frame->ox = (LONG)Num(j);
 			else if (Is(name, n, "OffsetY"))
 				frame->oy = (LONG)Num(j);
+			else if (Is(name, n, "PixelWidth"))
+				frame->pw = (LONG)Num(j);
+			else if (Is(name, n, "PixelHeight"))
+				frame->ph = (LONG)Num(j);
+			else if (Is(name, n, "PixelScale"))
+				frame->scale = (LONG)Num(j);
 			else if (Is(name, n, "Additive"))
 			{
 				Ws(j);
@@ -3419,6 +3428,7 @@ namespace ImageReplace
 	#define SHEET_PIECE_LOGS 20
 	#define SHEET_UNCERTAIN_LOGS 64
 	#define SHEET_FORCED_LOGS 96
+	#define SHEET_EVENT_LOGS 256
 	#define SHEET_OVERLAP_LIMIT 1024
 
 	struct SheetFrameInfo {
@@ -3448,7 +3458,7 @@ namespace ImageReplace
 	DWORD sheetFrameCount;
 
 	struct {
-		DWORD pieceLogs, uncertainLogs;
+		DWORD pieceLogs, uncertainLogs, eventLogs;
 		DWORD wrongSize, fileNamed, fileNamedDiffer, notFrame, offsetLost, overlaps, duplicates, dropped, unchecked, forcedLogs;
 	} sheetCheck;
 
@@ -3736,6 +3746,31 @@ namespace ImageReplace
 
 	const CHAR* const originNames[] = { "canvas", "centre", "sprite" };
 
+	// The entry rect a seed piece samples: the piece's rect in the decoded file less the frame box's place, in the entry's 1x units (Width/Height), and the same in
+	// the WebP's texels (PixelWidth/PixelHeight). Twin.cpp PieceUv hands the GPU these as fractions of Width/Height, so PixelScale never enters the placement
+	VOID PieceSource(const PackFrame* pf, const RECT* to, const RECT* place, RECT* src, RECT* tex)
+	{
+		SetRect(src, to->left - place->left, to->top - place->top, to->right - place->left, to->bottom - place->top);
+		LONGLONG w = pf->w > 0 ? pf->w : 1, h = pf->h > 0 ? pf->h : 1;
+		LONGLONG pw = pf->pw > 0 ? pf->pw : w, ph = pf->ph > 0 ? pf->ph : h;
+		SetRect(tex, (LONG)(src->left * pw / w), (LONG)(src->top * ph / h), (LONG)(src->right * pw / w), (LONG)(src->bottom * ph / h));
+	}
+
+	// " pixels PWxPH scale S", with a flag when the texture is not the 1x box at one scale (its content would then be stretched over the 1x box)
+	const CHAR* PixelText(const PackFrame* pf, CHAR* text)
+	{
+		LONGLONG w = pf->w, h = pf->h, pw = pf->pw, ph = pf->ph;
+		const CHAR* flag = "";
+		if (pw <= 0 || ph <= 0)
+			flag = " (no PixelWidth/PixelHeight in the manifest)";
+		else if (pw * h - ph * w > (pw > ph ? pw : ph) || ph * w - pw * h > (pw > ph ? pw : ph))
+			flag = " | TEXTURE ASPECT DIFFERS FROM Width/Height: the 4K is stretched over the 1x box";
+		else if (pf->scale > 0 && (pw != w * pf->scale || ph != h * pf->scale))
+			flag = " (not Width/Height x PixelScale)";
+		StrPrint(text, " pixels %dx%d scale %d%s", pf->pw, pf->ph, pf->scale, flag);
+		return text;
+	}
+
 	// the full piece list, so a misplacement can be read from the log: sheet rect -> pack frame, its part's rect in the frame canvas, the frame box placed in the sheet
 	VOID SheetPieceLog(const CHAR* label, DWORD fileId, LONG w, LONG h, DWORD count, const Twin::SeedSheetStats* stats, const CHAR* why)
 	{
@@ -3752,9 +3787,12 @@ namespace ImageReplace
 				StrCopy(derivedText, " | full-canvas entry, 0,0 is its place");
 			else if (i->derived == DeriveUnplaced)
 				StrCopy(derivedText, " | ZEROED OFFSET NOT DERIVABLE: left 1x");
-			DebugLog("image sheet pieces %.40s frame [%u] %.48s canvas %dx%d, %u parts %s %d,%d %dx%d of it -> pack %.48s%s #%d %dx%d offset %d,%d origin %s%s%s%s", label, f, i->name, i->cw, i->ch,
+			CHAR pixelText[160] = "";
+			if (pf)
+				PixelText(pf, pixelText);
+			DebugLog("image sheet pieces %.40s frame [%u] %.48s canvas %dx%d, %u parts %s %d,%d %dx%d of it -> pack %.48s%s #%d %dx%d%s offset %d,%d origin %s%s%s%s", label, f, i->name, i->cw, i->ch,
 				i->parts, i->composite ? "with the file's other frames (event portrait composite) covering" : "covering", i->bounds.left, i->bounds.top, i->bounds.right - i->bounds.left, i->bounds.bottom - i->bounds.top,
-				i->anim ? pack.names + i->anim->name : "-", i->exact ? "" : " (name variant)", i->frame, pf ? pf->w : 0, pf ? pf->h : 0, pf ? pf->ox : 0, pf ? pf->oy : 0,
+				i->anim ? pack.names + i->anim->name : "-", i->exact ? "" : " (name variant)", i->frame, pf ? pf->w : 0, pf ? pf->h : 0, pixelText, pf ? pf->ox : 0, pf ? pf->oy : 0,
 				originNames[i->origin < 3 ? i->origin : 0], derivedText, i->outsideParts ? " | ENTRY OUTSIDE THE FRAME'S PARTS: not this frame, left 1x" : "", !i->fileNamed ? "" : i->readingsDiffer ? " | named like the file, canvas reading (an identity reading would differ)" : " | named like the file, both readings agree");
 		}
 		CHAR text[1100];
@@ -3763,16 +3801,123 @@ namespace ImageReplace
 		for (DWORD k = 0; k < count && lines < 16; ++k)
 		{
 			const Twin::SeedPiece* p = &sheetPieces[k];
-			at += StrPrint(at, " %d,%d %dx%d->[%u]#%d canvas %d,%d place %d,%d%s;", p->to.left, p->to.top, p->to.right - p->to.left, p->to.bottom - p->to.top, sheetFrameOf[k], p->frame,
-				sheetCanvas[k].x, sheetCanvas[k].y, p->place.left, p->place.top, sheetDrop[k] ? " DROPPED" : "");
-			if (at - text > 700 || k + 1 == count)
+			RECT src, tex;
+			PieceSource(&pack.frames[p->frame], &p->to, &p->place, &src, &tex);
+			at += StrPrint(at, " %d,%d %dx%d->[%u]#%d canvas %d,%d place %d,%d src %d,%d %dx%d tex %d,%d %dx%d%s;", p->to.left, p->to.top, p->to.right - p->to.left, p->to.bottom - p->to.top, sheetFrameOf[k], p->frame,
+				sheetCanvas[k].x, sheetCanvas[k].y, p->place.left, p->place.top, src.left, src.top, src.right - src.left, src.bottom - src.top,
+				tex.left, tex.top, tex.right - tex.left, tex.bottom - tex.top, sheetDrop[k] ? " DROPPED" : "");
+			if (at - text > 600 || k + 1 == count)
 			{
-				DebugLog("image sheet pieces %.40s (sheet rect -> [frame] #pack frame, part's canvas pos, frame box in the sheet, not flipped):%s", label, text);
+				DebugLog("image sheet pieces %.40s (sheet rect -> [frame] #pack frame, part's canvas pos, frame box in the sheet, entry rect sampled in 1x and texels, not flipped):%s", label, text);
 				at = text;
 				*at = 0;
 				++lines;
 			}
 		}
+	}
+
+	// An event portrait shown as upright bands in reversed vertical order is a permutation of strips, not a flip (a flip would turn each band over) and not a
+	// scale (that stretches): each band takes the 4K of another band. This counts, over the pieces of one frame whose canvas rows do not overlap, the pairs the
+	// sheet keeps in canvas order and the pairs it keeps reversed. Mostly reversed means the packer stored the bands bottom-up, so anything that lays the entry
+	// over the sheet in sheet order (an identity reading) shows exactly the reported picture; the canvas reading (SheetPieces) cannot
+	VOID BandOrderLog(const CHAR* label, DWORD count)
+	{
+		DWORD same = 0, reversed = 0;
+		LONG minPlace = 0, maxPlace = 0;
+		for (DWORD i = 0; i < count && i < 512; ++i)
+		{
+			const Twin::SeedPiece* a = &sheetPieces[i];
+			LONG pa = a->place.top;
+			if (!i || pa < minPlace)
+				minPlace = pa;
+			if (!i || pa > maxPlace)
+				maxPlace = pa;
+			for (DWORD k = i + 1; k < count && k < 512; ++k)
+			{
+				const Twin::SeedPiece* b = &sheetPieces[k];
+				if (a->frame != b->frame || sheetFrameOf[i] != sheetFrameOf[k])
+					continue;
+				LONG ah = a->to.bottom - a->to.top, bh = b->to.bottom - b->to.top;
+				if (sheetCanvas[i].y + ah <= sheetCanvas[k].y || sheetCanvas[k].y + bh <= sheetCanvas[i].y)
+				{
+					BOOL canvasBefore = sheetCanvas[i].y < sheetCanvas[k].y;
+					BOOL sheetBefore = a->to.top < b->to.top;
+					if (canvasBefore == sheetBefore)
+						++same;
+					else
+						++reversed;
+				}
+			}
+		}
+		DebugLog("image sheet pieces %.40s band order: pairs of pieces of one frame on separate canvas rows %u, kept in canvas order by the sheet %u, reversed by the sheet %u | frame box tops in the sheet from %d to %d%s",
+			label, same + reversed, same, reversed, minPlace, maxPlace,
+			reversed > same ? " | THE SHEET STORES THE BANDS BOTTOM-UP: reversed upright bands on screen mean the entry was laid over the sheet in sheet order (identity), not through these pieces" : "");
+	}
+
+	// Wrapper.ff's *_BG files: the battle (HUMAN_0_BG, NEUTRAL_0_BG, ...) and city backgrounds, 990x600, one frame
+	BOOL BackgroundFile(const Archive* a, const CHAR* label)
+	{
+		DWORD pathLength = StrLength(a->path), length = label ? StrLength(label) : 0;
+		if (pathLength < 11 || StrCompareInsensitive(a->path + pathLength - 11, "\\Wrapper.ff"))
+			return FALSE;
+		if (length > 4 && !StrCompareInsensitive(label + length - 4, ".PNG"))
+			length -= 4;
+		return length > 3 && label[length - 3] == '_' && (label[length - 2] | 0x20) == 'b' && (label[length - 1] | 0x20) == 'g';
+	}
+
+	#define BACKGROUND_LOGS 200
+
+	struct {
+		DWORD logs, lastFile, lastDraw;
+	} backgroundLog;
+
+	// one line per background seed (deduplicated per decode: StoreDraw's sheet seed and the loader's pieces see the same decode): the pack entry with its manifest
+	// geometry, the frame's canvas and parts, the derived offset, and where the 4K box lands against the 1x canvas in the decoded file, with the entry rect each
+	// piece samples. The 1x is authoritative: the 4K is right when its box sits at the entry's offset from the canvas origin and the entry is the canvas's art
+	VOID BackgroundSeedLog(const CHAR* label, DWORD fileId, LONG w, LONG h, DWORD count, DWORD blocks)
+	{
+		if (backgroundLog.logs >= BACKGROUND_LOGS || (backgroundLog.lastFile == fileId && backgroundLog.lastDraw == storeStats.draws))
+			return;
+		++backgroundLog.logs;
+		backgroundLog.lastFile = fileId;
+		backgroundLog.lastDraw = storeStats.draws;
+
+		CHAR text[1000];
+		CHAR* at = text;
+		at += StrPrint(at, "file %u %dx%d, blocks %u, frames %u, pieces %u", fileId, w, h, blocks, sheetFrameCount, count);
+		for (DWORD f = 0; f < sheetFrameCount && f < 1; ++f)
+		{
+			const SheetFrameInfo* i = &sheetFrames[f];
+			const PackFrame* pf = i->frame >= 0 ? &pack.frames[i->frame] : NULL;
+			CHAR pixelText[160] = "";
+			if (pf)
+				PixelText(pf, pixelText);
+			at += StrPrint(at, " | frame [%u] %.32s canvas %dx%d, parts union %d,%d %dx%d -> pack %.32s #%d entry %dx%d%s offset %d,%d origin %s, %s, placed with offset %d,%d",
+				f, i->name, i->cw, i->ch, i->bounds.left, i->bounds.top, i->bounds.right - i->bounds.left, i->bounds.bottom - i->bounds.top,
+				i->anim ? pack.names + i->anim->name : "-", i->frame, pf ? pf->w : 0, pf ? pf->h : 0, pixelText, pf ? pf->ox : 0, pf ? pf->oy : 0,
+				originNames[i->origin < 3 ? i->origin : 0], i->derived ? deriveNames[i->derived] : "offset as stored", i->ox, i->oy);
+			if (pf && (pf->w != i->cw || pf->h != i->ch || i->ox || i->oy))
+				at += StrPrint(at, " | ENTRY IS NOT THE CANVAS AT 0,0: its 4K covers canvas %d,%d %dx%d", i->ox, i->oy, pf->w, pf->h);
+		}
+		DebugLog("image background seed %.40s: %s", label, text);
+
+		at = text;
+		*at = 0;
+		for (DWORD k = 0; k < count && k < 6; ++k)
+		{
+			const Twin::SeedPiece* p = &sheetPieces[k];
+			RECT src, tex;
+			PieceSource(&pack.frames[p->frame], &p->to, &p->place, &src, &tex);
+			// the part's canvas origin in the file, and the 4K box's top-left against it (the offset the 4K is drawn at, relative to the 1x canvas)
+			LONG originX = p->to.left - sheetCanvas[k].x, originY = p->to.top - sheetCanvas[k].y;
+			at += StrPrint(at, "%s[%u] canvas %d,%d -> file %d,%d %dx%d: 1x canvas origin at file %d,%d, 4K box at file %d,%d %dx%d (%d,%d from the canvas origin), samples entry %d,%d %dx%d = texels %d,%d %dx%d%s",
+				k ? "; " : "", sheetFrameOf[k], sheetCanvas[k].x, sheetCanvas[k].y, p->to.left, p->to.top, p->to.right - p->to.left, p->to.bottom - p->to.top, originX, originY,
+				p->place.left, p->place.top, p->place.right - p->place.left, p->place.bottom - p->place.top, p->place.left - originX, p->place.top - originY,
+				src.left, src.top, src.right - src.left, src.bottom - src.top, tex.left, tex.top, tex.right - tex.left, tex.bottom - tex.top, sheetDrop[k] ? " DROPPED" : "");
+			if (at - text > 600)
+				break;
+		}
+		DebugLog("image background seed %.40s placement: %s", label, count ? text : "no piece, left 1x");
 	}
 
 	// the packer's frames sit in deduped blocks of one sheet; each block gets the 4K of the first frame that uses it, at that frame's canvas position
@@ -4085,8 +4230,17 @@ namespace ImageReplace
 			stats.uncertain += sheetDrop[i];
 		sheetCheck.dropped += stats.uncertain;
 
-		// logged before the uncertain pieces are taken out, so the next round sees where they would have gone
-		if (log && sheetCheck.pieceLogs < SHEET_PIECE_LOGS)
+		if (pack.gameNames && BackgroundFile(a, label))
+			BackgroundSeedLog(label, fileId, w, h, count, blocks);
+
+		// logged before the uncertain pieces are taken out, so the next round sees where they would have gone; every event portrait seed is listed, with its band order
+		if (events && sheetCheck.eventLogs < SHEET_EVENT_LOGS)
+		{
+			++sheetCheck.eventLogs;
+			SheetPieceLog(label, fileId, w, h, count, &stats, "event portrait");
+			BandOrderLog(label, count);
+		}
+		else if (log && sheetCheck.pieceLogs < SHEET_PIECE_LOGS)
 		{
 			++sheetCheck.pieceLogs;
 			SheetPieceLog(label, fileId, w, h, count, &stats, "sheet seed");
