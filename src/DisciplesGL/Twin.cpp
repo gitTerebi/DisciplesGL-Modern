@@ -65,19 +65,13 @@
 #define REPAIR_LOGS 32
 #define REPAIR_LOGS_FRAME 4
 #define REPAIR_TOP 3
-#define ART_MAX 16
-#define UPGRADE_MAX 128
+#define ART_MAX 64
 #define MAX_EXPECT 32768
 #define MAX_IMAGES 8192
 #define EXPECT_BUCKETS 8192
-#define THRASH_MAX 32
-#define THRASH_WINDOW 60
-#define THRASH_LIMIT 8
-#define THRASH_BLOCK 300
 #define REJECT_LOGS 16
-#define THRASH_LOGS 16
 #define EXPECT_SCAN 256
-#define UPGRADE_LOGS 32
+#define ART_LOGS 32
 #define UNMATCHED_LOGS 16
 #define LOGS_FRAME 4
 #define SHOT_DELAY 15000
@@ -97,6 +91,7 @@ namespace Twin
 		DWORD src;
 		RECT rect;
 		RECT clip;
+		RECT place;
 		LONG x;
 		LONG y;
 		DWORD value;
@@ -123,13 +118,6 @@ namespace Twin
 		DWORD size;
 		DWORD arenaCapacity;
 		Counters counters;
-	};
-
-	struct Upgrade {
-		RECT rect;
-		LONG frame;
-		BOOL flipped;
-		RECT map;
 	};
 
 	struct Expect {
@@ -162,13 +150,6 @@ namespace Twin
 		DWORD artDiffer;
 	};
 
-	struct Thrash {
-		RECT rect;
-		DWORD first;
-		DWORD count;
-		DWORD until;
-	};
-
 	struct Record {
 		StateBuffer* owner;
 		BYTE* base;
@@ -182,10 +163,6 @@ namespace Twin
 		DWORD key;
 		DWORD artCount;
 		RECT art[ART_MAX];
-		DWORD upCount;
-		Upgrade up[UPGRADE_MAX];
-		DWORD thrashCount;
-		Thrash thrash[THRASH_MAX];
 		DWORD count;
 		RECT dirty[DIRTY_MAX];
 	};
@@ -241,7 +218,7 @@ namespace Twin
 		BOOL tileKeyDown;
 		BOOL tintKeyDown;
 		BOOL shotRequest;
-		DWORD lastUpgrade;
+		DWORD lastArtSource;
 		DWORD frameNo;
 		DWORD repairsLogged;
 		DWORD frameRepairLogs;
@@ -264,20 +241,16 @@ namespace Twin
 		DWORD head;
 		DWORD expected;
 		DWORD matched;
-		DWORD upgrades;
-		DWORD skipped;
 		DWORD notReady;
 		DWORD unmatched;
 		DWORD overflow;
 		DWORD duplicates;
 		DWORD rejected;
-		DWORD thrashed;
-		DWORD blocked;
+		DWORD draws;
 		DWORD px;
-		DWORD upgradeLogs;
+		DWORD artLogs;
 		DWORD unmatchedLogs;
 		DWORD rejectLogs;
-		DWORD thrashLogs;
 		DWORD frameLogs;
 		BOOL checked;
 		DWORD firstTick;
@@ -307,6 +280,7 @@ namespace Twin
 		DWORD artDraws;
 		DWORD artFallbacks;
 		DWORD artRejected;
+		DWORD artCalls;
 		DWORD showOpaque;
 		DWORD showBack;
 		DWORD showInvalid;
@@ -353,6 +327,7 @@ namespace Twin
 		DWORD artDraws;
 		DWORD artFallbacks;
 		DWORD artRejected;
+		DWORD artCalls;
 		DWORD rejectLogs;
 		DWORD showOpaque;
 		DWORD showBack;
@@ -650,17 +625,6 @@ namespace Twin
 				twin->art[i - 1] = twin->art[--twin->artCount];
 	}
 
-	VOID DropUpgrades(Record* twin, const RECT* rect)
-	{
-		RECT part;
-		for (DWORD i = twin->upCount; i; --i)
-			if (IntersectRect(&part, rect, &twin->up[i - 1].rect))
-			{
-				MemoryCopy(&twin->up[i - 1], &twin->up[i], (twin->upCount - i) * sizeof(Upgrade));
-				--twin->upCount;
-			}
-	}
-
 	VOID Upload(Record* twin, DWORD id, const RECT* rect)
 	{
 		LONG width = rect->right - rect->left;
@@ -684,7 +648,6 @@ namespace Twin
 		++game.list->counters.uploads;
 		game.list->counters.pixels += width * height;
 		CoverArt(twin, rect);
-		DropUpgrades(twin, rect);
 
 		if (twin->mirror)
 		{
@@ -961,8 +924,6 @@ namespace Twin
 			cmd->value = game.scale;
 		}
 		twin->artCount = 0;
-		twin->upCount = 0;
-		twin->thrashCount = 0;
 		MarkAll(twin);
 	}
 
@@ -1007,7 +968,7 @@ namespace Twin
 			--scale;
 
 		game.scale = scale;
-		game.lastUpgrade = TWIN_NONE;
+		game.lastArtSource = TWIN_NONE;
 
 		CHAR env[8];
 		DWORD length = GetEnvironmentVariable("DGL_TWIN_TILECHECK", env, sizeof(env));
@@ -1047,8 +1008,6 @@ namespace Twin
 		twin->repairPx = 0;
 		twin->keyed = FALSE;
 		twin->artCount = 0;
-		twin->upCount = 0;
-		twin->thrashCount = 0;
 
 		while (game.top && !game.twins[game.top - 1].owner)
 			--game.top;
@@ -1158,7 +1117,7 @@ namespace Twin
 		return NULL;
 	}
 
-	VOID UpgradeSource(Record* source, DWORD id, Expect* e, LONG x, LONG y)
+	BOOL ArtCopy(Record* target, DWORD dstId, const RECT* to, DWORD srcId, const RECT* from, Expect* e, LONG x, LONG y, BOOL keyed, DWORD key)
 	{
 		e->used = TRUE;
 		while (art.head < art.count && art.expect[art.head].used)
@@ -1168,12 +1127,6 @@ namespace Twin
 		const Image* image = &art.images[e->image];
 		LONG placeW = image->place.right - image->place.left;
 		LONG placeH = image->place.bottom - image->place.top;
-		RECT sheet = { e->sx, e->sy, e->sx + e->w, e->sy + e->h };
-		if (placeW <= 0 || placeH <= 0 || !Clip(source, &sheet))
-			return;
-
-		RECT map = { e->dx - image->place.left + sheet.left - e->sx, e->dy - image->place.top + sheet.top - e->sy, placeW, placeH };
-
 		LONG cx = e->dx - image->place.left, cy = e->dy - image->place.top;
 		if (placeW < 2 || placeH < 2 || cx < -1 || cy < -1 || cx + e->w > placeW + 1 || cy + e->h > placeH + 1)
 		{
@@ -1182,110 +1135,33 @@ namespace Twin
 			{
 				++art.rejectLogs;
 				++art.frameLogs;
-				DebugLog("twin rejected place frame=%d src=%p sheet=%d,%d %dx%d dst=%d,%d canvas=%d,%d of %dx%d at frame %u", image->frame, source->owner,
+				DebugLog("twin rejected place frame=%d sheet=%d,%d %dx%d dst=%d,%d canvas=%d,%d of %dx%d at frame %u", image->frame,
 					e->sx, e->sy, e->w, e->h, x, y, cx, cy, placeW, placeH, game.frameNo);
 			}
-			return;
-		}
-
-		FlushRegion(source, id, &sheet);
-		Verify(source, id, &sheet, NULL, 0, FALSE);
-
-		for (DWORD i = 0; i < source->upCount; ++i)
-		{
-			const Upgrade* u = &source->up[i];
-			if (EqualRect(&u->rect, &sheet) && u->frame == image->frame && !u->flipped == !image->flipped && EqualRect(&u->map, &map))
-			{
-				++art.skipped;
-				return;
-			}
+			return FALSE;
 		}
 
 		if (!ImageReplace::ArtReady(image->frame))
 		{
 			++art.notReady;
-			return;
+			return FALSE;
 		}
-
-		Thrash* thrash = NULL;
-		for (DWORD i = 0; i < source->thrashCount && !thrash; ++i)
-			if (EqualRect(&source->thrash[i].rect, &sheet))
-				thrash = &source->thrash[i];
-		if (!thrash)
-		{
-			if (source->thrashCount < THRASH_MAX)
-				thrash = &source->thrash[source->thrashCount++];
-			else
-			{
-				thrash = &source->thrash[0];
-				for (DWORD i = 1; i < THRASH_MAX; ++i)
-					if (source->thrash[i].until <= game.frameNo && (thrash->until > game.frameNo || source->thrash[i].first < thrash->first))
-						thrash = &source->thrash[i];
-			}
-			thrash->rect = sheet;
-			thrash->first = game.frameNo;
-			thrash->count = 0;
-			thrash->until = 0;
-		}
-
-		if (thrash->until > game.frameNo)
-		{
-			++art.blocked;
-			return;
-		}
-
-		if (game.frameNo - thrash->first >= THRASH_WINDOW)
-		{
-			thrash->first = game.frameNo;
-			thrash->count = 0;
-		}
-
-		if (++thrash->count > THRASH_LIMIT)
-		{
-			thrash->until = game.frameNo + THRASH_BLOCK;
-			++art.thrashed;
-			if (art.thrashLogs < THRASH_LOGS)
-			{
-				++art.thrashLogs;
-				DebugLog("twin thrash frame=%d src=%p sheet=%d,%d %dx%d upgraded %u times in %u frames, blocked for %u frames at frame %u", image->frame, source->owner,
-					sheet.left, sheet.top, sheet.right - sheet.left, sheet.bottom - sheet.top, thrash->count - 1, game.frameNo - thrash->first + 1, THRASH_BLOCK, game.frameNo);
-			}
-			return;
-		}
-
-		LONG width = sheet.right - sheet.left;
-		LONG height = sheet.bottom - sheet.top;
-		DWORD offset;
-		DWORD* pixels = (DWORD*)Reserve(width * height * sizeof(DWORD), &offset);
-		if (!pixels)
-			return;
-		Convert(source, pixels, (const DWORD*)source->base + sheet.top * source->pitch + sheet.left, width, height);
 
 		Cmd* cmd = Emit(CmdArt);
 		if (!cmd)
-			return;
-		cmd->dst = id;
-		cmd->src = offset;
-		cmd->rect = sheet;
-		cmd->clip = map;
+			return FALSE;
+		cmd->dst = dstId;
+		cmd->src = srcId;
+		cmd->rect = *to;
+		cmd->clip = *from;
+		cmd->place = image->place;
 		cmd->value = (DWORD)image->frame;
-		cmd->flags = image->flipped ? 1 : 0;
+		cmd->flags = (image->flipped ? 1 : 0) | (keyed ? 2 : 0);
+		cmd->extra = key;
 
-		DropUpgrades(source, &sheet);
-		if (source->upCount == UPGRADE_MAX)
-		{
-			MemoryCopy(&source->up[0], &source->up[1], (UPGRADE_MAX - 1) * sizeof(Upgrade));
-			--source->upCount;
-		}
-		Upgrade* u = &source->up[source->upCount++];
-		u->rect = sheet;
-		u->frame = image->frame;
-		u->flipped = image->flipped;
-		u->map = map;
-
-		++art.upgrades;
-		art.px += width * height;
-		game.lastUpgrade = id;
+		++art.draws;
+		art.px += (to->right - to->left) * (to->bottom - to->top);
+		game.lastArtSource = srcId;
 		if (!art.firstTick)
 			art.firstTick = GetTickCount() | 1;
 		if (!art.checked)
@@ -1294,13 +1170,15 @@ namespace Twin
 			game.checkRequest = TRUE;
 		}
 
-		if (art.upgradeLogs < UPGRADE_LOGS && art.frameLogs < LOGS_FRAME)
+		if (art.artLogs < ART_LOGS && art.frameLogs < LOGS_FRAME)
 		{
-			++art.upgradeLogs;
+			++art.artLogs;
 			++art.frameLogs;
-			DebugLog("twin upgrade frame=%d src=%p sheet=%d,%d %dx%d dst=%d,%d canvas=%d,%d of %dx%d%s at frame %u", image->frame, source->owner,
-				sheet.left, sheet.top, width, height, x, y, map.left, map.top, placeW, placeH, image->flipped ? " flipped" : "", game.frameNo);
+			DebugLog("twin art frame=%d src=%p sheet=%d,%d dst=%p %d,%d %dx%d canvas=%d,%d of %dx%d%s%s at frame %u", image->frame, game.twins[srcId].owner, from->left, from->top,
+				target->owner, to->left, to->top, to->right - to->left, to->bottom - to->top, to->left - image->place.left, to->top - image->place.top, placeW, placeH,
+				image->flipped ? " flipped" : "", keyed ? " keyed" : "", game.frameNo);
 		}
+		return TRUE;
 	}
 
 	VOID ExpireArt()
@@ -1371,7 +1249,6 @@ namespace Twin
 		twin->keyed = FALSE;
 		twin->key = 0;
 		twin->artCount = 0;
-		twin->upCount = 0;
 		twin->mirror = (DWORD*)MemoryAlloc(width * height * sizeof(DWORD));
 		if (twin->mirror)
 			MemoryCopy(twin->mirror, twin->base, width * height * sizeof(DWORD));
@@ -1454,28 +1331,29 @@ namespace Twin
 		FlushRegion(source, srcId, &from);
 		Verify(source, srcId, &from, NULL, 0, FALSE);
 
-		if (art.count)
+		Expect* e = art.count ? Match(x, y, srcRect->right - srcRect->left, srcRect->bottom - srcRect->top, srcRect->left, srcRect->top) : NULL;
+		if (e)
 		{
-			Expect* e = Match(x, y, srcRect->right - srcRect->left, srcRect->bottom - srcRect->top, srcRect->left, srcRect->top);
-			if (e)
-				UpgradeSource(source, srcId, e, x, y);
+			FlushRegion(target, dstId, &to, TRUE);
+			if (ArtCopy(target, dstId, &to, srcId, &from, e, x, y, keyed, key))
+			{
+				MirrorCopy(target, &to, source, &from, keyed, key);
+				AddArt(target, &to);
+				return;
+			}
 		}
 
 		if (!keyed)
 			Cover(target, &to);
 		FlushRegion(target, dstId, &to, TRUE);
 
-		RECT arts[ART_MAX + UPGRADE_MAX];
+		RECT arts[ART_MAX];
 		DWORD artCount = 0;
 		for (DWORD i = 0; i < source->artCount; ++i)
 			if (IntersectRect(&arts[artCount], &source->art[i], &from))
 				OffsetRect(&arts[artCount++], ox, oy);
-		for (DWORD i = 0; i < source->upCount; ++i)
-			if (IntersectRect(&arts[artCount], &source->up[i].rect, &from))
-				OffsetRect(&arts[artCount++], ox, oy);
 		if (!keyed)
 			CoverArt(target, &to);
-		DropUpgrades(target, &to);
 		for (DWORD i = 0; i < artCount; ++i)
 			AddArt(target, &arts[i]);
 
@@ -1525,7 +1403,6 @@ namespace Twin
 		Cover(twin, &area);
 		FlushRegion(twin, id, &area, TRUE);
 		CoverArt(twin, &area);
-		DropUpgrades(twin, &area);
 
 		Cmd* cmd = Emit(CmdFill);
 		if (!cmd)
@@ -1678,21 +1555,22 @@ namespace Twin
 		DWORD artReplayed = shared.artDraws;
 		DWORD artFallbacks = shared.artFallbacks;
 		DWORD artRejected = shared.artRejected;
-		shared.artDraws = shared.artFallbacks = shared.artRejected = 0;
+		DWORD artCalls = shared.artCalls;
+		shared.artDraws = shared.artFallbacks = shared.artRejected = shared.artCalls = 0;
 		CheckResult check = shared.check;
 		DWORD showOpaque = shared.showOpaque, showBack = shared.showBack, showInvalid = shared.showInvalid, showOffCount = shared.showOff, showOther = shared.showOther;
 		shared.showOpaque = shared.showBack = shared.showInvalid = shared.showOff = shared.showOther = 0;
 		Unlock();
 
-		DebugLog("twin art expected %u dup %u matched %u upgrades %u px %u skipped %u notready %u rejected place %u (replay %u) thrash %u blocked %u unmatched %u overflow %u | replayed %u fallbacks %u",
-			art.expected, art.duplicates, art.matched, art.upgrades, art.px, art.skipped, art.notReady, art.rejected, artRejected, art.thrashed, art.blocked, art.unmatched, art.overflow, artReplayed, artFallbacks);
-		art.expected = art.duplicates = art.matched = art.upgrades = art.px = art.skipped = art.notReady = art.rejected = art.thrashed = art.blocked = art.unmatched = art.overflow = 0;
+		DebugLog("twin art expected %u dup %u matched %u draws %u px %u notready %u rejected place %u aspect %u unmatched %u overflow %u | replayed %u calls %u fallbacks %u",
+			art.expected, art.duplicates, art.matched, art.draws, art.px, art.notReady, art.rejected, artRejected, art.unmatched, art.overflow, artReplayed, artCalls, artFallbacks);
+		art.expected = art.duplicates = art.matched = art.draws = art.px = art.notReady = art.rejected = art.unmatched = art.overflow = 0;
 
 		DebugLog("twin show shown %u (opaque %u, over background %u) hidden: 1x toggle %u, invalid %u, other %u",
 			showOpaque + showBack, showOpaque, showBack, showOffCount, showInvalid, showOther);
 
 		if (check.valid)
-			DebugLog("twin gpu check %ums ago twin %u bad tiles %u/%u px %u art tiles %u (differ %u)", now - check.tick, check.twin, check.bad, check.tiles, check.px, check.art, check.artDiffer);
+			DebugLog("twin gpu check %ums ago twin %u bad %u of %u non-art tiles, px %u | art tiles %u (differ from 1x %u)", now - check.tick, check.twin, check.bad, check.tiles, check.px, check.art, check.artDiffer);
 		else
 			DebugLog("twin gpu check none yet");
 
@@ -1744,11 +1622,6 @@ namespace Twin
 		{
 			shared.tint = !shared.tint;
 			DebugLog("twin art tint %s", shared.tint ? "magenta" : "off");
-			for (DWORD i = 0; i < game.top; ++i)
-			{
-				game.twins[i].upCount = 0;
-				game.twins[i].thrashCount = 0;
-			}
 		}
 		game.tintKeyDown = down;
 
@@ -1794,15 +1667,13 @@ namespace Twin
 
 		DWORD artOffset = 0;
 		DWORD artCount = 0;
-		if (check && twin->artCount + twin->upCount)
+		if (check && twin->artCount)
 		{
-			RECT* arts = (RECT*)Reserve((twin->artCount + twin->upCount) * sizeof(RECT), &artOffset);
+			RECT* arts = (RECT*)Reserve(twin->artCount * sizeof(RECT), &artOffset);
 			if (arts)
 			{
 				MemoryCopy(arts, twin->art, twin->artCount * sizeof(RECT));
-				for (DWORD i = 0; i < twin->upCount; ++i)
-					arts[twin->artCount + i] = twin->up[i].rect;
-				artCount = twin->artCount + twin->upCount;
+				artCount = twin->artCount;
 			}
 		}
 
@@ -1819,7 +1690,7 @@ namespace Twin
 			if (shot)
 			{
 				cmd->flags |= PresentShot;
-				cmd->clip.left = game.lastUpgrade;
+				cmd->clip.left = game.lastArtSource;
 			}
 			if (twin)
 			{
@@ -1997,10 +1868,7 @@ namespace Twin
 			"void main()\n"
 			"{\n"
 			"	if (art != 0 && (fTex.x < 0.0 || fTex.y < 0.0 || fTex.x > 1.0 || fTex.y > 1.0))\n"
-			"	{\n"
-			"		FRAG_COLOR = vec4(0.0);\n"
-			"		return;\n"
-			"	}\n"
+			"		discard;\n"
 			"	vec4 c = texture(tex01, fTex);\n"
 			"	if (art != 0 && tint != 0)\n"
 			"		c.rgb *= vec3(1.0, 0.15, 1.0);\n"
@@ -2317,9 +2185,9 @@ namespace Twin
 			Blend(FALSE);
 	}
 
-	DWORD ReplayCopies(const List* list, DWORD index)
+	DWORD ReplayCopies(const Cmd* cmds, DWORD count, DWORD index)
 	{
-		const Cmd* first = &list->cmds[index];
+		const Cmd* first = &cmds[index];
 		if (first->src == first->dst)
 		{
 			if (Valid(first->dst))
@@ -2335,9 +2203,9 @@ namespace Twin
 
 		DWORD i = index;
 		gl.vertCount = 0;
-		for (; i < list->count; ++i)
+		for (; i < count; ++i)
 		{
-			const Cmd* cmd = &list->cmds[i];
+			const Cmd* cmd = &cmds[i];
 			if (cmd->type != CmdCopy || cmd->src != first->src || cmd->dst != first->dst || cmd->flags != first->flags || (cmd->flags && cmd->value != first->value))
 				break;
 
@@ -2478,68 +2346,98 @@ namespace Twin
 		return i;
 	}
 
-	VOID ReplayArt(const Cmd* cmd, const List* list)
+	BOOL ArtAspect(const Cmd* cmd, LONG width, LONG height)
 	{
-		if (!Valid(cmd->dst))
-			return;
+		FLOAT placeW = (FLOAT)(cmd->place.right - cmd->place.left), placeH = (FLOAT)(cmd->place.bottom - cmd->place.top);
+		FLOAT aspect = width > 0 && height > 0 && placeH > 0.0f ? (placeW * height) / (placeH * width) : 0.0f;
+		if (aspect >= 0.98f && aspect <= 1.02f)
+			return TRUE;
 
-		Gpu* gpu = &gl.twins[cmd->dst];
+		++gl.artRejected;
+		if (gl.rejectLogs < REJECT_LOGS)
+		{
+			++gl.rejectLogs;
+			DebugLog("twin rejected aspect frame=%d place %dx%d texture %dx%d", (LONG)cmd->value, cmd->place.right - cmd->place.left, cmd->place.bottom - cmd->place.top, width, height);
+		}
+		return FALSE;
+	}
+
+	VOID ArtFallback(const Cmd* cmd)
+	{
+		++gl.artFallbacks;
+
+		Cmd copy;
+		MemoryZero(&copy, sizeof(Cmd));
+		copy.type = CmdCopy;
+		copy.dst = cmd->dst;
+		copy.src = cmd->src;
+		copy.rect = cmd->clip;
+		copy.x = cmd->rect.left;
+		copy.y = cmd->rect.top;
+		copy.value = cmd->extra;
+		copy.flags = (cmd->flags & 2) ? 1 : 0;
+		if (Valid(copy.src) && Valid(copy.dst))
+			ReplayCopies(&copy, 1, 0);
+	}
+
+	DWORD ReplayArt(const List* list, DWORD index)
+	{
+		const Cmd* first = &list->cmds[index];
+		DWORD end = index + 1;
+		while (end < list->count && list->cmds[end].type == CmdArt && list->cmds[end].dst == first->dst && list->cmds[end].value == first->value)
+			++end;
+
 		GLuint texture = 0;
 		LONG width = 0, height = 0;
-		const RECT* map = &cmd->clip;
-		FLOAT placeW = (FLOAT)map->right, placeH = (FLOAT)map->bottom;
-		BOOL ready = ImageReplace::ArtTexture((LONG)cmd->value, &texture, &width, &height) && texture;
-		if (ready)
-		{
-			FLOAT aspect = width > 0 && height > 0 ? (placeW * height) / (placeH * width) : 0.0f;
-			if (aspect < 0.98f || aspect > 1.02f)
-			{
-				ready = FALSE;
-				++gl.artRejected;
-				if (gl.rejectLogs < REJECT_LOGS)
-				{
-					++gl.rejectLogs;
-					DebugLog("twin rejected aspect frame=%d place %dx%d texture %dx%d twin %u sheet=%d,%d %dx%d", (LONG)cmd->value, map->right, map->bottom, width, height,
-						cmd->dst, cmd->rect.left, cmd->rect.top, cmd->rect.right - cmd->rect.left, cmd->rect.bottom - cmd->rect.top);
-				}
-			}
-		}
-		else
-			++gl.artFallbacks;
-
+		BOOL ready = Valid(first->dst) && ImageReplace::ArtTexture((LONG)first->value, &texture, &width, &height) && texture && ArtAspect(first, width, height);
 		if (!ready)
 		{
-			GLBindTexture(GL_TEXTURE_2D, gl.stage);
-			GLPixelStorei(GL_UNPACK_ALIGNMENT, 4);
-			LONG shelf[3] = { 0, 0, 0 };
-			StageUpload(cmd->dst, &cmd->rect, (const DWORD*)(list->arena + cmd->src), shelf);
-			GLPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
-			FlushPlaced();
-			return;
+			for (DWORD i = index; i < end; ++i)
+				ArtFallback(&list->cmds[i]);
+			return end;
 		}
 
-		FLOAT u0 = map->left / placeW;
-		FLOAT u1 = (map->left + cmd->rect.right - cmd->rect.left) / placeW;
-		FLOAT v0 = map->top / placeH;
-		FLOAT v1 = (map->top + cmd->rect.bottom - cmd->rect.top) / placeH;
-		if (cmd->flags)
-		{
-			u0 = 1.0f - u0;
-			u1 = 1.0f - u1;
-		}
-
+		Gpu* gpu = &gl.twins[first->dst];
 		LONG scale = gpu->scale;
-		TargetTwin(cmd->dst);
-		UseCopy(FALSE, 0);
-		GLUniform1i(gl.artLoc, 1);
-		GLUniform1i(gl.tintLoc, shared.tint ? 1 : 0);
-		GLBindTexture(GL_TEXTURE_2D, texture);
-		AddQuad((FLOAT)(gpu->width * scale), (FLOAT)(gpu->height * scale), (FLOAT)(cmd->rect.left * scale), (FLOAT)(cmd->rect.top * scale), (FLOAT)(cmd->rect.right * scale), (FLOAT)(cmd->rect.bottom * scale),
-			u0, v0, u1, v1);
-		DrawVerts();
-		GLUniform1i(gl.artLoc, 0);
-		GLUniform1i(gl.tintLoc, 0);
-		++gl.artDraws;
+		FLOAT tw = (FLOAT)(gpu->width * scale), th = (FLOAT)(gpu->height * scale);
+
+		gl.vertCount = 0;
+		DWORD drawn = 0;
+		for (DWORD i = index; i < end; ++i)
+		{
+			const Cmd* cmd = &list->cmds[i];
+
+			FLOAT placeW = (FLOAT)(cmd->place.right - cmd->place.left), placeH = (FLOAT)(cmd->place.bottom - cmd->place.top);
+			FLOAT u0 = (cmd->rect.left - cmd->place.left) / placeW, u1 = (cmd->rect.right - cmd->place.left) / placeW;
+			FLOAT v0 = (cmd->rect.top - cmd->place.top) / placeH, v1 = (cmd->rect.bottom - cmd->place.top) / placeH;
+			if (cmd->flags & 1)
+			{
+				u0 = 1.0f - u0;
+				u1 = 1.0f - u1;
+			}
+
+			AddQuad(tw, th, (FLOAT)(cmd->rect.left * scale), (FLOAT)(cmd->rect.top * scale), (FLOAT)(cmd->rect.right * scale), (FLOAT)(cmd->rect.bottom * scale), u0, v0, u1, v1);
+			++drawn;
+		}
+
+		if (drawn)
+		{
+			TargetTwin(first->dst);
+			UseCopy(FALSE, 0);
+			GLUniform1i(gl.artLoc, 1);
+			GLUniform1i(gl.tintLoc, shared.tint ? 1 : 0);
+			GLBindTexture(GL_TEXTURE_2D, texture);
+			Blend(TRUE);
+			DrawVerts();
+			Blend(FALSE);
+			GLUniform1i(gl.artLoc, 0);
+			GLUniform1i(gl.tintLoc, 0);
+			gl.artDraws += drawn;
+			++gl.artCalls;
+		}
+		gl.vertCount = 0;
+
+		return end;
 	}
 
 	VOID Check(const Cmd* cmd, const List* list)
@@ -2643,7 +2541,7 @@ namespace Twin
 		for (DWORD k = 0; k < WORST && worst[k].count; ++k)
 			ptr += StrPrint(ptr, " (%d,%d,%u)", worst[k].x, worst[k].y, worst[k].count);
 
-		DebugLog("twin check twin %u %dx%d N %d bad tiles %u/%u px %u art tiles %u (differ %u) worst%s", cmd->dst, width, height, gpu->scale, badTiles, tilesX * tilesY - artTiles, badPixels, artTiles, artBad, badTiles ? text : " none");
+		DebugLog("twin check twin %u %dx%d N %d bad %u of %u non-art tiles, px %u | art tiles %u (differ from 1x %u) worst%s", cmd->dst, width, height, gpu->scale, badTiles, tilesX * tilesY - artTiles, badPixels, artTiles, artBad, badTiles ? text : " none");
 
 		Lock();
 		shared.check.valid = TRUE;
@@ -2801,11 +2699,11 @@ namespace Twin
 				continue;
 
 			case CmdArt:
-				ReplayArt(cmd, list);
-				break;
+				i = ReplayArt(list, i);
+				continue;
 
 			case CmdCopy:
-				i = ReplayCopies(list, i);
+				i = ReplayCopies(list->cmds, list->count, i);
 				continue;
 
 			case CmdPresent:
@@ -2957,6 +2855,7 @@ namespace Twin
 			gl.artDraws = 0;
 			gl.artFallbacks = 0;
 			gl.artRejected = 0;
+			gl.artCalls = 0;
 			gl.showOpaque = gl.showBack = gl.showInvalid = gl.showOther = 0;
 			gl.readFbo = readFbo;
 			GLUseProgram(0);
@@ -3026,6 +2925,7 @@ namespace Twin
 			shared.artDraws += gl.artDraws;
 			shared.artFallbacks += gl.artFallbacks;
 			shared.artRejected += gl.artRejected;
+			shared.artCalls += gl.artCalls;
 			shared.drawCalls += gl.drawCalls;
 			shared.lastDrawCalls = gl.drawCalls;
 			++shared.draws;
