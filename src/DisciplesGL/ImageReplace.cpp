@@ -1517,7 +1517,18 @@ namespace ImageReplace
 
 	BOOL ArtReady(LONG frame)
 	{
-		return pack.ready && frame >= 0 && (DWORD)frame < pack.frameCount && pack.texs[frame].state == TexUploaded;
+		if (!pack.ready || frame < 0 || (DWORD)frame >= pack.frameCount)
+			return FALSE;
+
+		// frames picked by the twins (faces, cached images) may never pass through Queue, so asking is what gets them decoded
+		Tex* tex = &pack.texs[frame];
+		if (tex->state != TexUploaded)
+		{
+			Touch(tex, frame);
+			return FALSE;
+		}
+		tex->lastUse = game.frameNo;
+		return TRUE;
 	}
 
 	LONG Queue(Entry* entry, DWORD rec)

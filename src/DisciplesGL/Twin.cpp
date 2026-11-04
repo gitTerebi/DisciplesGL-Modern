@@ -89,10 +89,10 @@
 #define ART_LOGS 32
 #define REGION_MAX 256
 #define INDEX_MAGIC 0x58495754
-#define INDEX_VERSION 2
-#define TENTATIVE_LIFE 600
-#define CONTRADICTIONS 3
-#define JUDGE_LOGS 32
+#define INDEX_VERSION 3
+#define IDENTITIES 4
+#define SOURCE_WEIGHT 100
+#define TRACE_LOGS 24
 #define INDEX_MIN_SIZE 8
 #define INDEX_SAVE_PERIOD 60000
 #define INDEX_LOGS 32
@@ -177,24 +177,25 @@ namespace Twin
 		BOOL cached;
 	};
 
-	struct IndexEntry {
-		ULONGLONG hash;
-		LONG width;
-		LONG height;
+	struct Identity {
 		LONG frame;
 		LONG cx;
 		LONG cy;
 		LONG canvasW;
 		LONG canvasH;
 		LONG flipped;
-		LONG state;
-		DWORD learnedAt;
-		LONG contradictions;
-		LONG pad;
+		DWORD count;
 	};
 
-	enum EntryState { EntryTentative, EntryConfirmed, EntrySource };
-	enum Verdict { VerdictAgree, VerdictDisagree, VerdictReplaced };
+	// the packer dedupes identical 1x blocks across animation frames, so one block can legitimately be several pieces; each is kept with its evidence
+	struct IndexEntry {
+		ULONGLONG hash;
+		LONG width;
+		LONG height;
+		DWORD idCount;
+		LONG pad;
+		Identity ids[IDENTITIES];
+	};
 
 	struct Expect {
 		LONG dx;
@@ -241,6 +242,7 @@ namespace Twin
 		RECT art[ART_MAX];
 		Region* regions;
 		BOOL memory;
+		BOOL anonymous;
 		DWORD lastUse;
 		DWORD regionCount;
 		DWORD count;
@@ -348,18 +350,21 @@ namespace Twin
 		DWORD misses;
 		DWORD rejected;
 		DWORD logs;
-		DWORD tentative;
-		DWORD confirmed;
-		DWORD contradicted;
-		DWORD replaced;
-		DWORD expired;
-		DWORD judgeLogs;
+		DWORD multi;
+		DWORD contextDraws;
+		DWORD contentDraws;
+		DWORD evidence;
+		DWORD traceLogs;
+		DWORD untwinnedLogs;
+		DWORD clipLogs;
+		DWORD notReadyLogs;
 	} index;
 
 	struct {
 		LONG frame[FRAME_SLOTS];
 		DWORD learned[FRAME_SLOTS];
 		DWORD pass[FRAME_SLOTS];
+		BYTE multi[FRAME_SLOTS];
 		struct {
 			LONG frame;
 			LONG cx;
@@ -412,6 +417,19 @@ namespace Twin
 	} memory;
 
 	struct {
+		const CHAR* name;
+		DWORD mode;
+		BOOL mirror;
+		Record* source;
+		DWORD srcId;
+		RECT from;
+		Record* target;
+		DWORD dstId;
+		RECT to;
+		const CHAR* outcome;
+	} trace;
+
+	struct {
 		Expect expect[MAX_EXPECT];
 		Image images[MAX_IMAGES];
 		DWORD bucket[EXPECT_BUCKETS];
@@ -435,6 +453,8 @@ namespace Twin
 		DWORD artLogs;
 		DWORD rejectLogs;
 		DWORD frameLogs;
+		const CHAR* reason;
+		BOOL drew;
 		BOOL checked;
 		DWORD firstTick;
 		BOOL shotTaken;
@@ -1338,7 +1358,7 @@ namespace Twin
 
 		// expectations only teach the index now; once every part of this frame is known there is nothing to learn
 		DWORD* learned = FrameLearned(frame, FALSE);
-		if (learned && *learned >= count)
+		if (learned && *learned >= count && !learn.multi[learned - learn.learned])
 		{
 			// let one call through every LEARN_PASS frames so a part the count missed can still learn
 			DWORD* pass = &learn.pass[learned - learn.learned];
@@ -1446,11 +1466,19 @@ namespace Twin
 		return NULL;
 	}
 
+	const CHAR* TwinKind(const Record* twin);
+
 	BOOL RecordArt(Record* target, DWORD dstId, const RECT* to, DWORD srcId, const RECT* from, LONG frame, BOOL flipped, const RECT* place, BOOL keyed, DWORD key, BOOL cached, BOOL half)
 	{
 		if (!ImageReplace::ArtReady(frame))
 		{
 			++art.notReady;
+			art.reason = "art texture not ready (frame never requested or still decoding)";
+			if (index.notReadyLogs < TRACE_LOGS)
+			{
+				++index.notReadyLogs;
+				DebugLog("twin art not ready frame=%d src %u %s dst %u at frame %u", frame, srcId, TwinKind(&game.twins[srcId]), dstId, game.frameNo);
+			}
 			return FALSE;
 		}
 
@@ -1467,6 +1495,7 @@ namespace Twin
 		cmd->extra = key;
 
 		++art.draws;
+		art.drew = TRUE;
 		if (cached)
 			++art.cachedDraws;
 		art.px += (to->right - to->left) * (to->bottom - to->top);
@@ -1631,37 +1660,11 @@ namespace Twin
 		items[slot] = *entry;
 	}
 
-	BOOL SameIdentity(const IndexEntry* a, const IndexEntry* b)
+	IndexEntry* IndexCreate(ULONGLONG hash, LONG width, LONG height)
 	{
-		return a->frame == b->frame && a->cx == b->cx && a->cy == b->cy && a->canvasW == b->canvasW && a->canvasH == b->canvasH && !a->flipped == !b->flipped;
-	}
-
-	VOID SetIdentity(IndexEntry* entry, const IndexEntry* identity, LONG state)
-	{
-		Lock();
-		entry->frame = identity->frame;
-		entry->cx = identity->cx;
-		entry->cy = identity->cy;
-		entry->canvasW = identity->canvasW;
-		entry->canvasH = identity->canvasH;
-		entry->flipped = identity->flipped;
-		entry->state = state;
-		entry->learnedAt = game.frameNo;
-		entry->contradictions = 0;
-		index.dirty = TRUE;
-		Unlock();
-	}
-
-	// returns the entry that holds this block's identity: the new one, or the one already there when the pixels were known
-	IndexEntry* IndexInsert(const IndexEntry* entry, BOOL* conflict)
-	{
-		*conflict = FALSE;
-		IndexEntry* found = IndexFind(entry->hash, entry->width, entry->height);
+		IndexEntry* found = IndexFind(hash, width, height);
 		if (found)
-		{
-			*conflict = !SameIdentity(found, entry);
 			return found;
-		}
 
 		if ((index.count + 1) * 10 >= index.capacity * 7)
 		{
@@ -1683,12 +1686,80 @@ namespace Twin
 				MemoryFree(old);
 		}
 
+		IndexEntry entry;
+		MemoryZero(&entry, sizeof(entry));
+		entry.hash = hash;
+		entry.width = width;
+		entry.height = height;
+
 		Lock();
-		IndexPlace(index.items, index.capacity, entry);
+		IndexPlace(index.items, index.capacity, &entry);
 		++index.count;
+		Unlock();
+		return IndexFind(hash, width, height);
+	}
+
+	BOOL SameIdentity(const Identity* a, const Identity* b)
+	{
+		return a->frame == b->frame && a->cx == b->cx && a->cy == b->cy && a->canvasW == b->canvasW && a->canvasH == b->canvasH && !a->flipped == !b->flipped;
+	}
+
+	// the identity used when only the pixels are known: the best supported one with at least two sightings, earliest on a tie
+	const Identity* Dominant(const IndexEntry* entry)
+	{
+		const Identity* best = NULL;
+		for (DWORD i = 0; i < entry->idCount; ++i)
+			if (entry->ids[i].count >= 2 && (!best || entry->ids[i].count > best->count))
+				best = &entry->ids[i];
+		return best;
+	}
+
+	VOID MarkMulti(const IndexEntry* entry)
+	{
+		for (DWORD i = 0; i < entry->idCount; ++i)
+		{
+			DWORD* learned = FrameLearned(entry->ids[i].frame, TRUE);
+			if (learned)
+				learn.multi[learned - learn.learned] = TRUE;
+		}
+	}
+
+	VOID AddEvidence(IndexEntry* entry, const Identity* seen, DWORD weight)
+	{
+		Lock();
+		Identity* slot = NULL;
+		for (DWORD i = 0; i < entry->idCount && !slot; ++i)
+			if (SameIdentity(&entry->ids[i], seen))
+				slot = &entry->ids[i];
+
+		BOOL added = FALSE;
+		if (slot)
+			slot->count = min(slot->count + weight, 0x7FFFFFFFu);
+		else
+		{
+			if (entry->idCount < IDENTITIES)
+				slot = &entry->ids[entry->idCount++];
+			else
+			{
+				slot = &entry->ids[0];
+				for (DWORD i = 1; i < IDENTITIES; ++i)
+					if (entry->ids[i].count < slot->count)
+						slot = &entry->ids[i];
+			}
+			*slot = *seen;
+			slot->count = weight;
+			added = TRUE;
+		}
 		index.dirty = TRUE;
 		Unlock();
-		return IndexFind(entry->hash, entry->width, entry->height);
+
+		++index.evidence;
+		if (added && entry->idCount == 2)
+			++index.multi;
+		if (entry->idCount > 1)
+			MarkMulti(entry);
+		if (slot->count >= 2 && Dominant(entry) == slot)
+			CountLearned(slot->frame, slot->cx, slot->cy, entry->width, entry->height);
 	}
 
 	VOID IndexPath(CHAR* path, const CHAR* name)
@@ -1725,14 +1796,28 @@ namespace Twin
 
 		DWORD count = header[3], loaded = 0;
 		IndexEntry entry;
-		BOOL conflict;
 		while (loaded < count && ReadFile(file, &entry, sizeof(entry), &read, NULL) && read == sizeof(entry))
 		{
-			entry.contradictions = 0;
-			if (entry.width >= INDEX_MIN_SIZE && entry.height >= INDEX_MIN_SIZE && entry.canvasW >= 2 && entry.canvasH >= 2 && entry.state != EntryTentative &&
-				IndexInsert(&entry, &conflict) && !conflict)
-				CountLearned(entry.frame, entry.cx, entry.cy, entry.width, entry.height);
 			++loaded;
+			if (entry.width < INDEX_MIN_SIZE || entry.height < INDEX_MIN_SIZE || !entry.idCount || entry.idCount > IDENTITIES)
+				continue;
+
+			IndexEntry* slot = IndexCreate(entry.hash, entry.width, entry.height);
+			if (!slot)
+				continue;
+			Lock();
+			slot->idCount = entry.idCount;
+			MemoryCopy(slot->ids, entry.ids, sizeof(entry.ids));
+			Unlock();
+
+			if (slot->idCount > 1)
+			{
+				++index.multi;
+				MarkMulti(slot);
+			}
+			const Identity* dominant = Dominant(slot);
+			if (dominant)
+				CountLearned(dominant->frame, dominant->cx, dominant->cy, slot->width, slot->height);
 		}
 		CloseHandle(file);
 
@@ -1750,7 +1835,7 @@ namespace Twin
 		IndexEntry* copy = index.count ? (IndexEntry*)MemoryAlloc(index.count * sizeof(IndexEntry)) : NULL;
 		if (copy)
 			for (DWORD i = 0; i < index.capacity && count < index.count; ++i)
-				if (index.items[i].width && index.items[i].state != EntryTentative)
+				if (index.items[i].width && index.items[i].idCount)
 					copy[count++] = index.items[i];
 		BOOL dirty = index.dirty;
 		index.dirty = FALSE;
@@ -1831,155 +1916,120 @@ namespace Twin
 		region->lastUse = ++art.useClock;
 	}
 
-	VOID DropIdentity(ULONGLONG hash, LONG width, LONG height)
-	{
-		for (DWORD t = 0; t < game.top; ++t)
-		{
-			Record* twin = &game.twins[t];
-			for (DWORD i = twin->regionCount; i; --i)
-			{
-				const Region* region = &twin->regions[i - 1];
-				if (region->hash == hash && region->rect.right - region->rect.left == width && region->rect.bottom - region->rect.top == height)
-					twin->regions[i - 1] = twin->regions[--twin->regionCount];
-			}
-		}
-	}
-
-	VOID LogJudge(const CHAR* what, const IndexEntry* old, const IndexEntry* next, const Record* source, const RECT* from)
-	{
-		if (index.judgeLogs >= JUDGE_LOGS)
-			return;
-		++index.judgeLogs;
-		DebugLog("twin index %s block %dx%d frame %d at %d,%d of %dx%d%s -> frame %d at %d,%d of %dx%d%s (src %p sheet=%d,%d) at frame %u", what, old->width, old->height,
-			old->frame, old->cx, old->cy, old->canvasW, old->canvasH, old->flipped ? " flipped" : "", next->frame, next->cx, next->cy, next->canvasW, next->canvasH, next->flipped ? " flipped" : "",
-			source ? source->owner : NULL, from ? from->left : 0, from ? from->top : 0, game.frameNo);
-	}
-
-	BOOL ExpectIdentity(const Expect* e, ULONGLONG hash, IndexEntry* entry, LONG x, LONG y)
+	BOOL PlaceSane(const Expect* e, LONG x, LONG y)
 	{
 		const Image* image = &art.images[e->image];
 		LONG placeW = image->place.right - image->place.left;
 		LONG placeH = image->place.bottom - image->place.top;
 		LONG cx = e->dx - image->place.left, cy = e->dy - image->place.top;
-		if (placeW < 2 || placeH < 2 || cx < -1 || cy < -1 || cx + e->w > placeW + 1 || cy + e->h > placeH + 1)
-		{
-			++index.rejected;
-			if (art.rejectLogs < REJECT_LOGS && art.frameLogs < LOGS_FRAME)
-			{
-				++art.rejectLogs;
-				++art.frameLogs;
-				DebugLog("twin learn rejected place frame=%d sheet=%d,%d %dx%d dst=%d,%d canvas=%d,%d of %dx%d at frame %u", image->frame,
-					e->sx, e->sy, e->w, e->h, x, y, cx, cy, placeW, placeH, game.frameNo);
-			}
-			return FALSE;
-		}
+		if (placeW >= 2 && placeH >= 2 && cx >= -1 && cy >= -1 && cx + e->w <= placeW + 1 && cy + e->h <= placeH + 1)
+			return TRUE;
 
-		entry->hash = hash;
-		entry->width = e->w;
-		entry->height = e->h;
-		entry->frame = image->frame;
-		entry->cx = cx;
-		entry->cy = cy;
-		entry->canvasW = placeW;
-		entry->canvasH = placeH;
-		entry->flipped = image->flipped ? 1 : 0;
-		entry->state = EntryTentative;
-		entry->learnedAt = game.frameNo;
-		entry->contradictions = 0;
-		entry->pad = 0;
-		return TRUE;
+		++index.rejected;
+		if (art.rejectLogs < REJECT_LOGS && art.frameLogs < LOGS_FRAME)
+		{
+			++art.rejectLogs;
+			++art.frameLogs;
+			DebugLog("twin expectation rejected place frame=%d sheet=%d,%d %dx%d dst=%d,%d canvas=%d,%d of %dx%d at frame %u", image->frame,
+				e->sx, e->sy, e->w, e->h, x, y, cx, cy, placeW, placeH, game.frameNo);
+		}
+		return FALSE;
 	}
 
-	// an expectation is only a hint: a new identity is tentative until a later frame agrees, and repeated disagreement replaces an expectation-learned one
-	DWORD Judge(IndexEntry* entry, const IndexEntry* seen, const Record* source, const RECT* from)
-	{
-		if (SameIdentity(entry, seen))
-		{
-			if (entry->state == EntryTentative && game.frameNo > entry->learnedAt)
-			{
-				Lock();
-				entry->state = EntryConfirmed;
-				index.dirty = TRUE;
-				Unlock();
-				++index.confirmed;
-				CountLearned(entry->frame, entry->cx, entry->cy, entry->width, entry->height);
-			}
-			entry->contradictions = 0;
-			return VerdictAgree;
-		}
-
-		if (entry->state == EntrySource)
-		{
-			++index.conflicts;
-			LogJudge("source entry disagrees with expectation", entry, seen, source, from);
-			return VerdictDisagree;
-		}
-
-		if (entry->state == EntryTentative && game.frameNo - entry->learnedAt > TENTATIVE_LIFE)
-		{
-			++index.expired;
-			SetIdentity(entry, seen, EntryTentative);
-			DropIdentity(entry->hash, entry->width, entry->height);
-			return VerdictReplaced;
-		}
-
-		++index.contradicted;
-		LogJudge("contradiction", entry, seen, source, from);
-		if (++entry->contradictions < CONTRADICTIONS)
-			return VerdictDisagree;
-
-		++index.replaced;
-		LogJudge("replaced", entry, seen, source, from);
-		SetIdentity(entry, seen, EntryTentative);
-		DropIdentity(entry->hash, entry->width, entry->height);
-		return VerdictReplaced;
-	}
-
+	// context first: an expectation is the game's own statement of what this copy draws; the pixels decide only when there is none
 	BOOL IdentifyArt(Record* target, DWORD dstId, const RECT* to, Record* source, DWORD srcId, const RECT* from, LONG x, LONG y, const RECT* srcRect, BOOL keyed, DWORD key, BOOL half, BOOL mirror, ArtPlan* plan = NULL)
 	{
 		LONG width = from->right - from->left;
 		LONG height = from->bottom - from->top;
 		if (width < INDEX_MIN_SIZE || height < INDEX_MIN_SIZE)
+		{
+			art.reason = "block under 8x8";
 			return FALSE;
+		}
 
 		Region* region = NULL;
 		for (DWORD i = 0; i < source->regionCount && !region; ++i)
 			if (Contains(&source->regions[i].rect, from))
 				region = &source->regions[i];
 
-		// only a copy of a whole, unclipped part says something reliable about the block's identity
-		Expect* e = NULL;
-		if (art.count && !mirror && EqualRect(from, srcRect))
-		{
-			e = Match(x, y, width, height, srcRect->left, srcRect->top);
-			if (e && !(e->dx == x && e->dy == y && e->sx == srcRect->left && e->sy == srcRect->top && e->w == width && e->h == height))
-				e = NULL;
-		}
+		Expect* e = art.count && !mirror ? Match(x, y, srcRect->right - srcRect->left, srcRect->bottom - srcRect->top, srcRect->left, srcRect->top) : NULL;
+		if (e && !PlaceSane(e, x, y))
+			e = NULL;
 
-		if (region && region->frame < 0 && !e)
+		if (e)
 		{
-			region->lastUse = ++art.useClock;
-			return FALSE;
+			e->used = TRUE;
+			while (art.head < art.count && art.expect[art.head].used)
+				++art.head;
+			++art.matched;
+
+			const Image* image = &art.images[e->image];
+			BOOL whole = EqualRect(from, srcRect) && x == e->dx && y == e->dy && width == e->w && height == e->h;
+			if (whole)
+			{
+				ULONGLONG hash = 0;
+				BOOL have = FALSE;
+				if (region && EqualRect(&region->rect, from))
+				{
+					hash = region->hash;
+					have = TRUE;
+				}
+				else
+				{
+					BOOL solid;
+					hash = HashBlock((const DWORD*)source->base + from->top * source->pitch + from->left, source->pitch, width, height, HashKey(source), &solid);
+					++index.lookups;
+					have = !solid;
+				}
+
+				IndexEntry* entry = have ? IndexCreate(hash, width, height) : NULL;
+				if (entry)
+				{
+					Identity seen;
+					seen.frame = image->frame;
+					seen.cx = e->dx - image->place.left;
+					seen.cy = e->dy - image->place.top;
+					seen.canvasW = image->place.right - image->place.left;
+					seen.canvasH = image->place.bottom - image->place.top;
+					seen.flipped = image->flipped ? 1 : 0;
+					seen.count = 0;
+					AddEvidence(entry, &seen, 1);
+
+					const Identity* dominant = Dominant(entry);
+					if (dominant)
+						AddRegion(source, from, hash, dominant->frame, dominant->flipped, dominant->canvasW, dominant->canvasH, dominant->cx, dominant->cy);
+					else
+						AddRegion(source, from, hash, -1, FALSE, 0, 0, 0, 0);
+				}
+			}
+
+			++index.contextDraws;
+			art.reason = "context";
+			if (plan)
+			{
+				plan->frame = image->frame;
+				plan->flipped = image->flipped;
+				plan->place = image->place;
+				plan->cached = FALSE;
+				return TRUE;
+			}
+			return RecordArt(target, dstId, to, srcId, from, image->frame, image->flipped, &image->place, keyed, key, FALSE, half);
 		}
 
 		Region found;
-		if (region && region->frame >= 0)
+		if (region)
 		{
 			region->lastUse = ++art.useClock;
+			if (region->frame < 0)
+			{
+				art.reason = "known miss region";
+				return FALSE;
+			}
+
+			++index.regionHits;
 			found = *region;
 			found.cx += from->left - region->rect.left;
 			found.cy += from->top - region->rect.top;
-
-			if (e && EqualRect(&region->rect, from))
-			{
-				e->used = TRUE;
-				++art.matched;
-				IndexEntry* entry = IndexFind(region->hash, width, height);
-				IndexEntry seen;
-				if (entry && ExpectIdentity(e, region->hash, &seen, x, y) && Judge(entry, &seen, source, from) == VerdictReplaced)
-					return FALSE;
-			}
-			++index.regionHits;
 		}
 		else
 		{
@@ -1989,51 +2039,27 @@ namespace Twin
 			if (solid)
 			{
 				++index.misses;
+				art.reason = "solid or unreadable block";
 				return FALSE;
 			}
 
 			IndexEntry* entry = IndexFind(hash, width, height);
-			IndexEntry seen;
-			BOOL hint = e && ExpectIdentity(e, hash, &seen, x, y);
-			if (e)
-			{
-				e->used = TRUE;
-				++art.matched;
-			}
-
-			if (!entry && hint)
-			{
-				BOOL conflict;
-				entry = IndexInsert(&seen, &conflict);
-				if (entry)
-				{
-					++index.tentative;
-					++index.learnedExpect;
-					if (index.logs < INDEX_LOGS)
-					{
-						++index.logs;
-						DebugLog("twin learned tentatively frame=%d block %dx%d at %d,%d of %dx%d%s from an expectation (src %p sheet=%d,%d)", seen.frame, seen.width, seen.height,
-							seen.cx, seen.cy, seen.canvasW, seen.canvasH, seen.flipped ? " flipped" : "", source->owner, from->left, from->top);
-					}
-				}
-			}
-			else if (entry && hint && Judge(entry, &seen, source, from) == VerdictReplaced)
-				entry = NULL;
-
-			if (!entry || entry->state == EntryTentative)
+			const Identity* dominant = entry ? Dominant(entry) : NULL;
+			if (!dominant)
 			{
 				++index.misses;
 				AddRegion(source, from, hash, -1, FALSE, 0, 0, 0, 0);
+				art.reason = entry ? "hash known but no identity seen twice" : "hash miss";
 				return FALSE;
 			}
 
 			++index.hits;
-			found.frame = entry->frame;
-			found.flipped = entry->flipped;
-			found.placeW = entry->canvasW;
-			found.placeH = entry->canvasH;
-			found.cx = entry->cx;
-			found.cy = entry->cy;
+			found.frame = dominant->frame;
+			found.flipped = dominant->flipped;
+			found.placeW = dominant->canvasW;
+			found.placeH = dominant->canvasH;
+			found.cx = dominant->cx;
+			found.cy = dominant->cy;
 			AddRegion(source, from, hash, found.frame, found.flipped, found.placeW, found.placeH, found.cx, found.cy);
 			region = NULL;
 		}
@@ -2050,6 +2076,9 @@ namespace Twin
 		place.top = to->top - found.cy;
 		place.right = place.left + found.placeW;
 		place.bottom = place.top + found.placeH;
+
+		++index.contentDraws;
+		art.reason = region ? "region" : "hash";
 		if (plan)
 		{
 			plan->frame = found.frame;
@@ -2096,58 +2125,34 @@ namespace Twin
 		Record* twin = FindAddress(first, &id);
 
 		BOOL solid;
-		IndexEntry entry;
-		entry.hash = HashBlock(first, pitch, width, height, HashKey(twin), &solid);
+		ULONGLONG hash = HashBlock(first, pitch, width, height, HashKey(twin), &solid);
 		if (solid)
 			return;
-		entry.width = width;
-		entry.height = height;
-		entry.frame = frame;
-		entry.cx = canvas->left;
-		entry.cy = canvas->top;
-		entry.canvasW = canvasWidth;
-		entry.canvasH = canvasHeight;
-		entry.flipped = flipped ? 1 : 0;
-		entry.state = EntrySource;
-		entry.learnedAt = game.frameNo;
-		entry.contradictions = 0;
-		entry.pad = 0;
 
-		BOOL conflict;
-		IndexEntry* kept = IndexInsert(&entry, &conflict);
+		IndexEntry* kept = IndexCreate(hash, width, height);
 		if (!kept)
 			return;
-		if (conflict)
-		{
-			if (kept->state != EntrySource)
-			{
-				++index.replaced;
-				LogJudge("replaced by source", kept, &entry, twin, rect);
-				SetIdentity(kept, &entry, EntrySource);
-				DropIdentity(kept->hash, kept->width, kept->height);
-			}
-			else
-			{
-				++index.conflicts;
-				LogJudge("source conflict kept first", kept, &entry, twin, rect);
-			}
-		}
-		else if (kept->state != EntrySource)
-		{
-			Lock();
-			kept->state = EntrySource;
-			index.dirty = TRUE;
-			Unlock();
-		}
-		else
-			++index.learnedSource;
-		CountLearned(kept->frame, kept->cx, kept->cy, width, height);
+
+		Identity seen;
+		seen.frame = frame;
+		seen.cx = canvas->left;
+		seen.cy = canvas->top;
+		seen.canvasW = canvasWidth;
+		seen.canvasH = canvasHeight;
+		seen.flipped = flipped ? 1 : 0;
+		seen.count = 0;
+		AddEvidence(kept, &seen, SOURCE_WEIGHT);
+		++index.learnedSource;
+
+		const Identity* dominant = Dominant(kept);
+		if (!dominant)
+			return;
 
 		LONG x, y;
 		if (twin && PixelPos(twin, first, pitch, width, height, &x, &y))
 		{
 			RECT block = { x, y, x + width, y + height };
-			AddRegion(twin, &block, kept->hash, kept->frame, kept->flipped, kept->canvasW, kept->canvasH, kept->cx, kept->cy);
+			AddRegion(twin, &block, hash, dominant->frame, dominant->flipped, dominant->canvasW, dominant->canvasH, dominant->cx, dominant->cy);
 		}
 	}
 
@@ -2213,6 +2218,7 @@ namespace Twin
 		++memory.count;
 		++memory.created;
 		memory.bytes += bytes;
+		twin->anonymous = anonymous;
 		if (anonymous)
 			++memory.anonymous;
 
@@ -2421,6 +2427,7 @@ namespace Twin
 		twin->regions = NULL;
 		twin->regionCount = 0;
 		twin->memory = FALSE;
+		twin->anonymous = FALSE;
 		twin->lastUse = game.frameNo;
 		twin->mirror = (DWORD*)MemoryAlloc(width * height * sizeof(DWORD));
 		if (twin->mirror)
@@ -2532,6 +2539,34 @@ namespace Twin
 			Release(twin, id);
 	}
 
+	const CHAR* TwinKind(const Record* twin)
+	{
+		return !twin ? "none" : twin->anonymous ? "anonymous" : twin->memory ? "memory" : "surface";
+	}
+
+	VOID TraceBegin(const CHAR* name, DWORD mode, BOOL mirror)
+	{
+		MemoryZero(&trace, sizeof(trace));
+		trace.name = name;
+		trace.mode = mode;
+		trace.mirror = mirror;
+		trace.outcome = "not reached";
+		art.reason = "no art lookup";
+		art.drew = FALSE;
+	}
+
+	VOID TraceEnd()
+	{
+		if (index.traceLogs >= TRACE_LOGS || !((trace.source && trace.source->memory) || (trace.target && trace.target->memory)))
+			return;
+
+		++index.traceLogs;
+		DebugLog("twin trace %s mode %u%s src %u %s %d,%d %dx%d dst %u %s %d,%d %dx%d | %s | art %s (%s) at frame %u", trace.name, trace.mode, trace.mirror ? " mirror" : "",
+			trace.srcId, TwinKind(trace.source), trace.from.left, trace.from.top, trace.from.right - trace.from.left, trace.from.bottom - trace.from.top,
+			trace.dstId, TwinKind(trace.target), trace.to.left, trace.to.top, trace.to.right - trace.to.left, trace.to.bottom - trace.to.top,
+			trace.outcome, art.drew ? "drawn" : "none", art.reason, game.frameNo);
+	}
+
 	VOID CopyTwins(Record* target, DWORD dstId, LONG x, LONG y, Record* source, DWORD srcId, const RECT* srcRect, BOOL keyed, DWORD key);
 
 	VOID OnCopy(StateBuffer* dst, LONG x, LONG y, StateBuffer* src, const RECT* srcRect, BOOL keyed, DWORD key)
@@ -2558,7 +2593,16 @@ namespace Twin
 
 		RECT rect = *srcRect;
 		OffsetRect(&rect, sox, soy);
+		TraceBegin("blt", keyed, FALSE);
+		trace.source = source;
+		trace.srcId = srcId;
+		trace.from = rect;
+		trace.target = target;
+		trace.dstId = dstId;
+		SetRect(&trace.to, x + dox, y + doy, x + dox + rect.right - rect.left, y + doy + rect.bottom - rect.top);
+		trace.outcome = source ? "recorded" : "src untwinned, dst marked dirty";
 		CopyTwins(target, dstId, x + dox, y + doy, source, srcId, &rect, keyed, key);
+		TraceEnd();
 	}
 
 	VOID CopyTwins(Record* target, DWORD dstId, LONG x, LONG y, Record* source, DWORD srcId, const RECT* srcRect, BOOL keyed, DWORD key)
@@ -2655,7 +2699,16 @@ namespace Twin
 			AddArt(target, &to);
 
 		if (!EqualRect(&from, srcRect))
+		{
+			if (keyed && index.clipLogs < 16)
+			{
+				++index.clipLogs;
+				DebugLog("twin clipped keyed copy src %u %s %d,%d %dx%d (asked %d,%d %dx%d) -> dst %u %d,%d key %08X src key %s %08X art %s (%s) at frame %u", srcId, TwinKind(source),
+					from.left, from.top, from.right - from.left, from.bottom - from.top, srcRect->left, srcRect->top, srcRect->right - srcRect->left, srcRect->bottom - srcRect->top,
+					dstId, to.left, to.top, key, source->keyed ? "learned" : "unknown", source->key, art.drew ? "drawn" : "none", art.reason, game.frameNo);
+			}
 			MarkDirty(target, whole);
+		}
 	}
 
 	VOID FillTwin(Record* twin, DWORD id, const RECT* rect, DWORD color);
@@ -2786,39 +2839,70 @@ namespace Twin
 		return pitch == twin->pitch && *x + width <= twin->width && *y + height <= twin->height;
 	}
 
+	VOID PixelCopyInner(PixelMode mode, const DWORD* src, LONG srcPitch, const DWORD* dst, LONG dstPitch, LONG width, LONG height, DWORD key, DWORD param);
+
 	VOID OnPixelCopy(PixelMode mode, const DWORD* src, LONG srcPitch, const DWORD* dst, LONG dstPitch, LONG width, LONG height, DWORD key, DWORD param)
 	{
 		Timed timed("OnPixelCopy");
 		if (!dst || !src || width <= 0 || height <= 0 || (DWORD)mode >= PIXEL_MODES || !Active())
 			return;
 
+		TraceBegin("pixel", mode, (param & PixelMirror) != 0);
+		PixelCopyInner(mode, src, srcPitch, dst, dstPitch, width, height, key, param);
+		TraceEnd();
+	}
+
+	VOID PixelCopyInner(PixelMode mode, const DWORD* src, LONG srcPitch, const DWORD* dst, LONG dstPitch, LONG width, LONG height, DWORD key, DWORD param)
+	{
 		Sync(FALSE);
 
 		DWORD dstId;
 		Record* target = Adopt(dst, &dstId);
+		trace.target = target;
+		trace.dstId = dstId;
 		if (!target)
+		{
+			trace.outcome = "dst untwinned";
 			return;
+		}
 
 		++game.pixelOps[mode];
 
 		LONG dx, dy;
 		if (!PixelPos(target, dst, dstPitch, width, height, &dx, &dy))
 		{
+			trace.outcome = dstPitch != target->pitch ? "dst pitch differs from its twin, marked dirty" : "dst rect outside its twin, marked dirty";
 			OnWrite(dst, dstPitch, width, height);
 			return;
 		}
 		RECT to = { dx, dy, dx + width, dy + height };
+		trace.to = to;
 
 		DWORD srcId;
 		Record* source = Adopt(src, &srcId);
+		trace.source = source;
+		trace.srcId = srcId;
 		LONG sx, sy;
 		if (!source || !PixelPos(source, src, srcPitch, width, height, &sx, &sy))
 		{
 			++game.pixelUntwinned;
+			trace.outcome = !source ? "src untwinned, dst marked dirty" : srcPitch != source->pitch ? "src pitch differs from its twin, dst marked dirty" : "src rect outside its twin, dst marked dirty";
+			if (index.untwinnedLogs < TRACE_LOGS)
+			{
+				++index.untwinnedLogs;
+				const VOID* base = NULL;
+				LONG pitch = 0, w = 0, h = 0, frame = -1;
+				BOOL flipped = FALSE;
+				BOOL known = ImageReplace::FindMemory(src, &base, &pitch, &w, &h, &frame, &flipped);
+				DebugLog("twin untwinned src mode %u src=%p pitch %d %dx%d -> dst %u %s | %s | FindMemory %s base=%p pitch %d %dx%d frame %d at frame %u", mode, src, srcPitch, width, height,
+					dstId, TwinKind(target), trace.outcome, known ? "knows it" : "doesn't know it", base, pitch, w, h, frame, game.frameNo);
+			}
 			MarkDirty(target, to);
 			return;
 		}
 		RECT from = { sx, sy, sx + width, sy + height };
+		trace.from = from;
+		trace.outcome = "recorded";
 		DrainSyncIn(source, &from);
 
 		BOOL mirror = (param & PixelMirror) != 0;
@@ -3184,8 +3268,8 @@ namespace Twin
 		art.expected = art.duplicates = art.matched = art.draws = art.px = art.notReady = art.overflow = 0;
 		index.regionHits = index.lookups = index.hits = index.misses = index.learnedExpect = index.learnedSource = index.conflicts = index.rejected = 0;
 
-		DebugLog("twin index trust: tentative %u confirmed %u contradicted %u replaced %u expired %u", index.tentative, index.confirmed, index.contradicted, index.replaced, index.expired);
-		index.tentative = index.confirmed = index.contradicted = index.replaced = index.expired = 0;
+		DebugLog("twin index identities: multi-identity entries %u | context draws %u content draws %u | evidence %u", index.multi, index.contextDraws, index.contentDraws, index.evidence);
+		index.contextDraws = index.contentDraws = index.evidence = 0;
 
 		LARGE_INTEGER qpc;
 		QueryPerformanceCounter(&qpc);
