@@ -97,6 +97,8 @@
 #define MEMORY_LOGS 16
 #define MEMORY_ART_LOGS 16
 #define FRAME_SLOTS 65536
+#define PIECE_SLOTS 131072
+#define LEARN_PASS 600
 #define HASH_LOGS 32
 #define GROUND_LOGS 8
 #define SCREEN_LOGS 64
@@ -340,6 +342,15 @@ namespace Twin
 	struct {
 		LONG frame[FRAME_SLOTS];
 		DWORD learned[FRAME_SLOTS];
+		DWORD pass[FRAME_SLOTS];
+		struct {
+			LONG frame;
+			LONG cx;
+			LONG cy;
+			LONG w;
+			LONG h;
+		} pieces[PIECE_SLOTS];
+		DWORD pieceCount;
 		DWORD skipped;
 		DWORD slowHashes;
 		DWORD hashLogs;
@@ -1307,8 +1318,14 @@ namespace Twin
 		DWORD* learned = FrameLearned(frame, FALSE);
 		if (learned && *learned >= count)
 		{
-			++learn.skipped;
-			return;
+			// let one call through every LEARN_PASS frames so a part the count missed can still learn
+			DWORD* pass = &learn.pass[learned - learn.learned];
+			if (game.frameNo - *pass < LEARN_PASS)
+			{
+				++learn.skipped;
+				return;
+			}
+			*pass = game.frameNo;
 		}
 
 		Timed timed("ExpectArt");
@@ -1480,8 +1497,29 @@ namespace Twin
 		return NULL;
 	}
 
-	VOID CountLearned(LONG frame)
+	// a piece is a part's place in its frame's canvas; counting unique pieces, not learned positions, keeps the fast path from closing before every part is known
+	VOID CountLearned(LONG frame, LONG cx, LONG cy, LONG w, LONG h)
 	{
+		if (learn.pieceCount * 10 >= PIECE_SLOTS * 7)
+			return;
+
+		DWORD mask = PIECE_SLOTS - 1;
+		DWORD slot = ((DWORD)frame * 2654435761u ^ (DWORD)cx * 73856093u ^ (DWORD)cy * 19349663u ^ (DWORD)w * 83492791u ^ (DWORD)h) & mask;
+		for (;; slot = (slot + 1) & mask)
+		{
+			if (!learn.pieces[slot].w)
+				break;
+			if (learn.pieces[slot].frame == frame && learn.pieces[slot].cx == cx && learn.pieces[slot].cy == cy && learn.pieces[slot].w == w && learn.pieces[slot].h == h)
+				return;
+		}
+
+		learn.pieces[slot].frame = frame;
+		learn.pieces[slot].cx = cx;
+		learn.pieces[slot].cy = cy;
+		learn.pieces[slot].w = w;
+		learn.pieces[slot].h = h;
+		++learn.pieceCount;
+
 		DWORD* count = FrameLearned(frame, TRUE);
 		if (count)
 			++*count;
@@ -1646,7 +1684,7 @@ namespace Twin
 		while (loaded < count && ReadFile(file, &entry, sizeof(entry), &read, NULL) && read == sizeof(entry))
 		{
 			if (entry.width >= INDEX_MIN_SIZE && entry.height >= INDEX_MIN_SIZE && entry.canvasW >= 2 && entry.canvasH >= 2 && IndexInsert(&entry, &conflict) && !conflict)
-				CountLearned(entry.frame);
+				CountLearned(entry.frame, entry.cx, entry.cy, entry.width, entry.height);
 			++loaded;
 		}
 		CloseHandle(file);
@@ -1789,7 +1827,7 @@ namespace Twin
 		if (!kept)
 			return FALSE;
 		if (conflict || kept->frame == entry.frame)
-			CountLearned(entry.frame);
+			CountLearned(entry.frame, cx, cy, e->w, e->h);
 		if (conflict)
 			++index.conflicts;
 		else if (kept->frame == entry.frame)
@@ -1940,7 +1978,7 @@ namespace Twin
 		IndexEntry* kept = IndexInsert(&entry, &conflict);
 		if (!kept)
 			return;
-		CountLearned(frame);
+		CountLearned(frame, canvas->left, canvas->top, width, height);
 		if (conflict)
 			++index.conflicts;
 		else if (kept->frame == frame)
