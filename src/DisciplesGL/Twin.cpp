@@ -2164,7 +2164,7 @@ namespace Twin
 				continue;
 
 			DWORD slot = REPAIR_TOP;
-			while (slot && top[slot - 1]->repairs < twin->repairs)
+			while (slot && (!top[slot - 1] || top[slot - 1]->repairs < twin->repairs))
 				--slot;
 			if (slot < REPAIR_TOP)
 			{
