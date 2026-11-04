@@ -1,0 +1,865 @@
+21:06:14.168 DllMain attach
+21:06:14.180 Config loaded exe version major=07D3000C minor=000B0001 renderer=0 mode=1024x768
+21:06:14.180 Hooks::Load begin exe version major=07D3000C minor=000B0001
+21:06:14.195 LoadV2 version major=07D3000C minor=000B0001 check=005676DA
+21:06:14.195 DeepHooksStage=0
+21:06:14.198 Skipping transition npc hook
+21:06:14.210 Hooks loaded
+21:06:14.229 Mods loaded
+21:06:14.275 DrawCreate
+21:06:14.287 DrawCreateEx
+21:06:14.287 DrawCreateEx
+21:06:14.287 DrawCreateEx
+21:06:14.287 SetCooperativeLevel hwnd=004F0A32 flags=00000008
+21:06:14.290 RenderStart begin renderer=0 windowed=1 mode=800x600x16
+21:06:14.430 Renderer::Start begin hwnd=004F0A32 finish=1
+21:06:14.431 Renderer::Start end draw=00C605F0 viewport=800x600
+21:06:14.431 RenderStart end gl=04060000 renderer=0
+21:06:14.431 CreateSurface flags=00000001 caps=00000200 w=0 h=0 bpp=0 pitch=0 surf=00000000
+21:06:14.431 Surface CreateBuffer type=0 800x600 bpp=16 external=00000000
+21:06:14.431 StateBufferAligned alloc length=1920000 count=1 renderer=0 true=1
+21:06:14.432 StateBufferAligned alloc length=1920000 count=2 renderer=0 true=1
+21:06:14.432 StateBufferAligned alloc length=1920000 count=3 renderer=0 true=1
+21:06:14.432 CreateSurface flags=00000007 caps=00000040 w=800 h=600 bpp=0 pitch=0 surf=00000000
+21:06:14.432 Surface CreateBuffer type=1 800x600 bpp=16 external=00000000
+21:06:14.432 StateBufferAligned alloc length=1920000 count=4 renderer=0 true=1
+21:06:14.432 CreateSurface flags=00001007 caps=00000840 w=1152 h=1152 bpp=8 pitch=0 surf=00000000
+21:06:14.433 Surface CreateBuffer type=2 1152x1152 bpp=8 external=00000000
+21:06:14.433 StateBuffer alloc size=1327104 count=1 total=1327104
+21:06:14.433 CreateSurface flags=00001007 caps=00000000 w=1152 h=1152 bpp=16 pitch=0 surf=00000000
+21:06:14.433 Surface CreateBuffer type=2 1152x1152 bpp=16 external=00000000
+21:06:14.433 StateBuffer alloc size=5308416 count=2 total=6635520
+21:06:14.468 StateBufferAligned alloc length=1920000 count=5 renderer=0 true=1
+21:06:14.518 BinkOpen G:\games\Disciples 2 - Dzieje\Video\SF.bik replaced with blank ok
+21:06:14.519 Screen .?AVCIntroAnim@@ popup=0
+21:06:14.519 CreateSurface flags=00001007 caps=10004040 w=800 h=600 bpp=16 pitch=0 surf=00000000
+21:06:14.519 Surface CreateBuffer type=2 800x600 bpp=16 external=00000000
+21:06:14.519 StateBuffer alloc size=1920000 count=3 total=8555520
+21:06:15.525 StateBuffer free count=2
+21:06:15.527 Screen .?AVCLoadingIntf@@ popup=0
+21:06:15.527 CreateSurface flags=00001007 caps=10004040 w=800 h=600 bpp=16 pitch=0 surf=00000000
+21:06:15.527 Surface CreateBuffer type=2 800x600 bpp=16 external=00000000
+21:06:15.527 StateBuffer alloc size=1920000 count=3 total=10475520
+21:06:15.753 StateBuffer free count=2
+21:06:16.099 Screen .?AVCMenuFullScreenAnim@@ popup=0
+21:06:16.099 CreateSurface flags=00001007 caps=10004040 w=800 h=600 bpp=16 pitch=0 surf=00000000
+21:06:16.099 Surface CreateBuffer type=2 800x600 bpp=16 external=00000000
+21:06:16.099 StateBuffer alloc size=1920000 count=3 total=12395520
+21:06:16.099 CreateSurface flags=00001007 caps=10004040 w=24 h=54 bpp=16 pitch=0 surf=00000000
+21:06:16.099 Surface CreateBuffer type=2 24x54 bpp=16 external=00000000
+21:06:16.099 StateBuffer alloc size=5184 count=4 total=12400704
+21:06:17.965 StateBuffer free count=3
+21:06:17.969 StateBuffer free count=2
+21:06:17.970 Screen .?AVCMenuMain@@ popup=0
+21:06:17.971 CreateSurface flags=00001007 caps=10004040 w=688 h=1014 bpp=16 pitch=0 surf=00000000
+21:06:17.971 Surface CreateBuffer type=2 688x1014 bpp=16 external=00000000
+21:06:17.971 StateBuffer alloc size=2790528 count=3 total=15191232
+21:06:17.971 CreateSurface flags=00001007 caps=10004040 w=748 h=896 bpp=16 pitch=0 surf=00000000
+21:06:17.972 Surface CreateBuffer type=2 748x896 bpp=16 external=00000000
+21:06:17.972 StateBuffer alloc size=2680832 count=4 total=17872064
+21:06:17.972 CreateSurface flags=00001007 caps=10004040 w=800 h=664 bpp=16 pitch=0 surf=00000000
+21:06:17.972 Surface CreateBuffer type=2 800x664 bpp=16 external=00000000
+21:06:17.972 StateBuffer alloc size=2124800 count=5 total=19996864
+21:06:17.972 CreateSurface flags=00001007 caps=10004040 w=800 h=600 bpp=16 pitch=0 surf=00000000
+21:06:17.972 Surface CreateBuffer type=2 800x600 bpp=16 external=00000000
+21:06:17.972 StateBuffer alloc size=1920000 count=6 total=21916864
+21:06:17.973 CreateSurface flags=00001007 caps=10004040 w=200 h=20 bpp=16 pitch=0 surf=00000000
+21:06:17.973 Surface CreateBuffer type=2 200x20 bpp=16 external=00000000
+21:06:17.973 StateBuffer alloc size=16000 count=7 total=21932864
+21:06:17.973 CreateSurface flags=00001007 caps=10004040 w=200 h=20 bpp=16 pitch=0 surf=00000000
+21:06:17.973 Surface CreateBuffer type=2 200x20 bpp=16 external=00000000
+21:06:17.973 StateBuffer alloc size=16000 count=8 total=21948864
+21:06:17.973 CreateSurface flags=00001007 caps=10004040 w=120 h=20 bpp=16 pitch=0 surf=00000000
+21:06:17.973 Surface CreateBuffer type=2 120x20 bpp=16 external=00000000
+21:06:17.973 StateBuffer alloc size=9600 count=9 total=21958464
+21:06:17.973 CreateSurface flags=00001007 caps=10004040 w=100 h=20 bpp=16 pitch=0 surf=00000000
+21:06:17.973 Surface CreateBuffer type=2 100x20 bpp=16 external=00000000
+21:06:17.973 StateBuffer alloc size=8000 count=10 total=21966464
+21:06:17.973 CreateSurface flags=00001007 caps=10004040 w=100 h=20 bpp=16 pitch=0 surf=00000000
+21:06:17.973 Surface CreateBuffer type=2 100x20 bpp=16 external=00000000
+21:06:17.973 StateBuffer alloc size=8000 count=11 total=21974464
+21:06:17.973 CreateSurface flags=00001007 caps=10004040 w=24 h=54 bpp=16 pitch=0 surf=00000000
+21:06:17.973 Surface CreateBuffer type=2 24x54 bpp=16 external=00000000
+21:06:17.973 StateBuffer alloc size=5184 count=12 total=21979648
+21:06:17.973 CreateSurface flags=00001007 caps=10004040 w=64 h=20 bpp=16 pitch=0 surf=00000000
+21:06:17.974 Surface CreateBuffer type=2 64x20 bpp=16 external=00000000
+21:06:17.974 StateBuffer alloc size=5120 count=13 total=21984768
+21:06:17.974 CreateSurface flags=00001007 caps=10004040 w=64 h=20 bpp=16 pitch=0 surf=00000000
+21:06:17.974 Surface CreateBuffer type=2 64x20 bpp=16 external=00000000
+21:06:17.974 StateBuffer alloc size=5120 count=14 total=21989888
+21:06:17.974 CreateSurface flags=00001007 caps=10004040 w=36 h=20 bpp=16 pitch=0 surf=00000000
+21:06:17.974 Surface CreateBuffer type=2 36x20 bpp=16 external=00000000
+21:06:17.974 StateBuffer alloc size=2880 count=15 total=21992768
+21:06:19.533 CreateSurface flags=00001007 caps=10004040 w=344 h=507 bpp=16 pitch=0 surf=00000000
+21:06:19.533 Surface CreateBuffer type=2 344x507 bpp=16 external=00000000
+21:06:19.533 StateBuffer alloc size=697632 count=16 total=22690400
+04:59:34.711 DllMain attach
+04:59:34.723 Config loaded exe version major=07D3000C minor=000B0001 renderer=0 mode=1024x768
+04:59:34.723 Hooks::Load begin exe version major=07D3000C minor=000B0001
+04:59:34.738 LoadV2 version major=07D3000C minor=000B0001 check=005676DA
+04:59:34.738 DeepHooksStage=0
+04:59:34.742 Skipping transition npc hook
+04:59:34.752 Hooks loaded
+04:59:34.771 Mods loaded
+04:59:34.809 DrawCreate
+04:59:34.815 DrawCreateEx
+04:59:34.815 DrawCreateEx
+04:59:34.815 DrawCreateEx
+04:59:34.815 SetCooperativeLevel hwnd=001E043C flags=00000008
+04:59:34.817 RenderStart begin renderer=0 windowed=1 mode=800x600x16
+04:59:34.947 Renderer::Start begin hwnd=001E043C finish=1
+04:59:34.948 Renderer::Start end draw=004A08DA viewport=800x600
+04:59:34.948 RenderStart end gl=04060000 renderer=0
+04:59:34.948 CreateSurface flags=00000001 caps=00000200 w=0 h=0 bpp=0 pitch=0 surf=00000000
+04:59:34.948 Surface CreateBuffer type=0 800x600 bpp=16 external=00000000
+04:59:34.948 StateBufferAligned alloc length=1920000 count=1 renderer=0 true=1
+04:59:34.948 StateBufferAligned alloc length=1920000 count=2 renderer=0 true=1
+04:59:34.949 StateBufferAligned alloc length=1920000 count=3 renderer=0 true=1
+04:59:34.949 CreateSurface flags=00000007 caps=00000040 w=800 h=600 bpp=0 pitch=0 surf=00000000
+04:59:34.949 Surface CreateBuffer type=1 800x600 bpp=16 external=00000000
+04:59:34.949 StateBufferAligned alloc length=1920000 count=4 renderer=0 true=1
+04:59:34.949 CreateSurface flags=00001007 caps=00000840 w=1152 h=1152 bpp=8 pitch=0 surf=00000000
+04:59:34.949 Surface CreateBuffer type=2 1152x1152 bpp=8 external=00000000
+04:59:34.949 StateBuffer alloc size=1327104 count=1 total=1327104
+04:59:34.949 CreateSurface flags=00001007 caps=00000000 w=1152 h=1152 bpp=16 pitch=0 surf=00000000
+04:59:34.949 Surface CreateBuffer type=2 1152x1152 bpp=16 external=00000000
+04:59:34.950 StateBuffer alloc size=5308416 count=2 total=6635520
+04:59:34.985 StateBufferAligned alloc length=1920000 count=5 renderer=0 true=1
+04:59:35.007 BinkOpen G:\games\Disciples 2 - Dzieje\Video\SF.bik replaced with blank ok
+04:59:35.008 Screen .?AVCIntroAnim@@ popup=0
+04:59:35.008 CreateSurface flags=00001007 caps=10004040 w=800 h=600 bpp=16 pitch=0 surf=00000000
+04:59:35.008 Surface CreateBuffer type=2 800x600 bpp=16 external=00000000
+04:59:35.008 StateBuffer alloc size=1920000 count=3 total=8555520
+04:59:36.009 StateBuffer free count=2
+04:59:36.012 Screen .?AVCLoadingIntf@@ popup=0
+04:59:36.012 CreateSurface flags=00001007 caps=10004040 w=800 h=600 bpp=16 pitch=0 surf=00000000
+04:59:36.012 Surface CreateBuffer type=2 800x600 bpp=16 external=00000000
+04:59:36.012 StateBuffer alloc size=1920000 count=3 total=10475520
+04:59:36.187 StateBuffer free count=2
+04:59:36.359 Screen .?AVCMenuFullScreenAnim@@ popup=0
+04:59:36.359 CreateSurface flags=00001007 caps=10004040 w=800 h=600 bpp=16 pitch=0 surf=00000000
+04:59:36.359 Surface CreateBuffer type=2 800x600 bpp=16 external=00000000
+04:59:36.359 StateBuffer alloc size=1920000 count=3 total=12395520
+04:59:36.359 CreateSurface flags=00001007 caps=10004040 w=24 h=54 bpp=16 pitch=0 surf=00000000
+04:59:36.359 Surface CreateBuffer type=2 24x54 bpp=16 external=00000000
+04:59:36.359 StateBuffer alloc size=5184 count=4 total=12400704
+07:06:27.178 DllMain attach
+07:06:27.194 Config loaded exe version major=07D3000C minor=000B0001 renderer=0 mode=1024x768
+07:06:27.195 Hooks::Load begin exe version major=07D3000C minor=000B0001
+07:06:27.240 LoadV2 version major=07D3000C minor=000B0001 check=005676DA
+07:06:27.262 Hooks loaded
+07:06:27.283 Mods loaded
+07:06:27.413 RenderStart begin renderer=0 windowed=1 mode=800x600x16
+07:06:27.549 RenderStart end gl=04060000 renderer=0
+07:06:27.619 BinkOpen G:\games\Disciples 2 - Dzieje\Video\SF.bik replaced with blank ok
+07:07:59.294 Turn art loaded, font loaded
+07:08:28.431 Autosave copy turn=0 scenario=Devil's Night file=G:\games\Disciples 2 - Dzieje\SaveGame\Devil's Night T0001.sg
+07:09:43.720 Autosave copy turn=3 scenario=Devil's Night file=G:\games\Disciples 2 - Dzieje\SaveGame\Devil's Night T0003.sg
+07:10:02.402 Autosave copy turn=3 scenario=Devil's Night file=G:\games\Disciples 2 - Dzieje\SaveGame\Devil's Night T0003.sg
+07:13:48.926 DllMain attach
+07:13:48.940 Config loaded exe version major=07D3000C minor=000B0001 renderer=0 mode=1024x768
+07:13:48.940 Hooks::Load begin exe version major=07D3000C minor=000B0001
+07:13:48.955 LoadV2 version major=07D3000C minor=000B0001 check=005676DA
+07:13:48.971 Hooks loaded
+07:13:48.991 Mods loaded
+07:13:49.038 RenderStart begin renderer=0 windowed=1 mode=800x600x16
+07:13:49.181 RenderStart end gl=04060000 renderer=0
+07:13:49.242 BinkOpen G:\games\Disciples 2 - Dzieje\Video\SF.bik replaced with blank ok
+07:13:50.618 Continue game G:\games\Disciples 2 - Dzieje\SaveGame\AutoSave.sg
+07:13:58.628 Autosave copy turn=3 scenario=Devil's Night file=G:\games\Disciples 2 - Dzieje\SaveGame\Devil's Night T0003.sg
+07:15:24.091 DllMain attach
+07:15:24.104 Config loaded exe version major=07D3000C minor=000B0001 renderer=0 mode=1024x768
+07:15:24.104 Hooks::Load begin exe version major=07D3000C minor=000B0001
+07:15:24.118 LoadV2 version major=07D3000C minor=000B0001 check=005676DA
+07:15:24.133 Hooks loaded
+07:15:24.152 Mods loaded
+07:15:24.200 RenderStart begin renderer=0 windowed=1 mode=800x600x16
+07:15:24.336 RenderStart end gl=04060000 renderer=0
+07:15:24.401 BinkOpen G:\games\Disciples 2 - Dzieje\Video\SF.bik replaced with blank ok
+07:19:55.494 DllMain attach
+07:19:55.508 Config loaded exe version major=07D3000C minor=000B0001 renderer=0 mode=1024x768
+07:19:55.508 Hooks::Load begin exe version major=07D3000C minor=000B0001
+07:19:55.524 LoadV2 version major=07D3000C minor=000B0001 check=005676DA
+07:19:55.539 Hooks loaded
+07:19:55.560 Mods loaded
+07:19:55.605 RenderStart begin renderer=0 windowed=1 mode=800x600x16
+07:19:55.736 RenderStart end gl=04060000 renderer=0
+07:19:55.802 BinkOpen G:\games\Disciples 2 - Dzieje\Video\SF.bik replaced with blank ok
+07:20:02.679 Continue game G:\games\Disciples 2 - Dzieje\SaveGame\AutoSave.sg
+07:20:05.937 Autosave copy turn=3 scenario=Devil's Night file=G:\games\Disciples 2 - Dzieje\SaveGame\Devil's Night T0003.sg
+07:20:27.214 DllMain attach
+07:20:27.226 Config loaded exe version major=07D3000C minor=000B0001 renderer=0 mode=1024x768
+07:20:27.226 Hooks::Load begin exe version major=07D3000C minor=000B0001
+07:20:27.242 LoadV2 version major=07D3000C minor=000B0001 check=005676DA
+07:20:27.256 Hooks loaded
+07:20:27.277 Mods loaded
+07:20:27.325 RenderStart begin renderer=0 windowed=1 mode=800x600x16
+07:20:27.454 RenderStart end gl=04060000 renderer=0
+07:20:27.520 BinkOpen G:\games\Disciples 2 - Dzieje\Video\SF.bik replaced with blank ok
+07:23:21.565 DllMain attach
+07:23:21.580 Config loaded exe version major=07D3000C minor=000B0001 renderer=0 mode=1024x768
+07:23:21.580 Hooks::Load begin exe version major=07D3000C minor=000B0001
+07:23:21.596 LoadV2 version major=07D3000C minor=000B0001 check=005676DA
+07:23:21.611 Hooks loaded
+07:23:21.631 Mods loaded
+07:23:21.690 RenderStart begin renderer=0 windowed=1 mode=800x600x16
+07:23:21.828 RenderStart end gl=04060000 renderer=0
+07:23:21.904 BinkOpen G:\games\Disciples 2 - Dzieje\Video\SF.bik replaced with blank ok
+07:34:01.563 DllMain attach
+07:34:01.576 Config loaded exe version major=07D3000C minor=000B0001 renderer=0 mode=1024x768
+07:34:01.576 Hooks::Load begin exe version major=07D3000C minor=000B0001
+07:34:01.592 LoadV2 version major=07D3000C minor=000B0001 check=005676DA
+07:34:01.607 Hooks loaded
+07:34:01.627 Mods loaded
+07:34:01.672 RenderStart begin renderer=0 windowed=1 mode=800x600x16
+07:34:01.805 RenderStart end gl=04060000 renderer=0
+07:34:01.872 BinkOpen G:\games\Disciples 2 - Dzieje\Video\SF.bik replaced with blank ok
+07:34:03.661 Continue game G:\games\Disciples 2 - Dzieje\SaveGame\AutoSave.sg
+07:34:07.211 Autosave copy turn=3 scenario=Devil's Night file=G:\games\Disciples 2 - Dzieje\SaveGame\Devil's Night T0003.sg
+07:34:20.988 DllMain attach
+07:34:21.001 Config loaded exe version major=07D3000C minor=000B0001 renderer=0 mode=1024x768
+07:34:21.001 Hooks::Load begin exe version major=07D3000C minor=000B0001
+07:34:21.017 LoadV2 version major=07D3000C minor=000B0001 check=005676DA
+07:34:21.032 Hooks loaded
+07:34:21.053 Mods loaded
+07:34:21.098 RenderStart begin renderer=0 windowed=1 mode=800x600x16
+07:34:21.229 RenderStart end gl=04060000 renderer=0
+07:34:21.292 BinkOpen G:\games\Disciples 2 - Dzieje\Video\SF.bik replaced with blank ok
+07:34:23.056 Continue game G:\games\Disciples 2 - Dzieje\SaveGame\AutoSave.sg
+07:38:15.808 DllMain attach
+07:38:15.820 Config loaded exe version major=07D3000C minor=000B0001 renderer=0 mode=1024x768
+07:38:15.820 Hooks::Load begin exe version major=07D3000C minor=000B0001
+07:38:15.835 LoadV2 version major=07D3000C minor=000B0001 check=005676DA
+07:38:15.850 Hooks loaded
+07:38:15.870 Mods loaded
+07:38:15.918 RenderStart begin renderer=0 windowed=1 mode=800x600x16
+07:38:16.052 RenderStart end gl=04060000 renderer=0
+07:38:16.117 BinkOpen G:\games\Disciples 2 - Dzieje\Video\SF.bik replaced with blank ok
+07:38:17.964 Continue game G:\games\Disciples 2 - Dzieje\SaveGame\AutoSave.sg
+07:38:21.674 Autosave copy turn=3 scenario=Devil's Night file=G:\games\Disciples 2 - Dzieje\SaveGame\Devil's Night T0003.sg
+07:45:00.213 DllMain attach
+07:45:00.225 Config loaded exe version major=07D3000C minor=000B0001 renderer=0 mode=1024x768
+07:45:00.225 Hooks::Load begin exe version major=07D3000C minor=000B0001
+07:45:00.241 LoadV2 version major=07D3000C minor=000B0001 check=005676DA
+07:45:00.255 Hooks loaded
+07:45:00.275 Mods loaded
+07:45:00.320 RenderStart begin renderer=0 windowed=1 mode=800x600x16
+07:45:00.455 RenderStart end gl=04060000 renderer=0
+07:45:00.519 BinkOpen G:\games\Disciples 2 - Dzieje\Video\SF.bik replaced with blank ok
+07:45:02.269 Continue game G:\games\Disciples 2 - Dzieje\SaveGame\AutoSave.sg
+07:45:06.796 Autosave copy turn=3 scenario=Devil's Night file=G:\games\Disciples 2 - Dzieje\SaveGame\Devil's Night T0003.sg
+08:38:38.832 DllMain attach
+08:38:38.844 Config loaded exe version major=07D3000C minor=000B0001 renderer=0 mode=1024x768
+08:38:38.845 Hooks::Load begin exe version major=07D3000C minor=000B0001
+08:38:38.860 LoadV2 version major=07D3000C minor=000B0001 check=005676DA
+08:38:38.879 Hooks loaded
+08:38:38.899 Mods loaded
+08:38:38.945 RenderStart begin renderer=0 windowed=1 mode=800x600x16
+08:38:39.083 RenderStart end gl=04060000 renderer=0
+08:38:39.148 BinkOpen G:\games\Disciples 2 - Dzieje\Video\SF.bik replaced with blank ok
+08:38:41.228 Continue game G:\games\Disciples 2 - Dzieje\SaveGame\AutoSave.sg
+08:38:42.554 Turn income text player=271DF184 view=0 gold=300 last=00000000/0
+08:38:42.587 Turn income arm pending=0
+08:38:46.600 Autosave copy turn=3 scenario=Devil's Night file=G:\games\Disciples 2 - Dzieje\SaveGame\Devil's Night T0003.sg
+08:38:47.177 Turn income arm pending=0
+08:38:47.179 Turn income text player=271DF184 view=1 gold=450 last=271DF184/300
+08:38:47.179 Turn income increase armed=1
+08:38:47.179 Turn income gold=300+150 red=225+75
+08:38:47.179 Turn income game write ms=0 gold=450 thread=800
+08:38:47.179 Turn income first tick ms=0 thread=800 game=800
+08:38:50.189 Turn income done ms=3011 ticks=188 writes=108 thread=800 text=450,,,,300
+08:38:51.304 Autosave copy turn=3 scenario=Devil's Night file=G:\games\Disciples 2 - Dzieje\SaveGame\Devil's Night T0003.sg
+08:38:52.430 Turn income arm pending=0
+08:38:52.430 Turn income text player=271DF184 view=1 gold=600 last=271DF184/450
+08:38:52.431 Turn income increase armed=1
+08:38:52.431 Turn income gold=450+150 red=300+75
+08:38:52.431 Turn income game write ms=0 gold=600 thread=800
+08:38:52.431 Turn income first tick ms=0 thread=800 game=800
+08:38:55.435 Turn income done ms=3003 ticks=188 writes=109 thread=800 text=600,,,,375
+12:49:05.825 DllMain attach
+12:49:05.838 Config loaded exe version major=07D3000C minor=000B0001 renderer=0 mode=1024x768
+12:49:05.838 Hooks::Load begin exe version major=07D3000C minor=000B0001
+12:49:05.853 LoadV2 version major=07D3000C minor=000B0001 check=005676DA
+12:49:05.871 Hooks loaded
+12:49:05.892 Mods loaded
+12:49:05.941 RenderStart begin renderer=0 windowed=1 mode=800x600x16
+12:49:06.073 RenderStart end gl=04060000 renderer=0
+12:49:06.133 BinkOpen G:\games\Disciples 2 - Dzieje\Video\SF.bik replaced with blank ok
+12:49:06.134 TextReplace diag glyphs=0 skipped=0 copies=0 carried=0 occluded=0 dropped=0 pixelCopies=0 rows=0 presents=1 presentGlyphs=0 maskedFrames=0 drawn=0 noAtlas=0
+12:49:06.134 TextReplace diag2 cleanPresents=0 emptyDirty=1 renders=0 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=0
+12:49:07.515 TextReplace font 03C21BA0 phases search 3 charset 1491 offset 601 us
+12:49:07.516 TextReplace font 03C21BA0: Palatino Linotype weight 700 italic 0 size 13 charset 0 offset 0,0 score 1000/1000
+12:49:07.516 TextReplace font 03C21BA0 name 'Menu' calibrated in 2348 us
+12:49:07.516 TextReplace offcarry blit src 03C4D140 1152x1152 glyphs 12 rect 0,0,200,20 -> dst 26B24918 200x20 at 0,0 now 12 (+12) first ch 83 alpha 255
+12:49:07.516 TextReplace offcarry blit src 03C4D140 1152x1152 glyphs 8 rect 0,0,200,20 -> dst 26B24970 200x20 at 0,0 now 8 (+8) first ch 84 alpha 255
+12:49:07.516 TextReplace offcarry blit src 03C4D140 1152x1152 glyphs 11 rect 0,0,120,20 -> dst 26B249C8 120x20 at 0,0 now 11 (+11) first ch 77 alpha 255
+12:49:07.516 TextReplace offcarry blit src 03C4D140 1152x1152 glyphs 7 rect 0,0,100,20 -> dst 26B24A20 100x20 at 0,0 now 7 (+7) first ch 67 alpha 255
+12:49:07.516 TextReplace offcarry blit src 03C4D140 1152x1152 glyphs 7 rect 0,0,100,20 -> dst 26B24A78 100x20 at 0,0 now 7 (+7) first ch 79 alpha 255
+12:49:07.516 TextReplace offcarry blit src 03C4D140 1152x1152 glyphs 5 rect 0,0,64,20 -> dst 26B24B28 64x20 at 0,0 now 5 (+5) first ch 73 alpha 255
+12:49:07.517 TextReplace offcarry blit src 03C4D140 1152x1152 glyphs 4 rect 0,0,64,20 -> dst 26B24B80 64x20 at 0,0 now 4 (+4) first ch 81 alpha 255
+12:49:07.518 TextReplace font 03C23018 phases search 1 charset 1420 offset 605 us
+12:49:07.518 TextReplace font 03C23018: Palatino Linotype weight 400 italic 0 size 12 charset 0 offset 0,0 score 1000/1000
+12:49:07.518 TextReplace font 03C23018 name 'Normal' calibrated in 2203 us
+12:49:07.518 TextReplace offcarry blit src 03C4D140 1152x1152 glyphs 4 rect 0,0,36,20 -> dst 26B24BD8 36x20 at 0,0 now 4 (+4) first ch 66 alpha 255
+12:49:08.134 TextReplace diag glyphs=59 skipped=58 copies=1306 carried=8410 occluded=0 dropped=0 pixelCopies=0 rows=0 presents=391 presentGlyphs=8294 maskedFrames=0 drawn=8236 noAtlas=0
+12:49:08.134 TextReplace diag2 cleanPresents=0 emptyDirty=248 renders=391 slotMiss=0 slotEmpty=249 atlas=39 in 4973 us calibrate 4551 us lockCleared=7
+12:49:08.928 TextReplace offcarry blit src 03C4D140 1152x1152 glyphs 20 rect 0,0,202,20 -> dst 28FCD378 202x20 at 0,0 now 20 (+20) first ch 85 alpha 255
+12:49:08.929 TextReplace offcarry blit src 03C4D140 1152x1152 glyphs 19 rect 0,0,252,20 -> dst 28FCD3D0 252x20 at 0,0 now 19 (+19) first ch 73 alpha 255
+12:49:08.929 TextReplace offcarry blit src 03C4D140 1152x1152 glyphs 25 rect 0,0,202,20 -> dst 26B24FB0 202x20 at 0,0 now 25 (+25) first ch 73 alpha 255
+12:49:08.929 TextReplace offcarry blit src 03C4D140 1152x1152 glyphs 8 rect 0,0,252,20 -> dst 28FCD278 252x20 at 0,0 now 8 (+8) first ch 65 alpha 255
+12:49:08.929 TextReplace offcarry blit src 03C4D140 1152x1152 glyphs 21 rect 0,0,252,20 -> dst 26B24E50 252x20 at 0,0 now 21 (+21) first ch 69 alpha 255
+12:49:08.929 TextReplace offcarry blit src 03C4D140 1152x1152 glyphs 11 rect 0,0,202,20 -> dst 26B24F58 202x20 at 0,0 now 11 (+11) first ch 66 alpha 255
+12:49:08.929 TextReplace offcarry blit src 03C4D140 1152x1152 glyphs 16 rect 0,0,252,20 -> dst 28FCD5C8 252x20 at 0,0 now 16 (+16) first ch 67 alpha 255
+12:49:08.929 TextReplace offcarry blit src 03C4D140 1152x1152 glyphs 15 rect 0,0,250,20 -> dst 28FCD620 250x20 at 0,0 now 15 (+15) first ch 70 alpha 255
+12:49:08.929 TextReplace offcarry blit src 03C4D140 1152x1152 glyphs 13 rect 0,0,202,20 -> dst 28FCD678 202x20 at 0,0 now 13 (+13) first ch 83 alpha 255
+12:49:08.931 TextReplace font 03C227E8 phases search 3 charset 1383 offset 579 us
+12:49:08.931 TextReplace font 03C227E8: Garamond weight 700 italic 0 size 16 charset 0 offset 0,0 score 1000/1000
+12:49:08.931 TextReplace font 03C227E8 name 'large' calibrated in 2116 us
+12:49:08.931 TextReplace offcarry blit src 03C4D140 1152x1152 glyphs 12 rect 0,0,134,27 -> dst 28FCD6D0 134x27 at 0,0 now 12 (+12) first ch 71 alpha 255
+12:49:08.931 TextReplace offcarry blit src 03C4D140 1152x1152 glyphs 8 rect 0,0,134,27 -> dst 28FCD728 134x27 at 0,0 now 8 (+8) first ch 71 alpha 255
+12:49:08.931 TextReplace offcarry blit src 03C4D140 1152x1152 glyphs 30 rect 0,0,252,20 -> dst 28FCD7D8 252x20 at 0,0 now 30 (+30) first ch 72 alpha 255
+12:49:08.932 TextReplace offcarry blit src 03C4D140 1152x1152 glyphs 7 rect 0,0,100,20 -> dst 28FCD830 100x20 at 0,0 now 7 (+7) first ch 72 alpha 255
+12:49:08.932 TextReplace offcarry blit src 03C4D140 1152x1152 glyphs 27 rect 0,0,252,20 -> dst 28FCD888 252x20 at 0,0 now 27 (+27) first ch 73 alpha 255
+12:49:08.932 TextReplace offcarry blit src 03C4D140 1152x1152 glyphs 21 rect 0,0,250,20 -> dst 28FCD8E0 250x20 at 0,0 now 21 (+21) first ch 69 alpha 255
+12:49:08.932 TextReplace offcarry blit src 03C4D140 1152x1152 glyphs 23 rect 0,0,252,20 -> dst 28FCD938 252x20 at 0,0 now 23 (+23) first ch 77 alpha 255
+12:49:08.932 TextReplace offcarry blit src 03C4D140 1152x1152 glyphs 6 rect 0,0,86,20 -> dst 28FCD990 86x20 at 0,0 now 6 (+6) first ch 76 alpha 255
+12:49:08.932 TextReplace offcarry blit src 03C4D140 1152x1152 glyphs 18 rect 0,0,252,20 -> dst 28FCD9E8 252x20 at 0,0 now 18 (+18) first ch 76 alpha 255
+12:49:08.932 TextReplace offcarry blit src 03C4D140 1152x1152 glyphs 11 rect 0,0,202,20 -> dst 28FCDA40 202x20 at 0,0 now 11 (+11) first ch 77 alpha 255
+12:49:08.932 TextReplace offcarry blit src 03C4D140 1152x1152 glyphs 20 rect 0,0,202,20 -> dst 28FCDA98 202x20 at 0,0 now 20 (+20) first ch 79 alpha 255
+12:49:08.932 TextReplace offcarry blit src 03C4D140 1152x1152 glyphs 34 rect 0,0,252,20 -> dst 28FCDAF0 252x20 at 0,0 now 34 (+34) first ch 65 alpha 255
+12:49:08.932 TextReplace offcarry blit src 03C4D140 1152x1152 glyphs 11 rect 0,0,134,26 -> dst 28FCDB48 134x26 at 0,0 now 11 (+11) first ch 80 alpha 255
+12:49:08.932 TextReplace offcarry blit src 03C4D140 1152x1152 glyphs 29 rect 0,0,252,20 -> dst 28FCDBA0 252x20 at 0,0 now 29 (+29) first ch 80 alpha 255
+12:49:08.932 TextReplace offcarry blit src 03C4D140 1152x1152 glyphs 11 rect 0,0,202,20 -> dst 28FCDBF8 202x20 at 0,0 now 11 (+11) first ch 83 alpha 255
+12:49:08.932 TextReplace offcarry blit src 03C4D140 1152x1152 glyphs 21 rect 0,0,250,20 -> dst 28FCDC50 250x20 at 0,0 now 21 (+21) first ch 65 alpha 255
+12:49:08.932 TextReplace offcarry blit src 03C4D140 1152x1152 glyphs 23 rect 0,0,250,20 -> dst 28FCDCA8 250x20 at 0,0 now 23 (+23) first ch 83 alpha 255
+12:49:08.933 TextReplace offcarry blit src 03C4D140 1152x1152 glyphs 5 rect 0,0,136,27 -> dst 28FCDD00 136x27 at 0,0 now 5 (+5) first ch 65 alpha 255
+12:49:08.933 TextReplace offcarry blit src 03C4D140 1152x1152 glyphs 34 rect 0,0,250,20 -> dst 28FCDD58 250x20 at 0,0 now 34 (+34) first ch 83 alpha 255
+12:49:08.935 TextReplace font 03C223D0 phases search 1 charset 1787 offset 784 us
+12:49:08.935 TextReplace font 03C223D0: Book Antiqua weight 700 italic 1 size 21 charset 0 offset 0,0 score 1000/1000
+12:49:08.935 TextReplace font 03C223D0 name 'vlarge' calibrated in 2710 us
+12:49:08.935 TextReplace offcarry blit src 03C4D140 1152x1152 glyphs 7 rect 0,0,206,30 -> dst 28FCDDB0 206x30 at 0,0 now 7 (+7) first ch 79 alpha 255
+12:49:08.935 TextReplace offcarry blit src 03C4D140 1152x1152 glyphs 12 rect 0,0,202,20 -> dst 28FCDE08 202x20 at 0,0 now 12 (+12) first ch 85 alpha 255
+12:49:08.936 TextReplace offcarry blit src 03C4D140 1152x1152 glyphs 3 rect 0,0,58,20 -> dst 28FCDE60 58x20 at 0,0 now 3 (+3) first ch 51 alpha 255
+12:49:08.936 TextReplace offcarry blit src 03C4D140 1152x1152 glyphs 3 rect 0,0,58,20 -> dst 28FCDEB8 58x20 at 0,0 now 3 (+3) first ch 76 alpha 255
+12:49:08.936 TextReplace offcarry blit src 03C4D140 1152x1152 glyphs 4 rect 0,0,78,20 -> dst 28FCDF10 78x20 at 0,0 now 4 (+4) first ch 70 alpha 255
+12:49:08.936 TextReplace offcarry blit src 03C4D140 1152x1152 glyphs 3 rect 0,0,58,20 -> dst 28FCDF68 58x20 at 0,0 now 3 (+3) first ch 51 alpha 255
+12:49:08.936 TextReplace offcarry blit src 03C4D140 1152x1152 glyphs 4 rect 0,0,78,20 -> dst 28FCDFC0 78x20 at 0,0 now 4 (+4) first ch 70 alpha 255
+12:49:08.936 TextReplace offcarry blit src 03C4D140 1152x1152 glyphs 3 rect 0,0,58,20 -> dst 28FCE018 58x20 at 0,0 now 3 (+3) first ch 50 alpha 255
+12:49:08.936 TextReplace offcarry blit src 03C4D140 1152x1152 glyphs 4 rect 0,0,78,20 -> dst 28FCE070 78x20 at 0,0 now 4 (+4) first ch 70 alpha 255
+12:49:08.936 TextReplace offcarry blit src 03C4D140 1152x1152 glyphs 4 rect 0,0,76,20 -> dst 28FCE0C8 76x20 at 0,0 now 4 (+4) first ch 70 alpha 255
+12:49:09.091 TextReplace offcarry blit src 03C4D140 1152x1152 glyphs 51 rect 0,0,344,70 -> dst 28FCE1E0 344x70 at 0,0 now 51 (+51) first ch 69 alpha 255
+12:49:09.141 TextReplace offcarry blit src 03C4D140 1152x1152 glyphs 55 rect 0,0,344,70 -> dst 28FCE238 344x70 at 0,0 now 55 (+55) first ch 76 alpha 255
+12:49:09.218 TextReplace offcarry blit src 03C4D140 1152x1152 glyphs 123 rect 0,0,344,70 -> dst 28FCE238 344x70 at 0,0 now 123 (+123) first ch 69 alpha 255
+12:49:09.286 TextReplace offcarry blit src 03C4D140 1152x1152 glyphs 87 rect 0,0,344,70 -> dst 28FCE238 344x70 at 0,0 now 87 (+87) first ch 71 alpha 255
+12:49:09.526 TextReplace offcarry blit src 03C4D140 1152x1152 glyphs 38 rect 0,0,344,70 -> dst 28FCE238 344x70 at 0,0 now 38 (+38) first ch 81 alpha 255
+12:49:09.791 TextReplace offcarry blit src 03C4D140 1152x1152 glyphs 87 rect 0,0,344,70 -> dst 28FCE238 344x70 at 0,0 now 87 (+87) first ch 71 alpha 255
+12:49:09.806 TextReplace offcarry blit src 03C4D140 1152x1152 glyphs 123 rect 0,0,344,70 -> dst 28FCE238 344x70 at 0,0 now 123 (+123) first ch 69 alpha 255
+12:49:09.823 TextReplace offcarry blit src 03C4D140 1152x1152 glyphs 55 rect 0,0,344,70 -> dst 28FCE1E0 344x70 at 0,0 now 55 (+55) first ch 76 alpha 255
+12:49:09.847 TextReplace offcarry blit src 03C4D140 1152x1152 glyphs 51 rect 0,0,344,70 -> dst 28FCE868 344x70 at 0,0 now 51 (+51) first ch 69 alpha 255
+12:49:09.934 TextReplace offcarry blit src 03C4D140 1152x1152 glyphs 45 rect 0,0,344,70 -> dst 28FCE868 344x70 at 0,0 now 45 (+45) first ch 69 alpha 255
+12:49:10.133 TextReplace diag glyphs=1430 skipped=1261 copies=13003 carried=181249 occluded=1085 dropped=4 pixelCopies=0 rows=0 presents=468 presentGlyphs=179455 maskedFrames=251 drawn=178980 noAtlas=0
+12:49:10.133 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=469 slotMiss=0 slotEmpty=0 atlas=175 in 21646 us calibrate 4826 us lockCleared=47
+12:49:10.161 TextReplace offcarry blit src 03C4D140 1152x1152 glyphs 68 rect 0,0,344,70 -> dst 28FCE448 344x70 at 0,0 now 68 (+68) first ch 67 alpha 255
+12:49:10.180 TextReplace offcarry blit src 03C4D140 1152x1152 glyphs 48 rect 0,0,344,70 -> dst 28FCE448 344x70 at 0,0 now 48 (+48) first ch 67 alpha 255
+12:49:10.204 TextReplace offcarry blit src 03C4D140 1152x1152 glyphs 22 rect 0,0,344,70 -> dst 28FCE448 344x70 at 0,0 now 22 (+22) first ch 65 alpha 255
+12:49:10.235 TextReplace offcarry blit src 03C4D140 1152x1152 glyphs 23 rect 0,0,344,70 -> dst 28FCE448 344x70 at 0,0 now 23 (+23) first ch 65 alpha 255
+12:49:10.886 TextReplace offcarry blit src 03C4D140 1152x1152 glyphs 53 rect 0,0,344,70 -> dst 28FCE868 344x70 at 0,0 now 53 (+53) first ch 67 alpha 255
+12:49:10.912 TextReplace offcarry blit src 03C4D140 1152x1152 glyphs 39 rect 0,0,344,70 -> dst 28FCE868 344x70 at 0,0 now 39 (+39) first ch 67 alpha 255
+12:49:10.928 TextReplace offcarry blit src 03C4D140 1152x1152 glyphs 44 rect 0,0,344,70 -> dst 28FCE868 344x70 at 0,0 now 44 (+44) first ch 65 alpha 255
+12:49:10.944 TextReplace offcarry blit src 03C4D140 1152x1152 glyphs 103 rect 0,0,344,70 -> dst 28FCE868 344x70 at 0,0 now 103 (+103) first ch 65 alpha 255
+12:49:10.955 TextReplace offcarry blit src 03C4D140 1152x1152 glyphs 48 rect 0,0,344,70 -> dst 28FCE448 344x70 at 0,0 now 48 (+48) first ch 69 alpha 255
+12:49:10.985 TextReplace offcarry blit src 03C4D140 1152x1152 glyphs 51 rect 0,0,344,70 -> dst 28FCE8C0 344x70 at 0,0 now 51 (+51) first ch 69 alpha 255
+12:49:10.993 TextReplace offcarry blit src 03C4D140 1152x1152 glyphs 55 rect 0,0,344,70 -> dst 28FCE868 344x70 at 0,0 now 55 (+55) first ch 76 alpha 255
+12:49:11.008 TextReplace offcarry blit src 03C4D140 1152x1152 glyphs 123 rect 0,0,344,70 -> dst 28FCE868 344x70 at 0,0 now 123 (+123) first ch 69 alpha 255
+12:49:11.029 TextReplace offcarry blit src 03C4D140 1152x1152 glyphs 87 rect 0,0,344,70 -> dst 28FCE868 344x70 at 0,0 now 87 (+87) first ch 71 alpha 255
+12:49:11.069 TextReplace offcarry blit src 03C4D140 1152x1152 glyphs 38 rect 0,0,344,70 -> dst 28FCE868 344x70 at 0,0 now 38 (+38) first ch 81 alpha 255
+12:49:12.134 TextReplace diag glyphs=933 skipped=802 copies=17902 carried=247433 occluded=438 dropped=0 pixelCopies=0 rows=0 presents=475 presentGlyphs=246666 maskedFrames=91 drawn=247790 noAtlas=0
+12:49:12.134 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=476 slotMiss=0 slotEmpty=0 atlas=13 in 1959 us calibrate 0 us lockCleared=15
+12:49:14.132 TextReplace diag glyphs=0 skipped=0 copies=4266 carried=27492 occluded=1099 dropped=0 pixelCopies=0 rows=0 presents=474 presentGlyphs=27492 maskedFrames=245 drawn=27550 noAtlas=0
+12:49:14.132 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=475 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=0
+12:49:15.009 TextReplace offcarry blit src 03C4D140 1152x1152 glyphs 14 rect 0,0,170,20 -> dst 26B24970 170x20 at 0,0 now 14 (+14) first ch 76 alpha 255
+12:49:15.010 TextReplace offcarry blit src 03C4D140 1152x1152 glyphs 13 rect 0,0,150,20 -> dst 26B24BD8 150x20 at 0,0 now 13 (+13) first ch 78 alpha 255
+12:49:15.010 TextReplace offcarry blit src 03C4D140 1152x1152 glyphs 9 rect 0,0,150,20 -> dst 26B24A20 150x20 at 0,0 now 9 (+9) first ch 76 alpha 255
+12:49:15.010 TextReplace offcarry blit src 03C4D140 1152x1152 glyphs 8 rect 0,0,150,20 -> dst 26B249C8 150x20 at 0,0 now 8 (+8) first ch 76 alpha 255
+12:49:15.010 TextReplace offcarry blit src 03C4D140 1152x1152 glyphs 8 rect 0,0,150,20 -> dst 26B24A78 150x20 at 0,0 now 8 (+8) first ch 78 alpha 255
+12:49:15.010 TextReplace offcarry blit src 03C4D140 1152x1152 glyphs 7 rect 0,0,150,20 -> dst 26B24B80 150x20 at 0,0 now 7 (+7) first ch 78 alpha 255
+12:49:15.010 TextReplace offcarry blit src 03C4D140 1152x1152 glyphs 5 rect 0,0,62,35 -> dst 26B24B28 62x35 at 0,0 now 1 (+1) first ch 87 alpha 255
+12:49:15.946 TextReplace offcarry blit src 03C4D140 1152x1152 glyphs 10 rect 0,0,160,30 -> dst 26B249C8 160x30 at 0,0 now 10 (+10) first ch 67 alpha 255
+12:49:15.954 TextReplace font 03C22C00 phases search 5359 charset 1314 offset 559 us
+12:49:15.954 TextReplace font 03C22C00: Garamond weight 400 italic 0 size 16 charset 0 offset 0,0 score 998/1000
+12:49:15.954 TextReplace font 03C22C00 name 'medium' calibrated in 7433 us
+12:49:15.954 TextReplace offcarry blit src 03C4D140 1152x1152 glyphs 16 rect 0,0,240,20 -> dst 26B24B80 240x20 at 0,0 now 16 (+16) first ch 84 alpha 255
+12:49:15.954 TextReplace offcarry blit src 03C4D140 1152x1152 glyphs 16 rect 0,0,62,35 -> dst 26B20350 62x35 at 0,0 now 1 (+1) first ch 84 alpha 255
+12:49:16.132 TextReplace diag glyphs=96 skipped=85 copies=4387 carried=26220 occluded=1171 dropped=7 pixelCopies=0 rows=0 presents=472 presentGlyphs=26191 maskedFrames=277 drawn=26255 noAtlas=0
+12:49:16.132 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=472 slotMiss=0 slotEmpty=0 atlas=43 in 8113 us calibrate 7433 us lockCleared=6
+12:49:18.133 TextReplace diag glyphs=43 skipped=37 copies=8089 carried=12530 occluded=0 dropped=35 pixelCopies=0 rows=0 presents=475 presentGlyphs=12485 maskedFrames=0 drawn=12506 noAtlas=0
+12:49:18.133 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=476 slotMiss=0 slotEmpty=0 atlas=25 in 5183 us calibrate 0 us lockCleared=0
+12:49:18.649 TextReplace font 03C21FB8 phases search 2 charset 1235 offset 515 us
+12:49:18.649 TextReplace font 03C21FB8: Palatino Linotype weight 700 italic 0 size 12 charset 0 offset 0,0 score 1000/1000
+12:49:18.649 TextReplace font 03C21FB8 name 'medbold' calibrated in 1947 us
+12:49:20.133 TextReplace diag glyphs=167 skipped=145 copies=15375 carried=52871 occluded=478 dropped=28 pixelCopies=0 rows=0 presents=474 presentGlyphs=52617 maskedFrames=352 drawn=52510 noAtlas=0
+12:49:20.133 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=474 slotMiss=0 slotEmpty=0 atlas=31 in 5962 us calibrate 1947 us lockCleared=4
+12:49:22.134 TextReplace diag glyphs=42 skipped=35 copies=13201 carried=69047 occluded=272 dropped=0 pixelCopies=0 rows=0 presents=455 presentGlyphs=68978 maskedFrames=275 drawn=69082 noAtlas=0
+12:49:22.134 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=456 slotMiss=0 slotEmpty=0 atlas=2 in 361 us calibrate 0 us lockCleared=0
+13:02:33.847 DllMain attach
+13:02:33.860 Config loaded exe version major=07D3000C minor=000B0001 renderer=0 mode=1024x768
+13:02:33.860 Hooks::Load begin exe version major=07D3000C minor=000B0001
+13:02:33.876 LoadV2 version major=07D3000C minor=000B0001 check=005676DA
+13:02:33.895 Hooks loaded
+13:02:33.916 Mods loaded
+13:02:33.967 RenderStart begin renderer=0 windowed=1 mode=800x600x16
+13:02:34.097 RenderStart end gl=04060000 renderer=0
+13:02:34.150 BinkOpen G:\games\Disciples 2 - Dzieje\Video\SF.bik replaced with blank ok
+13:02:34.152 TextReplace diag glyphs=0 skipped=0 copies=0 carried=0 occluded=0 dropped=0 pixelCopies=0 rows=0 presents=1 presentGlyphs=0 maskedFrames=0 drawn=0 noAtlas=0
+13:02:34.152 TextReplace diag2 cleanPresents=0 emptyDirty=1 renders=0 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=0
+13:02:35.533 TextReplace font 08381BA0 'Menu': charset 0 score 932/1000 offset 0,0
+13:02:35.533 TextReplace font 08381BA0 name 'Menu' calibrated in 836 us
+13:02:35.533 TextReplace offcarry blit src 096BD140 1152x1152 glyphs 12 rect 0,0,200,20 -> dst 268D4918 200x20 at 0,0 now 12 (+12) first ch 83 alpha 255
+13:02:35.533 TextReplace offcarry blit src 096BD140 1152x1152 glyphs 8 rect 0,0,200,20 -> dst 268D4970 200x20 at 0,0 now 8 (+8) first ch 84 alpha 255
+13:02:35.533 TextReplace offcarry blit src 096BD140 1152x1152 glyphs 11 rect 0,0,120,20 -> dst 268D49C8 120x20 at 0,0 now 11 (+11) first ch 77 alpha 255
+13:02:35.533 TextReplace offcarry blit src 096BD140 1152x1152 glyphs 7 rect 0,0,100,20 -> dst 268D4A20 100x20 at 0,0 now 7 (+7) first ch 67 alpha 255
+13:02:35.533 TextReplace offcarry blit src 096BD140 1152x1152 glyphs 7 rect 0,0,100,20 -> dst 268D4A78 100x20 at 0,0 now 7 (+7) first ch 79 alpha 255
+13:02:35.534 TextReplace offcarry blit src 096BD140 1152x1152 glyphs 5 rect 0,0,64,20 -> dst 268D4B28 64x20 at 0,0 now 5 (+5) first ch 73 alpha 255
+13:02:35.534 TextReplace offcarry blit src 096BD140 1152x1152 glyphs 4 rect 0,0,64,20 -> dst 268D4B80 64x20 at 0,0 now 4 (+4) first ch 81 alpha 255
+13:02:35.534 TextReplace font 08383018 'Normal': charset 0 score 924/1000 offset 0,0
+13:02:35.534 TextReplace font 08383018 name 'Normal' calibrated in 718 us
+13:02:35.535 TextReplace offcarry blit src 096BD140 1152x1152 glyphs 4 rect 0,0,36,20 -> dst 268D4BD8 36x20 at 0,0 now 4 (+4) first ch 66 alpha 255
+13:02:36.149 TextReplace diag glyphs=59 skipped=58 copies=1297 carried=8352 occluded=0 dropped=0 pixelCopies=0 rows=0 presents=386 presentGlyphs=8236 maskedFrames=0 drawn=8178 noAtlas=0
+13:02:36.149 TextReplace diag2 cleanPresents=0 emptyDirty=244 renders=386 slotMiss=0 slotEmpty=245 atlas=0 in 0 us calibrate 1554 us lockCleared=7
+13:02:38.149 TextReplace diag glyphs=0 skipped=0 copies=4276 carried=27550 occluded=0 dropped=4 pixelCopies=0 rows=0 presents=475 presentGlyphs=27550 maskedFrames=0 drawn=27608 noAtlas=0
+13:02:38.149 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=476 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=0
+13:02:40.149 TextReplace diag glyphs=0 skipped=0 copies=4284 carried=27608 occluded=0 dropped=0 pixelCopies=0 rows=0 presents=475 presentGlyphs=27550 maskedFrames=0 drawn=27608 noAtlas=0
+13:02:40.150 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=476 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=0
+13:02:42.149 TextReplace diag glyphs=0 skipped=0 copies=4275 carried=27550 occluded=0 dropped=0 pixelCopies=0 rows=0 presents=475 presentGlyphs=27550 maskedFrames=0 drawn=27608 noAtlas=0
+13:02:42.149 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=476 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=0
+13:02:44.149 TextReplace diag glyphs=0 skipped=0 copies=4275 carried=27550 occluded=0 dropped=0 pixelCopies=0 rows=0 presents=475 presentGlyphs=27550 maskedFrames=0 drawn=27608 noAtlas=0
+13:02:44.149 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=476 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=0
+13:02:46.149 TextReplace diag glyphs=0 skipped=0 copies=4275 carried=27550 occluded=0 dropped=0 pixelCopies=0 rows=0 presents=475 presentGlyphs=27550 maskedFrames=0 drawn=27608 noAtlas=0
+13:02:46.149 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=476 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=0
+13:02:48.148 TextReplace diag glyphs=0 skipped=0 copies=4275 carried=27550 occluded=0 dropped=0 pixelCopies=0 rows=0 presents=475 presentGlyphs=27550 maskedFrames=0 drawn=27608 noAtlas=0
+13:02:48.148 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=476 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=0
+13:02:50.155 TextReplace diag glyphs=0 skipped=0 copies=1491 carried=10266 occluded=0 dropped=0 pixelCopies=0 rows=0 presents=177 presentGlyphs=10266 maskedFrames=0 drawn=10324 noAtlas=0
+13:02:50.155 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=178 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=0
+13:02:52.154 TextReplace diag glyphs=0 skipped=0 copies=952 carried=6902 occluded=0 dropped=0 pixelCopies=0 rows=0 presents=119 presentGlyphs=6902 maskedFrames=0 drawn=6960 noAtlas=0
+13:02:52.154 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=120 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=0
+13:02:54.154 TextReplace diag glyphs=0 skipped=0 copies=952 carried=6902 occluded=0 dropped=0 pixelCopies=0 rows=0 presents=119 presentGlyphs=6902 maskedFrames=0 drawn=6960 noAtlas=0
+13:02:54.154 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=120 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=0
+13:02:56.155 TextReplace diag glyphs=0 skipped=0 copies=952 carried=6902 occluded=0 dropped=0 pixelCopies=0 rows=0 presents=119 presentGlyphs=6902 maskedFrames=0 drawn=6960 noAtlas=0
+13:02:56.155 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=120 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=0
+13:02:58.155 TextReplace diag glyphs=0 skipped=0 copies=952 carried=6902 occluded=0 dropped=0 pixelCopies=0 rows=0 presents=119 presentGlyphs=6902 maskedFrames=0 drawn=6960 noAtlas=0
+13:02:58.155 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=120 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=0
+13:03:00.154 TextReplace diag glyphs=0 skipped=0 copies=952 carried=6902 occluded=0 dropped=0 pixelCopies=0 rows=0 presents=120 presentGlyphs=6960 maskedFrames=0 drawn=6960 noAtlas=0
+13:03:00.154 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=120 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=0
+13:03:02.155 TextReplace diag glyphs=0 skipped=0 copies=952 carried=6902 occluded=0 dropped=0 pixelCopies=0 rows=0 presents=119 presentGlyphs=6902 maskedFrames=0 drawn=6960 noAtlas=0
+13:03:02.155 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=120 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=0
+13:03:04.154 TextReplace diag glyphs=0 skipped=0 copies=952 carried=6902 occluded=0 dropped=0 pixelCopies=0 rows=0 presents=119 presentGlyphs=6902 maskedFrames=0 drawn=6960 noAtlas=0
+13:03:04.154 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=120 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=0
+13:03:06.155 TextReplace diag glyphs=0 skipped=0 copies=952 carried=6902 occluded=0 dropped=0 pixelCopies=0 rows=0 presents=119 presentGlyphs=6902 maskedFrames=0 drawn=6960 noAtlas=0
+13:03:06.155 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=120 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=0
+13:03:08.154 TextReplace diag glyphs=0 skipped=0 copies=952 carried=6902 occluded=0 dropped=0 pixelCopies=0 rows=0 presents=119 presentGlyphs=6902 maskedFrames=0 drawn=6960 noAtlas=0
+13:03:08.154 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=120 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=0
+13:03:10.154 TextReplace diag glyphs=0 skipped=0 copies=952 carried=6902 occluded=0 dropped=0 pixelCopies=0 rows=0 presents=119 presentGlyphs=6902 maskedFrames=0 drawn=6960 noAtlas=0
+13:03:10.154 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=120 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=0
+13:03:12.154 TextReplace diag glyphs=0 skipped=0 copies=952 carried=6902 occluded=0 dropped=0 pixelCopies=0 rows=0 presents=120 presentGlyphs=6960 maskedFrames=0 drawn=6960 noAtlas=0
+13:03:12.154 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=120 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=0
+13:03:14.154 TextReplace diag glyphs=0 skipped=0 copies=952 carried=6902 occluded=0 dropped=0 pixelCopies=0 rows=0 presents=119 presentGlyphs=6902 maskedFrames=0 drawn=6960 noAtlas=0
+13:03:14.154 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=120 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=0
+13:03:16.155 TextReplace diag glyphs=0 skipped=0 copies=952 carried=6902 occluded=0 dropped=0 pixelCopies=0 rows=0 presents=119 presentGlyphs=6902 maskedFrames=0 drawn=6960 noAtlas=0
+13:03:16.155 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=120 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=0
+13:03:18.154 TextReplace diag glyphs=0 skipped=0 copies=952 carried=6902 occluded=0 dropped=0 pixelCopies=0 rows=0 presents=119 presentGlyphs=6902 maskedFrames=0 drawn=6960 noAtlas=0
+13:03:18.154 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=120 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=0
+13:03:20.154 TextReplace diag glyphs=0 skipped=0 copies=952 carried=6902 occluded=0 dropped=0 pixelCopies=0 rows=0 presents=119 presentGlyphs=6902 maskedFrames=0 drawn=6960 noAtlas=0
+13:03:20.154 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=120 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=0
+13:03:22.155 TextReplace diag glyphs=0 skipped=0 copies=952 carried=6902 occluded=0 dropped=0 pixelCopies=0 rows=0 presents=119 presentGlyphs=6902 maskedFrames=0 drawn=6960 noAtlas=0
+13:03:22.155 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=120 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=0
+13:03:24.154 TextReplace diag glyphs=0 skipped=0 copies=952 carried=6902 occluded=0 dropped=0 pixelCopies=0 rows=0 presents=119 presentGlyphs=6902 maskedFrames=0 drawn=6960 noAtlas=0
+13:03:24.154 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=120 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=0
+13:03:26.155 TextReplace diag glyphs=0 skipped=0 copies=952 carried=6902 occluded=0 dropped=0 pixelCopies=0 rows=0 presents=119 presentGlyphs=6902 maskedFrames=0 drawn=6960 noAtlas=0
+13:03:26.155 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=120 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=0
+13:03:28.154 TextReplace diag glyphs=0 skipped=0 copies=952 carried=6902 occluded=0 dropped=0 pixelCopies=0 rows=0 presents=119 presentGlyphs=6902 maskedFrames=0 drawn=6960 noAtlas=0
+13:03:28.154 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=120 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=0
+13:03:30.155 TextReplace diag glyphs=0 skipped=0 copies=952 carried=6902 occluded=0 dropped=0 pixelCopies=0 rows=0 presents=120 presentGlyphs=6960 maskedFrames=0 drawn=6960 noAtlas=0
+13:03:30.155 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=120 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=0
+13:03:32.154 TextReplace diag glyphs=0 skipped=0 copies=952 carried=6902 occluded=0 dropped=0 pixelCopies=0 rows=0 presents=119 presentGlyphs=6902 maskedFrames=0 drawn=6960 noAtlas=0
+13:03:32.155 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=120 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=0
+13:03:34.154 TextReplace diag glyphs=0 skipped=0 copies=952 carried=6902 occluded=0 dropped=0 pixelCopies=0 rows=0 presents=119 presentGlyphs=6902 maskedFrames=0 drawn=6960 noAtlas=0
+13:03:34.154 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=120 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=0
+13:03:36.154 TextReplace diag glyphs=0 skipped=0 copies=952 carried=6902 occluded=0 dropped=0 pixelCopies=0 rows=0 presents=120 presentGlyphs=6960 maskedFrames=0 drawn=6960 noAtlas=0
+13:03:36.154 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=120 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=0
+13:03:38.155 TextReplace diag glyphs=0 skipped=0 copies=952 carried=6902 occluded=0 dropped=0 pixelCopies=0 rows=0 presents=119 presentGlyphs=6902 maskedFrames=0 drawn=6960 noAtlas=0
+13:03:38.155 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=120 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=0
+13:03:40.149 TextReplace diag glyphs=0 skipped=0 copies=1138 carried=8062 occluded=0 dropped=0 pixelCopies=0 rows=0 presents=138 presentGlyphs=8004 maskedFrames=0 drawn=8120 noAtlas=0
+13:03:40.150 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=140 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=0
+13:03:51.253 DllMain attach
+13:03:51.266 Config loaded exe version major=07D3000C minor=000B0001 renderer=0 mode=1024x768
+13:03:51.266 Hooks::Load begin exe version major=07D3000C minor=000B0001
+13:03:51.280 LoadV2 version major=07D3000C minor=000B0001 check=005676DA
+13:03:51.300 Hooks loaded
+13:03:51.321 Mods loaded
+13:03:51.368 RenderStart begin renderer=0 windowed=1 mode=800x600x16
+13:03:51.500 RenderStart end gl=04060000 renderer=0
+13:03:51.554 BinkOpen G:\games\Disciples 2 - Dzieje\Video\SF.bik replaced with blank ok
+13:03:51.555 TextReplace diag glyphs=0 skipped=0 copies=0 carried=0 occluded=0 dropped=0 pixelCopies=0 rows=0 presents=1 presentGlyphs=0 maskedFrames=0 drawn=0 noAtlas=0
+13:03:51.555 TextReplace diag2 cleanPresents=0 emptyDirty=1 renders=0 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=0
+13:03:52.938 TextReplace font 08381BA0 'Menu': charset 0 score 932/1000 offset 0,0
+13:03:52.938 TextReplace font 08381BA0 name 'Menu' calibrated in 896 us
+13:03:52.938 TextReplace offcarry blit src 096BD140 1152x1152 glyphs 12 rect 0,0,200,20 -> dst 26B24918 200x20 at 0,0 now 12 (+12) first ch 83 alpha 255
+13:03:52.938 TextReplace offcarry blit src 096BD140 1152x1152 glyphs 8 rect 0,0,200,20 -> dst 26B24970 200x20 at 0,0 now 8 (+8) first ch 84 alpha 255
+13:03:52.938 TextReplace offcarry blit src 096BD140 1152x1152 glyphs 11 rect 0,0,120,20 -> dst 26B249C8 120x20 at 0,0 now 11 (+11) first ch 77 alpha 255
+13:03:52.938 TextReplace offcarry blit src 096BD140 1152x1152 glyphs 7 rect 0,0,100,20 -> dst 26B24A20 100x20 at 0,0 now 7 (+7) first ch 67 alpha 255
+13:03:52.938 TextReplace offcarry blit src 096BD140 1152x1152 glyphs 7 rect 0,0,100,20 -> dst 26B24A78 100x20 at 0,0 now 7 (+7) first ch 79 alpha 255
+13:03:52.938 TextReplace offcarry blit src 096BD140 1152x1152 glyphs 5 rect 0,0,64,20 -> dst 26B24B28 64x20 at 0,0 now 5 (+5) first ch 73 alpha 255
+13:03:52.938 TextReplace offcarry blit src 096BD140 1152x1152 glyphs 4 rect 0,0,64,20 -> dst 26B24B80 64x20 at 0,0 now 4 (+4) first ch 81 alpha 255
+13:03:52.939 TextReplace font 08383018 'Normal': charset 0 score 924/1000 offset 0,0
+13:03:52.939 TextReplace font 08383018 name 'Normal' calibrated in 708 us
+13:03:52.939 TextReplace offcarry blit src 096BD140 1152x1152 glyphs 4 rect 0,0,36,20 -> dst 26B24BD8 36x20 at 0,0 now 4 (+4) first ch 66 alpha 255
+13:03:53.553 TextReplace diag glyphs=59 skipped=58 copies=1297 carried=8352 occluded=0 dropped=0 pixelCopies=0 rows=0 presents=388 presentGlyphs=8236 maskedFrames=0 drawn=8178 noAtlas=0
+13:03:53.553 TextReplace diag2 cleanPresents=0 emptyDirty=246 renders=388 slotMiss=0 slotEmpty=247 atlas=0 in 0 us calibrate 1604 us lockCleared=7
+13:03:55.553 TextReplace diag glyphs=0 skipped=0 copies=4285 carried=27608 occluded=0 dropped=4 pixelCopies=0 rows=0 presents=476 presentGlyphs=27608 maskedFrames=0 drawn=27608 noAtlas=0
+13:03:55.553 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=476 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=0
+13:03:57.554 TextReplace diag glyphs=0 skipped=0 copies=4275 carried=27550 occluded=0 dropped=0 pixelCopies=0 rows=0 presents=475 presentGlyphs=27550 maskedFrames=0 drawn=27608 noAtlas=0
+13:03:57.554 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=476 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=0
+13:03:59.554 TextReplace diag glyphs=0 skipped=0 copies=4284 carried=27608 occluded=0 dropped=0 pixelCopies=0 rows=0 presents=476 presentGlyphs=27608 maskedFrames=0 drawn=27608 noAtlas=0
+13:03:59.554 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=476 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=0
+13:04:01.554 TextReplace diag glyphs=0 skipped=0 copies=4284 carried=27608 occluded=0 dropped=0 pixelCopies=0 rows=0 presents=476 presentGlyphs=27608 maskedFrames=0 drawn=27608 noAtlas=0
+13:04:01.554 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=476 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=0
+13:04:03.554 TextReplace diag glyphs=0 skipped=0 copies=4275 carried=27550 occluded=0 dropped=0 pixelCopies=0 rows=0 presents=475 presentGlyphs=27550 maskedFrames=0 drawn=27608 noAtlas=0
+13:04:03.554 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=476 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=0
+13:04:05.553 TextReplace diag glyphs=0 skipped=0 copies=4275 carried=27550 occluded=0 dropped=0 pixelCopies=0 rows=0 presents=475 presentGlyphs=27550 maskedFrames=0 drawn=27608 noAtlas=0
+13:04:05.553 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=476 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=0
+13:04:07.554 TextReplace diag glyphs=0 skipped=0 copies=1500 carried=10324 occluded=0 dropped=0 pixelCopies=0 rows=0 presents=178 presentGlyphs=10324 maskedFrames=0 drawn=10324 noAtlas=0
+13:04:07.554 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=178 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=0
+13:04:08.926 Continue game G:\games\Disciples 2 - Dzieje\SaveGame\AutoSave.sg
+13:04:09.003 TextReplace font 083823D0 'vlarge': charset 0 score 899/1000 offset 0,0
+13:04:09.003 TextReplace font 083823D0 name 'vlarge' calibrated in 1412 us
+13:04:09.003 TextReplace offcarry blit src 096BD140 1152x1152 glyphs 10 rect 0,0,300,70 -> dst 26B2C670 300x70 at 0,0 now 10 (+10) first ch 80 alpha 255
+13:04:09.435 TextReplace font 083827E8 'large': charset 0 score 924/1000 offset 0,0
+13:04:09.435 TextReplace font 083827E8 name 'large' calibrated in 875 us
+13:04:09.438 TextReplace font 08381FB8 'medbold': charset 0 score 930/1000 offset 0,0
+13:04:09.438 TextReplace font 08381FB8 name 'medbold' calibrated in 657 us
+13:04:09.438 TextReplace offcarry blit src 096BD140 1152x1152 glyphs 858 rect 0,0,440,467 -> dst 26B2C930 440x467 at 0,0 now 858 (+858) first ch 68 alpha 255
+13:04:09.555 TextReplace diag glyphs=1051 skipped=868 copies=700 carried=5962 occluded=0 dropped=10 pixelCopies=0 rows=0 presents=116 presentGlyphs=5152 maskedFrames=0 drawn=5244 noAtlas=0
+13:04:09.555 TextReplace diag2 cleanPresents=0 emptyDirty=1 renders=116 slotMiss=0 slotEmpty=1 atlas=0 in 0 us calibrate 2944 us lockCleared=1
+13:04:11.555 TextReplace diag glyphs=0 skipped=0 copies=238 carried=1428 occluded=0 dropped=0 pixelCopies=0 rows=0 presents=119 presentGlyphs=1428 maskedFrames=0 drawn=1440 noAtlas=0
+13:04:11.555 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=120 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=0
+13:04:13.555 TextReplace diag glyphs=0 skipped=0 copies=238 carried=4788 occluded=0 dropped=0 pixelCopies=0 rows=0 presents=120 presentGlyphs=4800 maskedFrames=0 drawn=3098 noAtlas=0
+13:04:13.555 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=120 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=0
+13:04:15.555 TextReplace diag glyphs=0 skipped=0 copies=238 carried=11192 occluded=0 dropped=0 pixelCopies=0 rows=0 presents=119 presentGlyphs=11128 maskedFrames=0 drawn=9616 noAtlas=0
+13:04:15.555 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=120 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=0
+13:04:17.555 TextReplace diag glyphs=0 skipped=0 copies=238 carried=17874 occluded=0 dropped=0 pixelCopies=0 rows=0 presents=119 presentGlyphs=17809 maskedFrames=0 drawn=16614 noAtlas=0
+13:04:17.555 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=120 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=0
+13:04:19.555 TextReplace diag glyphs=0 skipped=0 copies=238 carried=24627 occluded=0 dropped=0 pixelCopies=0 rows=0 presents=119 presentGlyphs=24568 maskedFrames=0 drawn=23837 noAtlas=0
+13:04:19.555 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=120 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=0
+13:04:21.555 TextReplace diag glyphs=0 skipped=0 copies=238 carried=30481 occluded=0 dropped=0 pixelCopies=0 rows=0 presents=119 presentGlyphs=30493 maskedFrames=0 drawn=29853 noAtlas=0
+13:04:21.555 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=120 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=0
+13:04:23.554 TextReplace diag glyphs=0 skipped=0 copies=238 carried=37234 occluded=0 dropped=0 pixelCopies=0 rows=0 presents=119 presentGlyphs=37168 maskedFrames=0 drawn=35728 noAtlas=0
+13:04:23.554 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=120 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=0
+13:04:25.555 TextReplace diag glyphs=0 skipped=0 copies=240 carried=44208 occluded=0 dropped=0 pixelCopies=0 rows=0 presents=119 presentGlyphs=43830 maskedFrames=0 drawn=42433 noAtlas=0
+13:04:25.555 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=120 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=0
+13:04:27.555 TextReplace diag glyphs=0 skipped=0 copies=238 carried=50376 occluded=0 dropped=0 pixelCopies=0 rows=0 presents=119 presentGlyphs=50314 maskedFrames=0 drawn=49039 noAtlas=0
+13:04:27.555 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=120 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=0
+13:04:29.554 TextReplace diag glyphs=0 skipped=0 copies=238 carried=52360 occluded=0 dropped=0 pixelCopies=0 rows=0 presents=119 presentGlyphs=52360 maskedFrames=0 drawn=52800 noAtlas=0
+13:04:29.555 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=120 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=0
+13:04:31.555 TextReplace diag glyphs=0 skipped=0 copies=238 carried=55666 occluded=0 dropped=0 pixelCopies=0 rows=0 presents=119 presentGlyphs=55609 maskedFrames=0 drawn=54584 noAtlas=0
+13:04:31.555 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=120 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=0
+13:04:33.555 TextReplace diag glyphs=0 skipped=0 copies=240 carried=62349 occluded=0 dropped=0 pixelCopies=0 rows=0 presents=119 presentGlyphs=61789 maskedFrames=0 drawn=60710 noAtlas=0
+13:04:33.555 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=120 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=0
+13:07:15.072 DllMain attach
+13:07:15.085 Config loaded exe version major=07D3000C minor=000B0001 renderer=0 mode=1024x768
+13:07:15.085 Hooks::Load begin exe version major=07D3000C minor=000B0001
+13:07:15.100 LoadV2 version major=07D3000C minor=000B0001 check=005676DA
+13:07:15.118 Hooks loaded
+13:07:15.137 Mods loaded
+13:07:15.186 RenderStart begin renderer=0 windowed=1 mode=800x600x16
+13:07:15.318 RenderStart end gl=04060000 renderer=0
+13:07:15.383 BinkOpen G:\games\Disciples 2 - Dzieje\Video\SF.bik replaced with blank ok
+13:07:15.384 TextReplace diag glyphs=0 skipped=0 copies=0 carried=0 occluded=0 dropped=0 pixelCopies=0 rows=0 presents=1 presentGlyphs=0 maskedFrames=0 drawn=0 noAtlas=0
+13:07:15.384 TextReplace diag2 cleanPresents=0 emptyDirty=1 renders=0 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=0
+13:07:16.749 TextReplace font 03D21BA0 'Menu': charset 0 score 932/1000 offset 0,0
+13:07:16.749 TextReplace font 03D21BA0 name 'Menu' calibrated in 916 us
+13:07:16.749 TextReplace offcarry blit src 03D4D140 1152x1152 glyphs 12 rect 0,0,200,20 -> dst 26B34918 200x20 at 0,0 now 12 (+12) first ch 83 alpha 255
+13:07:16.749 TextReplace offcarry blit src 03D4D140 1152x1152 glyphs 8 rect 0,0,200,20 -> dst 26B34970 200x20 at 0,0 now 8 (+8) first ch 84 alpha 255
+13:07:16.749 TextReplace offcarry blit src 03D4D140 1152x1152 glyphs 11 rect 0,0,120,20 -> dst 26B349C8 120x20 at 0,0 now 11 (+11) first ch 77 alpha 255
+13:07:16.749 TextReplace offcarry blit src 03D4D140 1152x1152 glyphs 7 rect 0,0,100,20 -> dst 26B34A20 100x20 at 0,0 now 7 (+7) first ch 67 alpha 255
+13:07:16.749 TextReplace offcarry blit src 03D4D140 1152x1152 glyphs 7 rect 0,0,100,20 -> dst 26B34A78 100x20 at 0,0 now 7 (+7) first ch 79 alpha 255
+13:07:16.749 TextReplace offcarry blit src 03D4D140 1152x1152 glyphs 5 rect 0,0,64,20 -> dst 26B34B28 64x20 at 0,0 now 5 (+5) first ch 73 alpha 255
+13:07:16.750 TextReplace offcarry blit src 03D4D140 1152x1152 glyphs 4 rect 0,0,64,20 -> dst 26B34B80 64x20 at 0,0 now 4 (+4) first ch 81 alpha 255
+13:07:16.750 TextReplace font 03D23018 'Normal': charset 0 score 924/1000 offset 0,0
+13:07:16.750 TextReplace font 03D23018 name 'Normal' calibrated in 740 us
+13:07:16.750 TextReplace offcarry blit src 03D4D140 1152x1152 glyphs 4 rect 0,0,36,20 -> dst 26B34BD8 36x20 at 0,0 now 4 (+4) first ch 66 alpha 255
+13:07:17.382 TextReplace diag glyphs=59 skipped=58 copies=1333 carried=8584 occluded=0 dropped=0 pixelCopies=0 rows=0 presents=387 presentGlyphs=8468 maskedFrames=0 drawn=8410 noAtlas=0
+13:07:17.382 TextReplace diag2 cleanPresents=0 emptyDirty=241 renders=387 slotMiss=0 slotEmpty=242 atlas=0 in 0 us calibrate 1656 us lockCleared=7
+13:07:20.113 TextReplace diag glyphs=0 skipped=0 copies=963 carried=6206 occluded=0 dropped=0 pixelCopies=0 rows=0 presents=108 presentGlyphs=6264 maskedFrames=0 drawn=6322 noAtlas=0
+13:07:20.113 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=109 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=0
+13:07:21.933 DllMain attach
+13:07:21.946 Config loaded exe version major=07D3000C minor=000B0001 renderer=0 mode=1024x768
+13:07:21.946 Hooks::Load begin exe version major=07D3000C minor=000B0001
+13:07:21.961 LoadV2 version major=07D3000C minor=000B0001 check=005676DA
+13:07:21.982 Hooks loaded
+13:07:22.002 Mods loaded
+13:07:22.052 RenderStart begin renderer=0 windowed=1 mode=1920x1080x16
+13:07:22.185 RenderStart end gl=04060000 renderer=0
+13:07:22.254 BinkOpen G:\games\Disciples 2 - Dzieje\Video\SF.bik replaced with blank ok
+13:07:22.257 TextReplace diag glyphs=0 skipped=0 copies=0 carried=0 occluded=0 dropped=0 pixelCopies=0 rows=0 presents=1 presentGlyphs=0 maskedFrames=0 drawn=0 noAtlas=0
+13:07:22.257 TextReplace diag2 cleanPresents=0 emptyDirty=1 renders=0 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=0
+13:07:24.256 TextReplace diag glyphs=59 skipped=0 copies=0 carried=0 occluded=0 dropped=0 pixelCopies=0 rows=0 presents=396 presentGlyphs=0 maskedFrames=0 drawn=0 noAtlas=0
+13:07:24.256 TextReplace diag2 cleanPresents=0 emptyDirty=396 renders=0 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=0
+13:07:33.823 TextReplace diag glyphs=0 skipped=0 copies=0 carried=0 occluded=0 dropped=0 pixelCopies=0 rows=0 presents=74 presentGlyphs=0 maskedFrames=0 drawn=0 noAtlas=0
+13:07:33.823 TextReplace diag2 cleanPresents=0 emptyDirty=74 renders=0 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=0
+13:07:35.123 DllMain attach
+13:07:35.137 Config loaded exe version major=07D3000C minor=000B0001 renderer=0 mode=1024x768
+13:07:35.138 Hooks::Load begin exe version major=07D3000C minor=000B0001
+13:07:35.153 LoadV2 version major=07D3000C minor=000B0001 check=005676DA
+13:07:35.171 Hooks loaded
+13:07:35.193 Mods loaded
+13:07:35.239 RenderStart begin renderer=0 windowed=1 mode=800x600x16
+13:07:35.379 RenderStart end gl=04060000 renderer=0
+13:07:35.439 BinkOpen G:\games\Disciples 2 - Dzieje\Video\SF.bik replaced with blank ok
+13:07:35.439 TextReplace diag glyphs=0 skipped=0 copies=0 carried=0 occluded=0 dropped=0 pixelCopies=0 rows=0 presents=1 presentGlyphs=0 maskedFrames=0 drawn=0 noAtlas=0
+13:07:35.439 TextReplace diag2 cleanPresents=0 emptyDirty=1 renders=0 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=0
+13:07:36.808 TextReplace font 08381BA0 'Menu': charset 0 score 932/1000 offset 0,0
+13:07:36.808 TextReplace font 08381BA0 name 'Menu' calibrated in 821 us
+13:07:36.808 TextReplace offcarry blit src 096BD140 1152x1152 glyphs 12 rect 0,0,200,20 -> dst 26B24918 200x20 at 0,0 now 12 (+12) first ch 83 alpha 255
+13:07:36.808 TextReplace offcarry blit src 096BD140 1152x1152 glyphs 8 rect 0,0,200,20 -> dst 26B24970 200x20 at 0,0 now 8 (+8) first ch 84 alpha 255
+13:07:36.808 TextReplace offcarry blit src 096BD140 1152x1152 glyphs 11 rect 0,0,120,20 -> dst 26B249C8 120x20 at 0,0 now 11 (+11) first ch 77 alpha 255
+13:07:36.809 TextReplace offcarry blit src 096BD140 1152x1152 glyphs 7 rect 0,0,100,20 -> dst 26B24A20 100x20 at 0,0 now 7 (+7) first ch 67 alpha 255
+13:07:36.809 TextReplace offcarry blit src 096BD140 1152x1152 glyphs 7 rect 0,0,100,20 -> dst 26B24A78 100x20 at 0,0 now 7 (+7) first ch 79 alpha 255
+13:07:36.809 TextReplace offcarry blit src 096BD140 1152x1152 glyphs 5 rect 0,0,64,20 -> dst 26B24B28 64x20 at 0,0 now 5 (+5) first ch 73 alpha 255
+13:07:36.809 TextReplace offcarry blit src 096BD140 1152x1152 glyphs 4 rect 0,0,64,20 -> dst 26B24B80 64x20 at 0,0 now 4 (+4) first ch 81 alpha 255
+13:07:36.810 TextReplace font 08383018 'Normal': charset 0 score 924/1000 offset 0,0
+13:07:36.810 TextReplace font 08383018 name 'Normal' calibrated in 699 us
+13:07:36.810 TextReplace offcarry blit src 096BD140 1152x1152 glyphs 4 rect 0,0,36,20 -> dst 26B24BD8 36x20 at 0,0 now 4 (+4) first ch 66 alpha 255
+13:07:37.427 TextReplace diag glyphs=59 skipped=58 copies=1306 carried=8410 occluded=43 dropped=0 pixelCopies=0 rows=0 presents=387 presentGlyphs=8294 maskedFrames=11 drawn=8236 noAtlas=0
+13:07:37.427 TextReplace diag2 cleanPresents=0 emptyDirty=244 renders=387 slotMiss=0 slotEmpty=245 atlas=0 in 0 us calibrate 1520 us lockCleared=7
+06:50:32.244 DllMain attach
+06:50:32.256 Config loaded exe version major=07D3000C minor=000B0001 renderer=0 mode=1024x768
+06:50:32.256 Hooks::Load begin exe version major=07D3000C minor=000B0001
+06:50:32.272 LoadV2 version major=07D3000C minor=000B0001 check=005676DA
+06:50:32.292 image replace loaded
+06:50:32.293 Hooks loaded
+06:50:32.314 Mods loaded
+06:50:32.363 RenderStart begin renderer=0 windowed=1 mode=800x600x16
+06:50:32.388 image pack loaded: 12655 animations, 163985 frames in 63 ms
+06:50:32.499 RenderStart end gl=04060000 renderer=0
+06:50:32.562 BinkOpen G:\games\Disciples 2 - Dzieje\Video\SF.bik replaced with blank ok
+06:50:32.563 TextReplace diag glyphs=0 skipped=0 copies=0 carried=0 occluded=0 dropped=0 pixelCopies=0 rows=0 presents=1 presentGlyphs=0 maskedFrames=0 drawn=0 noAtlas=0
+06:50:32.563 TextReplace diag2 cleanPresents=0 emptyDirty=1 renders=0 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=0
+06:50:34.137 TextReplace font 06871BA0 'Menu': charset 0 score 932/1000 offset 0,0
+06:50:34.138 TextReplace font 06871BA0 name 'Menu' calibrated in 723 us
+06:50:34.138 TextReplace offcarry blit src 065BD140 1152x1152 glyphs 12 rect 0,0,200,20 -> dst 0DAC4918 200x20 at 0,0 now 12 (+12) first ch 83 alpha 255
+06:50:34.138 TextReplace offcarry blit src 065BD140 1152x1152 glyphs 8 rect 0,0,200,20 -> dst 0DAC4970 200x20 at 0,0 now 8 (+8) first ch 84 alpha 255
+06:50:34.138 TextReplace offcarry blit src 065BD140 1152x1152 glyphs 11 rect 0,0,120,20 -> dst 0DAC49C8 120x20 at 0,0 now 11 (+11) first ch 77 alpha 255
+06:50:34.138 TextReplace offcarry blit src 065BD140 1152x1152 glyphs 7 rect 0,0,100,20 -> dst 0DAC4A20 100x20 at 0,0 now 7 (+7) first ch 67 alpha 255
+06:50:34.138 TextReplace offcarry blit src 065BD140 1152x1152 glyphs 7 rect 0,0,100,20 -> dst 0DAC4A78 100x20 at 0,0 now 7 (+7) first ch 79 alpha 255
+06:50:34.138 TextReplace offcarry blit src 065BD140 1152x1152 glyphs 5 rect 0,0,64,20 -> dst 0DAC4B28 64x20 at 0,0 now 5 (+5) first ch 73 alpha 255
+06:50:34.138 TextReplace offcarry blit src 065BD140 1152x1152 glyphs 4 rect 0,0,64,20 -> dst 0DAC4B80 64x20 at 0,0 now 4 (+4) first ch 81 alpha 255
+06:50:34.139 TextReplace font 06873018 'Normal': charset 0 score 924/1000 offset 0,0
+06:50:34.139 TextReplace font 06873018 name 'Normal' calibrated in 622 us
+06:50:34.139 TextReplace offcarry blit src 065BD140 1152x1152 glyphs 4 rect 0,0,36,20 -> dst 0DAC4BD8 36x20 at 0,0 now 4 (+4) first ch 66 alpha 255
+06:50:34.553 TextReplace diag glyphs=59 skipped=58 copies=892 carried=5742 occluded=0 dropped=0 pixelCopies=0 rows=0 presents=340 presentGlyphs=5626 maskedFrames=0 drawn=5568 noAtlas=0
+06:50:34.553 TextReplace diag2 cleanPresents=0 emptyDirty=243 renders=340 slotMiss=0 slotEmpty=244 atlas=0 in 0 us calibrate 1345 us lockCleared=7
+06:50:35.632 Continue game G:\games\Disciples 2 - Dzieje\SaveGame\AutoSave.sg
+06:50:35.715 TextReplace font 068723D0 'vlarge': charset 0 score 899/1000 offset 0,0
+06:50:35.715 TextReplace font 068723D0 name 'vlarge' calibrated in 1627 us
+06:50:35.715 TextReplace offcarry blit src 065BD140 1152x1152 glyphs 10 rect 0,0,300,70 -> dst 0DACC5E8 300x70 at 0,0 now 10 (+10) first ch 80 alpha 255
+06:50:36.250 TextReplace font 068727E8 'large': charset 0 score 924/1000 offset 0,0
+06:50:36.250 TextReplace font 068727E8 name 'large' calibrated in 905 us
+06:50:36.252 TextReplace font 06871FB8 'medbold': charset 0 score 930/1000 offset 0,0
+06:50:36.252 TextReplace font 06871FB8 name 'medbold' calibrated in 632 us
+06:50:36.253 TextReplace offcarry blit src 065BD140 1152x1152 glyphs 858 rect 0,0,440,467 -> dst 0DACC8A8 440x467 at 0,0 now 858 (+858) first ch 68 alpha 255
+06:50:36.555 TextReplace diag glyphs=1051 skipped=868 copies=2596 carried=17336 occluded=0 dropped=14 pixelCopies=0 rows=0 presents=408 presentGlyphs=16526 maskedFrames=0 drawn=16642 noAtlas=0
+06:50:36.555 TextReplace diag2 cleanPresents=0 emptyDirty=3 renders=409 slotMiss=0 slotEmpty=2 atlas=0 in 0 us calibrate 3164 us lockCleared=1
+06:50:37.082 TextReplace offcarry blit src 065BD140 1152x1152 glyphs 1 rect 0,0,40,25 -> dst 241B2E38 40x25 at 0,0 now 1 (+1) first ch 48 alpha 255
+06:50:37.082 TextReplace offcarry blit src 065BD140 1152x1152 glyphs 1 rect 0,0,40,25 -> dst 241B3128 40x25 at 0,0 now 1 (+1) first ch 48 alpha 255
+06:50:37.082 TextReplace offcarry blit src 065BD140 1152x1152 glyphs 3 rect 0,0,40,25 -> dst 241B3390 40x25 at 0,0 now 3 (+3) first ch 52 alpha 255
+06:50:37.082 TextReplace offcarry blit src 065BD140 1152x1152 glyphs 1 rect 0,0,40,25 -> dst 241B37A8 40x25 at 0,0 now 1 (+1) first ch 48 alpha 255
+06:50:37.082 TextReplace offcarry blit src 065BD140 1152x1152 glyphs 1 rect 0,0,40,25 -> dst 241B39F8 40x25 at 0,0 now 1 (+1) first ch 48 alpha 255
+06:50:37.082 TextReplace offcarry blit src 065BD140 1152x1152 glyphs 3 rect 0,0,40,25 -> dst 241B3D10 40x25 at 0,0 now 3 (+3) first ch 51 alpha 255
+06:50:37.086 image GL ready, mipmaps on
+06:50:37.089 TextReplace offcarry blit src 065BD140 1152x1152 glyphs 1 rect 0,0,36,20 -> dst 241B60C0 36x20 at 0,0 now 1 (+1) first ch 52 alpha 255
+06:50:37.098 TextReplace offcarry blit src 065BD140 1152x1152 glyphs 1 rect 0,0,36,20 -> dst 241B5610 36x20 at 0,0 now 1 (+1) first ch 52 alpha 255
+06:50:37.103 TextReplace offcarry blit src 065BD140 1152x1152 glyphs 24 rect 0,0,250,179 -> dst 241B74E0 250x179 at 0,0 now 24 (+24) first ch 82 alpha 255
+06:50:38.132 TextReplace offcarry blit src 065BD140 1152x1152 glyphs 6 rect 0,0,138,18 -> dst 241B98B0 138x18 at 0,0 now 6 (+6) first ch 89 alpha 255
+06:50:38.132 TextReplace offcarry blit src 065BD140 1152x1152 glyphs 10 rect 0,0,74,83 -> dst 241B9B28 74x83 at 0,0 now 10 (+10) first ch 77 alpha 255
+06:50:38.555 TextReplace diag glyphs=59 skipped=52 copies=25458 carried=8095 occluded=788 dropped=25 pixelCopies=4177 rows=0 presents=458 presentGlyphs=8016 maskedFrames=112 drawn=7989 noAtlas=0
+06:50:38.555 TextReplace diag2 cleanPresents=0 emptyDirty=119 renders=458 slotMiss=0 slotEmpty=120 atlas=0 in 0 us calibrate 0 us lockCleared=8
+06:50:40.336 TextReplace offcarry blit src 065BD140 1152x1152 glyphs 16 rect 0,0,172,18 -> dst 241BBBD8 172x18 at 0,0 now 16 (+16) first ch 76 alpha 255
+06:50:40.336 TextReplace offcarry blit src 065BD140 1152x1152 glyphs 6 rect 0,0,180,25 -> dst 241BB458 180x25 at 0,0 now 6 (+6) first ch 89 alpha 255
+06:50:40.336 TextReplace offcarry blit src 065BD140 1152x1152 glyphs 39 rect 0,0,124,83 -> dst 241BB6D0 124x83 at 0,0 now 39 (+39) first ch 77 alpha 255
+06:50:40.336 TextReplace offcarry blit src 065BD140 1152x1152 glyphs 36 rect 0,0,32,36 -> dst 241BB958 32x36 at 0,0 now 2 (+2) first ch 101 alpha 255
+06:50:40.336 TextReplace offcarry blit src 065BD140 1152x1152 glyphs 12 rect 0,0,122,35 -> dst 241BBE58 122x35 at 0,0 now 12 (+12) first ch 65 alpha 255
+06:50:40.336 TextReplace offcarry blit src 065BD140 1152x1152 glyphs 6 rect 0,0,122,35 -> dst 241BC408 122x35 at 0,0 now 6 (+6) first ch 70 alpha 255
+06:50:40.337 TextReplace font 06873430 'small': charset 0 score 931/1000 offset 0,0
+06:50:40.337 TextReplace font 06873430 name 'small' calibrated in 582 us
+06:50:40.337 TextReplace offcarry blit src 065BD140 1152x1152 glyphs 1 rect 0,0,60,83 -> dst 241BC9D0 60x83 at 0,0 now 1 (+1) first ch 50 alpha 255
+06:50:40.337 TextReplace offcarry blit src 065BD140 1152x1152 glyphs 1 rect 0,0,60,83 -> dst 241BCF80 60x83 at 0,0 now 1 (+1) first ch 50 alpha 255
+06:50:40.339 TextReplace offcarry blit src 065BD140 1152x1152 glyphs 7 rect 0,0,70,20 -> dst 241BD708 70x20 at 0,0 now 7 (+7) first ch 49 alpha 255
+06:50:40.339 TextReplace offcarry blit src 065BD140 1152x1152 glyphs 5 rect 0,0,70,20 -> dst 241BDC08 70x20 at 0,0 now 5 (+5) first ch 51 alpha 255
+06:50:40.339 TextReplace offcarry blit src 065BD140 1152x1152 glyphs 7 rect 0,0,150,20 -> dst 241BE438 150x20 at 0,0 now 7 (+7) first ch 49 alpha 255
+06:50:40.556 TextReplace diag glyphs=114 skipped=100 copies=31665 carried=16768 occluded=461 dropped=32 pixelCopies=4244 rows=0 presents=473 presentGlyphs=16693 maskedFrames=64 drawn=16619 noAtlas=0
+06:50:40.556 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=473 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 582 us lockCleared=6
+06:50:42.554 TextReplace diag glyphs=0 skipped=0 copies=9520 carried=48076 occluded=0 dropped=0 pixelCopies=0 rows=0 presents=476 presentGlyphs=48076 maskedFrames=476 drawn=48076 noAtlas=0
+06:50:42.554 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=476 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=0
+06:50:43.736 TextReplace offcarry blit src 065BD140 1152x1152 glyphs 6 rect 0,0,138,18 -> dst 241BC740 138x18 at 0,0 now 6 (+6) first ch 89 alpha 255
+06:50:43.736 TextReplace offcarry blit src 065BD140 1152x1152 glyphs 10 rect 0,0,74,83 -> dst 241BC408 74x83 at 0,0 now 10 (+10) first ch 77 alpha 255
+06:50:44.556 TextReplace diag glyphs=18 skipped=16 copies=19909 carried=33359 occluded=195 dropped=17 pixelCopies=1985 rows=0 presents=472 presentGlyphs=33316 maskedFrames=280 drawn=33491 noAtlas=0
+06:50:44.556 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=473 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=1
+06:50:45.062 TextReplace offcarry blit src 065BD140 1152x1152 glyphs 16 rect 0,0,172,18 -> dst 241B74E0 172x18 at 0,0 now 16 (+16) first ch 76 alpha 255
+06:50:45.062 TextReplace offcarry blit src 065BD140 1152x1152 glyphs 6 rect 0,0,180,25 -> dst 241B7B50 180x25 at 0,0 now 6 (+6) first ch 89 alpha 255
+06:50:45.062 TextReplace offcarry blit src 065BD140 1152x1152 glyphs 39 rect 0,0,124,83 -> dst 241B7258 124x83 at 0,0 now 39 (+39) first ch 77 alpha 255
+06:50:45.062 TextReplace offcarry blit src 065BD140 1152x1152 glyphs 36 rect 0,0,32,36 -> dst 241BA7B8 32x36 at 0,0 now 2 (+2) first ch 101 alpha 255
+06:50:45.062 TextReplace offcarry blit src 065BD140 1152x1152 glyphs 12 rect 0,0,122,35 -> dst 241BAA38 122x35 at 0,0 now 12 (+12) first ch 65 alpha 255
+06:50:45.064 TextReplace offcarry blit src 065BD140 1152x1152 glyphs 6 rect 0,0,122,35 -> dst 241BA028 122x35 at 0,0 now 6 (+6) first ch 70 alpha 255
+06:50:45.064 TextReplace offcarry blit src 065BD140 1152x1152 glyphs 1 rect 0,0,60,83 -> dst 241B6AC0 60x83 at 0,0 now 1 (+1) first ch 50 alpha 255
+06:50:45.064 TextReplace offcarry blit src 065BD140 1152x1152 glyphs 1 rect 0,0,60,83 -> dst 241BE108 60x83 at 0,0 now 1 (+1) first ch 50 alpha 255
+06:50:45.065 TextReplace offcarry blit src 065BD140 1152x1152 glyphs 7 rect 0,0,70,20 -> dst 241BD708 70x20 at 0,0 now 7 (+7) first ch 49 alpha 255
+06:50:45.065 TextReplace offcarry blit src 065BD140 1152x1152 glyphs 5 rect 0,0,70,20 -> dst 241BAF40 70x20 at 0,0 now 5 (+5) first ch 51 alpha 255
+06:50:45.065 TextReplace offcarry blit src 065BD140 1152x1152 glyphs 7 rect 0,0,150,20 -> dst 241F2088 150x20 at 0,0 now 7 (+7) first ch 49 alpha 255
+06:50:45.676 TextReplace offcarry blit src 065BD140 1152x1152 glyphs 6 rect 0,0,138,18 -> dst 241B6AC0 138x18 at 0,0 now 6 (+6) first ch 89 alpha 255
+06:50:45.676 TextReplace offcarry blit src 065BD140 1152x1152 glyphs 10 rect 0,0,74,83 -> dst 241BD988 74x83 at 0,0 now 10 (+10) first ch 77 alpha 255
+06:50:49.414 TextReplace diag glyphs=132 skipped=116 copies=20433 carried=21364 occluded=474 dropped=34 pixelCopies=2500 rows=0 presents=385 presentGlyphs=21273 maskedFrames=147 drawn=21273 noAtlas=0
+06:50:49.414 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=385 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=8
+06:50:49.520 TextReplace font 06872C00 'medium': charset 0 score 915/1000 offset 0,0
+06:50:49.520 TextReplace font 06872C00 name 'medium' calibrated in 856 us
+06:50:49.520 TextReplace offcarry blit src 065BD140 1152x1152 glyphs 1 rect 0,0,32,64 -> dst 241B74E0 32x64 at 0,0 now 1 (+1) first ch 52 alpha 255
+06:50:49.520 TextReplace offcarry blit src 065BD140 1152x1152 glyphs 1 rect 0,0,32,64 -> dst 241BA7B8 32x64 at 0,0 now 1 (+1) first ch 50 alpha 255
+06:50:51.413 TextReplace diag glyphs=2 skipped=2 copies=222584 carried=13783 occluded=1032 dropped=1 pixelCopies=5988 rows=0 presents=476 presentGlyphs=13752 maskedFrames=31 drawn=13750 noAtlas=0
+06:50:51.413 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=476 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 856 us lockCleared=1
+06:50:51.770 TextReplace offcarry blit src 065BD140 1152x1152 glyphs 1 rect 0,0,32,64 -> dst 241B7258 32x64 at 0,0 now 1 (+1) first ch 50 alpha 255
+06:50:51.771 TextReplace offcarry blit src 065BD140 1152x1152 glyphs 1 rect 0,0,32,64 -> dst 241BDC08 32x64 at 0,0 now 1 (+1) first ch 52 alpha 255
+06:50:53.412 TextReplace diag glyphs=2 skipped=2 copies=168955 carried=13476 occluded=620 dropped=2 pixelCopies=6472 rows=0 presents=476 presentGlyphs=13476 maskedFrames=32 drawn=13478 noAtlas=0
+06:50:53.413 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=476 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=0
+06:50:54.974 TextReplace offcarry blit src 065BD140 1152x1152 glyphs 12 rect 0,0,236,22 -> dst 241BD708 236x22 at 0,0 now 12 (+12) first ch 66 alpha 255
+06:50:54.974 TextReplace offcarry blit src 065BD140 1152x1152 glyphs 6 rect 0,0,276,28 -> dst 241BD200 276x28 at 0,0 now 6 (+6) first ch 71 alpha 255
+06:50:54.974 TextReplace offcarry blit src 065BD140 1152x1152 glyphs 10 rect 0,0,236,20 -> dst 241BE438 236x20 at 0,0 now 10 (+10) first ch 71 alpha 255
+06:50:54.974 TextReplace offcarry blit src 065BD140 1152x1152 glyphs 6 rect 0,0,114,33 -> dst 241BC740 114x33 at 0,0 now 6 (+6) first ch 71 alpha 255
+06:50:54.974 TextReplace offcarry blit src 065BD140 1152x1152 glyphs 6 rect 0,0,114,33 -> dst 241F25F8 114x33 at 0,0 now 6 (+6) first ch 71 alpha 255
+06:50:54.974 TextReplace offcarry blit src 065BD140 1152x1152 glyphs 6 rect 0,0,114,33 -> dst 241BC9D0 114x33 at 0,0 now 6 (+6) first ch 71 alpha 255
+06:50:54.974 TextReplace offcarry blit src 065BD140 1152x1152 glyphs 9 rect 0,0,204,33 -> dst 241BFC78 204x33 at 0,0 now 9 (+9) first ch 71 alpha 255
+06:50:55.414 TextReplace diag glyphs=58 skipped=55 copies=37935 carried=18101 occluded=2702 dropped=0 pixelCopies=4916 rows=0 presents=476 presentGlyphs=17997 maskedFrames=104 drawn=17948 noAtlas=0
+06:50:55.414 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=476 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=6
+06:50:57.415 TextReplace diag glyphs=0 skipped=0 copies=49931 carried=23660 occluded=5096 dropped=9 pixelCopies=3543 rows=0 presents=476 presentGlyphs=23707 maskedFrames=222 drawn=23754 noAtlas=0
+06:50:57.415 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=476 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=0
+06:50:59.324 TextReplace offcarry blit src 065BD140 1152x1152 glyphs 35 rect 0,0,250,179 -> dst 241BD200 250x179 at 0,0 now 35 (+35) first ch 68 alpha 255
+06:50:59.415 TextReplace diag glyphs=42 skipped=35 copies=211613 carried=13782 occluded=449 dropped=0 pixelCopies=5833 rows=0 presents=449 presentGlyphs=13747 maskedFrames=0 drawn=13743 noAtlas=0
+06:50:59.415 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=450 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=0
+06:54:14.852 DllMain attach
+06:54:14.866 Config loaded exe version major=07D3000C minor=000B0001 renderer=0 mode=1024x768
+06:54:14.866 Hooks::Load begin exe version major=07D3000C minor=000B0001
+06:54:14.881 LoadV2 version major=07D3000C minor=000B0001 check=005676DA
+06:54:14.900 image replace loaded
+06:54:14.900 Hooks loaded
+06:54:14.919 Mods loaded
+06:54:14.970 RenderStart begin renderer=0 windowed=1 mode=800x600x16
+06:54:15.002 image pack loaded: 12655 animations, 163985 frames in 63 ms
+06:54:15.104 RenderStart end gl=04060000 renderer=0
+06:54:15.172 BinkOpen G:\games\Disciples 2 - Dzieje\Video\SF.bik replaced with blank ok
+06:54:15.173 TextReplace diag glyphs=0 skipped=0 copies=0 carried=0 occluded=0 dropped=0 pixelCopies=0 rows=0 presents=1 presentGlyphs=0 maskedFrames=0 drawn=0 noAtlas=0
+06:54:15.173 TextReplace diag2 cleanPresents=0 emptyDirty=1 renders=0 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=0
+06:54:16.536 TextReplace font 06871BA0 'Menu': charset 0 score 932/1000 offset 0,0
+06:54:16.536 TextReplace font 06871BA0 name 'Menu' calibrated in 855 us
+06:54:16.536 TextReplace offcarry blit src 065DD140 1152x1152 glyphs 12 rect 0,0,200,20 -> dst 0DAC4918 200x20 at 0,0 now 12 (+12) first ch 83 alpha 255
+06:54:16.536 TextReplace offcarry blit src 065DD140 1152x1152 glyphs 8 rect 0,0,200,20 -> dst 0DAC4970 200x20 at 0,0 now 8 (+8) first ch 84 alpha 255
+06:54:16.536 TextReplace offcarry blit src 065DD140 1152x1152 glyphs 11 rect 0,0,120,20 -> dst 0DAC49C8 120x20 at 0,0 now 11 (+11) first ch 77 alpha 255
+06:54:16.536 TextReplace offcarry blit src 065DD140 1152x1152 glyphs 7 rect 0,0,100,20 -> dst 0DAC4A20 100x20 at 0,0 now 7 (+7) first ch 67 alpha 255
+06:54:16.536 TextReplace offcarry blit src 065DD140 1152x1152 glyphs 7 rect 0,0,100,20 -> dst 0DAC4A78 100x20 at 0,0 now 7 (+7) first ch 79 alpha 255
+06:54:16.537 TextReplace offcarry blit src 065DD140 1152x1152 glyphs 5 rect 0,0,64,20 -> dst 0DAC4B28 64x20 at 0,0 now 5 (+5) first ch 73 alpha 255
+06:54:16.537 TextReplace offcarry blit src 065DD140 1152x1152 glyphs 4 rect 0,0,64,20 -> dst 0DAC4B80 64x20 at 0,0 now 4 (+4) first ch 81 alpha 255
+06:54:16.537 TextReplace font 06873018 'Normal': charset 0 score 924/1000 offset 0,0
+06:54:16.537 TextReplace font 06873018 name 'Normal' calibrated in 679 us
+06:54:16.537 TextReplace offcarry blit src 065DD140 1152x1152 glyphs 4 rect 0,0,36,20 -> dst 0DAC4BD8 36x20 at 0,0 now 4 (+4) first ch 66 alpha 255
+06:54:16.622 Continue game G:\games\Disciples 2 - Dzieje\SaveGame\AutoSave.sg
+06:54:16.704 TextReplace font 068723D0 'vlarge': charset 0 score 899/1000 offset 0,0
+06:54:16.704 TextReplace font 068723D0 name 'vlarge' calibrated in 1644 us
+06:54:16.705 TextReplace offcarry blit src 065DD140 1152x1152 glyphs 10 rect 0,0,300,70 -> dst 0DACC610 300x70 at 0,0 now 10 (+10) first ch 80 alpha 255
+06:54:17.134 TextReplace font 068727E8 'large': charset 0 score 924/1000 offset 0,0
+06:54:17.134 TextReplace font 068727E8 name 'large' calibrated in 929 us
+06:54:17.137 TextReplace font 06871FB8 'medbold': charset 0 score 930/1000 offset 0,0
+06:54:17.137 TextReplace font 06871FB8 name 'medbold' calibrated in 660 us
+06:54:17.138 TextReplace offcarry blit src 065DD140 1152x1152 glyphs 858 rect 0,0,440,467 -> dst 0DACC8D0 440x467 at 0,0 now 858 (+858) first ch 68 alpha 255
+06:54:17.166 TextReplace diag glyphs=1110 skipped=926 copies=283 carried=2896 occluded=0 dropped=14 pixelCopies=0 rows=0 presents=352 presentGlyphs=1958 maskedFrames=0 drawn=1946 noAtlas=0
+06:54:17.166 TextReplace diag2 cleanPresents=0 emptyDirty=244 renders=352 slotMiss=0 slotEmpty=245 atlas=0 in 0 us calibrate 4767 us lockCleared=8
+06:54:18.220 TextReplace offcarry blit src 065DD140 1152x1152 glyphs 1 rect 0,0,40,25 -> dst 241D2EF8 40x25 at 0,0 now 1 (+1) first ch 48 alpha 255
+06:54:18.220 TextReplace offcarry blit src 065DD140 1152x1152 glyphs 1 rect 0,0,40,25 -> dst 241D3268 40x25 at 0,0 now 1 (+1) first ch 48 alpha 255
+06:54:18.220 TextReplace offcarry blit src 065DD140 1152x1152 glyphs 3 rect 0,0,40,25 -> dst 241D3500 40x25 at 0,0 now 3 (+3) first ch 52 alpha 255
+06:54:18.220 TextReplace offcarry blit src 065DD140 1152x1152 glyphs 1 rect 0,0,40,25 -> dst 241D3AC0 40x25 at 0,0 now 1 (+1) first ch 48 alpha 255
+06:54:18.220 TextReplace offcarry blit src 065DD140 1152x1152 glyphs 1 rect 0,0,40,25 -> dst 241D3D30 40x25 at 0,0 now 1 (+1) first ch 48 alpha 255
+06:54:18.220 TextReplace offcarry blit src 065DD140 1152x1152 glyphs 3 rect 0,0,40,25 -> dst 241D4048 40x25 at 0,0 now 3 (+3) first ch 51 alpha 255
+06:54:18.224 image GL ready, mipmaps on
+06:54:18.227 TextReplace offcarry blit src 065DD140 1152x1152 glyphs 1 rect 0,0,36,20 -> dst 241D6398 36x20 at 0,0 now 1 (+1) first ch 52 alpha 255
+06:54:18.236 TextReplace offcarry blit src 065DD140 1152x1152 glyphs 1 rect 0,0,36,20 -> dst 241D5918 36x20 at 0,0 now 1 (+1) first ch 52 alpha 255
+06:54:18.240 TextReplace offcarry blit src 065DD140 1152x1152 glyphs 24 rect 0,0,250,179 -> dst 241D77B8 250x179 at 0,0 now 24 (+24) first ch 82 alpha 255
+06:54:19.121 TextReplace offcarry blit src 065DD140 1152x1152 glyphs 6 rect 0,0,138,18 -> dst 241D8550 138x18 at 0,0 now 6 (+6) first ch 89 alpha 255
+06:54:19.121 TextReplace offcarry blit src 065DD140 1152x1152 glyphs 10 rect 0,0,74,83 -> dst 241D9890 74x83 at 0,0 now 10 (+10) first ch 77 alpha 255
+06:54:19.163 TextReplace diag glyphs=59 skipped=52 copies=16540 carried=6380 occluded=215 dropped=1 pixelCopies=2815 rows=0 presents=460 presentGlyphs=6313 maskedFrames=0 drawn=6298 noAtlas=0
+06:54:19.163 TextReplace diag2 cleanPresents=0 emptyDirty=120 renders=460 slotMiss=0 slotEmpty=120 atlas=0 in 0 us calibrate 0 us lockCleared=9
+06:54:20.435 TextReplace font 06872C00 'medium': charset 0 score 915/1000 offset 0,0
+06:54:20.435 TextReplace font 06872C00 name 'medium' calibrated in 847 us
+06:54:20.435 TextReplace offcarry blit src 065DD140 1152x1152 glyphs 1 rect 0,0,32,64 -> dst 241DA528 32x64 at 0,0 now 1 (+1) first ch 50 alpha 255
+06:54:20.436 TextReplace offcarry blit src 065DD140 1152x1152 glyphs 1 rect 0,0,32,64 -> dst 241DA2A0 32x64 at 0,0 now 1 (+1) first ch 52 alpha 255
+06:54:20.725 TextReplace offcarry blit src 065DD140 1152x1152 glyphs 1 rect 0,0,32,64 -> dst 241AF5A0 32x64 at 0,0 now 1 (+1) first ch 50 alpha 255
+06:54:20.727 TextReplace offcarry blit src 065DD140 1152x1152 glyphs 6 rect 0,0,138,18 -> dst 241DAA28 138x18 at 0,0 now 6 (+6) first ch 89 alpha 255
+06:54:20.727 TextReplace offcarry blit src 065DD140 1152x1152 glyphs 10 rect 0,0,74,83 -> dst 241DA528 74x83 at 0,0 now 10 (+10) first ch 77 alpha 255
+06:54:20.736 TextReplace offcarry blit src 065DD140 1152x1152 glyphs 160 rect 0,0,486,155 -> dst 241D7E00 486x155 at 0,0 now 160 (+160) first ch 65 alpha 255
+06:54:21.164 TextReplace diag glyphs=214 skipped=179 copies=58055 carried=29623 occluded=476 dropped=22 pixelCopies=4761 rows=0 presents=475 presentGlyphs=29257 maskedFrames=0 drawn=29124 noAtlas=0
+06:54:21.164 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=476 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 847 us lockCleared=2
+06:54:21.378 TextReplace offcarry blit src 065DD140 1152x1152 glyphs 1 rect 0,0,32,64 -> dst 241D77B8 32x64 at 0,0 now 1 (+1) first ch 50 alpha 255
+06:54:21.378 TextReplace offcarry blit src 065DD140 1152x1152 glyphs 6 rect 0,0,138,18 -> dst 241DB448 138x18 at 0,0 now 6 (+6) first ch 89 alpha 255
+06:54:21.378 TextReplace offcarry blit src 065DD140 1152x1152 glyphs 10 rect 0,0,74,83 -> dst 241D9D98 74x83 at 0,0 now 10 (+10) first ch 77 alpha 255
+06:54:23.086 TextReplace offcarry blit src 065DD140 1152x1152 glyphs 1 rect 0,0,32,64 -> dst 241D7018 32x64 at 0,0 now 1 (+1) first ch 50 alpha 255
+06:54:23.164 TextReplace diag glyphs=20 skipped=18 copies=201688 carried=21268 occluded=475 dropped=34 pixelCopies=5217 rows=0 presents=474 presentGlyphs=21222 maskedFrames=0 drawn=21568 noAtlas=0
+06:54:23.164 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=475 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=2
+06:54:23.395 TextReplace offcarry blit src 065DD140 1152x1152 glyphs 22 rect 0,0,132,17 -> dst 241D77B8 132x17 at 0,0 now 22 (+22) first ch 83 alpha 255
+06:54:23.516 TextReplace offcarry blit src 065DD140 1152x1152 glyphs 6 rect 0,0,138,18 -> dst 241D87D0 138x18 at 0,0 now 6 (+6) first ch 89 alpha 255
+06:54:23.518 TextReplace offcarry blit src 065DD140 1152x1152 glyphs 9 rect 0,0,74,83 -> dst 241D8550 74x83 at 0,0 now 9 (+9) first ch 77 alpha 255
+06:54:24.685 TextReplace offcarry blit src 065DD140 1152x1152 glyphs 7 rect 0,0,70,17 -> dst 24210870 70x17 at 0,0 now 7 (+7) first ch 50 alpha 255
+06:54:24.701 Turn art loaded
+06:54:24.702 TextReplace font 06873430 'small': charset 0 score 931/1000 offset 0,0
+06:54:24.702 TextReplace font 06873430 name 'small' calibrated in 603 us
+06:54:24.703 TextReplace offcarry blit src 065DD140 1152x1152 glyphs 47 rect 0,0,444,69 -> dst 241DACA8 444x69 at 0,0 now 47 (+47) first ch 49 alpha 255
+06:54:24.706 TextReplace offcarry blit src 065DD140 1152x1152 glyphs 18 rect 0,0,116,41 -> dst 24211AA0 116x41 at 0,0 now 18 (+18) first ch 71 alpha 255
+06:54:24.706 TextReplace offcarry blit src 065DD140 1152x1152 glyphs 7 rect 0,0,70,17 -> dst 24211E20 70x17 at 0,0 now 7 (+7) first ch 50 alpha 255
+06:54:24.709 TextReplace offcarry blit src 065DD140 1152x1152 glyphs 47 rect 0,0,444,69 -> dst 241DACA8 444x69 at 0,0 now 47 (+47) first ch 49 alpha 255
+06:54:24.709 TextReplace offcarry blit src 065DD140 1152x1152 glyphs 47 rect 0,0,444,69 -> dst 241DACA8 444x69 at 0,0 now 47 (+47) first ch 49 alpha 255
+06:54:24.710 TextReplace offcarry blit src 065DD140 1152x1152 glyphs 47 rect 0,0,444,69 -> dst 241DACA8 444x69 at 0,0 now 47 (+47) first ch 49 alpha 255
+06:54:24.710 TextReplace offcarry blit src 065DD140 1152x1152 glyphs 47 rect 0,0,444,69 -> dst 241DACA8 444x69 at 0,0 now 47 (+47) first ch 49 alpha 255
+06:54:24.710 TextReplace offcarry blit src 065DD140 1152x1152 glyphs 47 rect 0,0,444,69 -> dst 241DACA8 444x69 at 0,0 now 47 (+47) first ch 49 alpha 255
+06:54:24.710 TextReplace offcarry blit src 065DD140 1152x1152 glyphs 47 rect 0,0,444,69 -> dst 241DACA8 444x69 at 0,0 now 47 (+47) first ch 49 alpha 255
+06:54:24.710 TextReplace offcarry blit src 065DD140 1152x1152 glyphs 47 rect 0,0,444,69 -> dst 241DACA8 444x69 at 0,0 now 47 (+47) first ch 49 alpha 255
+06:54:24.711 TextReplace offcarry blit src 065DD140 1152x1152 glyphs 47 rect 0,0,444,69 -> dst 241DACA8 444x69 at 0,0 now 47 (+47) first ch 49 alpha 255
+06:54:24.712 TextReplace offcarry blit src 065DD140 1152x1152 glyphs 47 rect 0,0,444,69 -> dst 241DACA8 444x69 at 0,0 now 47 (+47) first ch 49 alpha 255
+06:54:24.712 TextReplace offcarry blit src 065DD140 1152x1152 glyphs 47 rect 0,0,444,69 -> dst 241DACA8 444x69 at 0,0 now 47 (+47) first ch 49 alpha 255
+06:54:24.712 TextReplace offcarry blit src 065DD140 1152x1152 glyphs 47 rect 0,0,444,69 -> dst 241DACA8 444x69 at 0,0 now 47 (+47) first ch 49 alpha 255
+06:54:24.713 TextReplace offcarry blit src 065DD140 1152x1152 glyphs 47 rect 0,0,444,69 -> dst 241DACA8 444x69 at 0,0 now 47 (+47) first ch 49 alpha 255
+06:54:24.713 TextReplace offcarry blit src 065DD140 1152x1152 glyphs 47 rect 0,0,444,69 -> dst 241DACA8 444x69 at 0,0 now 47 (+47) first ch 49 alpha 255
+06:54:24.713 TextReplace offcarry blit src 065DD140 1152x1152 glyphs 47 rect 0,0,444,69 -> dst 241DACA8 444x69 at 0,0 now 47 (+47) first ch 49 alpha 255
+06:54:24.713 TextReplace offcarry blit src 065DD140 1152x1152 glyphs 47 rect 0,0,444,69 -> dst 241DACA8 444x69 at 0,0 now 47 (+47) first ch 49 alpha 255
+06:54:24.714 TextReplace offcarry blit src 065DD140 1152x1152 glyphs 47 rect 0,0,444,69 -> dst 241DACA8 444x69 at 0,0 now 47 (+47) first ch 49 alpha 255
+06:54:24.714 TextReplace offcarry blit src 065DD140 1152x1152 glyphs 47 rect 0,0,444,69 -> dst 241DACA8 444x69 at 0,0 now 47 (+47) first ch 49 alpha 255
+06:54:24.714 TextReplace offcarry blit src 065DD140 1152x1152 glyphs 47 rect 0,0,444,69 -> dst 241DACA8 444x69 at 0,0 now 47 (+47) first ch 49 alpha 255
+06:54:24.715 TextReplace offcarry blit src 065DD140 1152x1152 glyphs 47 rect 0,0,444,69 -> dst 241DACA8 444x69 at 0,0 now 47 (+47) first ch 49 alpha 255
+06:54:24.715 TextReplace offcarry blit src 065DD140 1152x1152 glyphs 47 rect 0,0,444,69 -> dst 241DACA8 444x69 at 0,0 now 47 (+47) first ch 49 alpha 255
+06:54:24.715 TextReplace offcarry blit src 065DD140 1152x1152 glyphs 47 rect 0,0,444,69 -> dst 241DACA8 444x69 at 0,0 now 47 (+47) first ch 49 alpha 255
+06:54:24.716 TextReplace offcarry blit src 065DD140 1152x1152 glyphs 47 rect 0,0,444,69 -> dst 241DACA8 444x69 at 0,0 now 47 (+47) first ch 49 alpha 255
+06:54:24.716 TextReplace offcarry blit src 065DD140 1152x1152 glyphs 47 rect 0,0,444,69 -> dst 241DACA8 444x69 at 0,0 now 47 (+47) first ch 49 alpha 255
+06:54:24.716 TextReplace offcarry blit src 065DD140 1152x1152 glyphs 47 rect 0,0,444,69 -> dst 241DACA8 444x69 at 0,0 now 47 (+47) first ch 49 alpha 255
+06:54:24.717 TextReplace offcarry blit src 065DD140 1152x1152 glyphs 47 rect 0,0,444,69 -> dst 241DACA8 444x69 at 0,0 now 47 (+47) first ch 49 alpha 255
+06:54:24.717 TextReplace offcarry blit src 065DD140 1152x1152 glyphs 47 rect 0,0,444,69 -> dst 241DACA8 444x69 at 0,0 now 47 (+47) first ch 49 alpha 255
+06:54:24.717 TextReplace offcarry blit src 065DD140 1152x1152 glyphs 47 rect 0,0,444,69 -> dst 241DACA8 444x69 at 0,0 now 47 (+47) first ch 49 alpha 255
+06:54:24.717 TextReplace offcarry blit src 065DD140 1152x1152 glyphs 47 rect 0,0,444,69 -> dst 241DACA8 444x69 at 0,0 now 47 (+47) first ch 49 alpha 255
+06:54:24.718 TextReplace offcarry blit src 065DD140 1152x1152 glyphs 47 rect 0,0,444,69 -> dst 241DACA8 444x69 at 0,0 now 47 (+47) first ch 49 alpha 255
+06:54:24.718 TextReplace offcarry blit src 065DD140 1152x1152 glyphs 47 rect 0,0,444,69 -> dst 241DACA8 444x69 at 0,0 now 47 (+47) first ch 49 alpha 255
+06:54:24.718 TextReplace offcarry blit src 065DD140 1152x1152 glyphs 47 rect 0,0,444,69 -> dst 241DACA8 444x69 at 0,0 now 47 (+47) first ch 49 alpha 255
+06:54:24.718 TextReplace offcarry blit src 065DD140 1152x1152 glyphs 47 rect 0,0,444,69 -> dst 241DACA8 444x69 at 0,0 now 47 (+47) first ch 49 alpha 255
+06:54:24.718 TextReplace offcarry blit src 065DD140 1152x1152 glyphs 47 rect 0,0,444,69 -> dst 241DACA8 444x69 at 0,0 now 47 (+47) first ch 49 alpha 255
+06:54:24.718 TextReplace offcarry blit src 065DD140 1152x1152 glyphs 47 rect 0,0,444,69 -> dst 241DACA8 444x69 at 0,0 now 47 (+47) first ch 49 alpha 255
+06:54:24.719 TextReplace offcarry blit src 065DD140 1152x1152 glyphs 47 rect 0,0,444,69 -> dst 241DACA8 444x69 at 0,0 now 47 (+47) first ch 49 alpha 255
+06:54:24.719 TextReplace offcarry blit src 065DD140 1152x1152 glyphs 47 rect 0,0,444,69 -> dst 241DACA8 444x69 at 0,0 now 47 (+47) first ch 49 alpha 255
+06:54:24.719 TextReplace offcarry blit src 065DD140 1152x1152 glyphs 47 rect 0,0,444,69 -> dst 241DACA8 444x69 at 0,0 now 47 (+47) first ch 49 alpha 255
+06:54:24.719 TextReplace offcarry blit src 065DD140 1152x1152 glyphs 47 rect 0,0,444,69 -> dst 241DACA8 444x69 at 0,0 now 47 (+47) first ch 49 alpha 255
+06:54:24.720 TextReplace offcarry blit src 065DD140 1152x1152 glyphs 47 rect 0,0,444,69 -> dst 241DACA8 444x69 at 0,0 now 47 (+47) first ch 49 alpha 255
+06:54:24.720 TextReplace offcarry blit src 065DD140 1152x1152 glyphs 47 rect 0,0,444,69 -> dst 241DACA8 444x69 at 0,0 now 47 (+47) first ch 49 alpha 255
+06:54:24.720 TextReplace offcarry blit src 065DD140 1152x1152 glyphs 47 rect 0,0,444,69 -> dst 241DACA8 444x69 at 0,0 now 47 (+47) first ch 49 alpha 255
+06:54:24.720 TextReplace offcarry blit src 065DD140 1152x1152 glyphs 47 rect 0,0,444,69 -> dst 241DACA8 444x69 at 0,0 now 47 (+47) first ch 49 alpha 255
+06:54:25.164 TextReplace diag glyphs=105957 skipped=105952 copies=60174 carried=131838 occluded=1176 dropped=105914 pixelCopies=8831 rows=0 presents=457 presentGlyphs=25813 maskedFrames=101 drawn=25740 noAtlas=0
+06:54:25.165 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=457 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 603 us lockCleared=2224
