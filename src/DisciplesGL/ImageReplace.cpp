@@ -238,6 +238,7 @@ namespace ImageReplace
 	} stores;
 
 	#define RANGE_SCAN 256
+	#define RANGE_PITCH 4096
 
 	struct Range {
 		const BYTE* start;
@@ -249,7 +250,7 @@ namespace ImageReplace
 		Range list[STORE_SIZE * 3 / 4];
 		DWORD count;
 		DWORD span;
-		DWORD hits, misses, learnStore, learnFace, dropped;
+		DWORD hits, misses, learnStore, learnFace, dropped, rejected;
 	} memory;
 
 	struct {
@@ -1761,12 +1762,18 @@ namespace ImageReplace
 	{
 		DropRange(s);
 		LONG w = (LONG)s->dims[0], h = (LONG)s->dims[1];
-		if (!config.bpp32Hooked || !first || w <= 0 || h <= 0 || pitch < w || memory.count >= sizeof(memory.list) / sizeof(*memory.list))
+		if (!config.bpp32Hooked || !first || w <= 0 || h <= 0 || pitch < w || pitch > RANGE_PITCH || memory.count >= sizeof(memory.list) / sizeof(*memory.list))
 			return;
+
+		const BYTE* end = first + ((h - 1) * pitch + w) * sizeof(DWORD);
+		if (IsBadReadPtr(first, end - first))
+		{
+			++memory.rejected;
+			return;
+		}
 
 		s->first = first;
 		s->pitch = pitch;
-		const BYTE* end = first + ((h - 1) * pitch + w) * sizeof(DWORD);
 		for (DWORD i = 0; i < memory.count;)
 		{
 			const Range* r = &memory.list[i];
@@ -2136,8 +2143,8 @@ namespace ImageReplace
 		}
 		if (!linked)
 			NoteFace(s, src, srcPitch, width, bottom);
-		if (s && !linked && s->first == (const BYTE*)src && s->pitch != srcPitch && srcPitch > 0)
-			AddRange(s, s->first, srcPitch, &memory.learnFace);
+		if (s && !linked && IsFace(s) && (s->first != (const BYTE*)src || s->pitch != srcPitch))
+			AddRange(s, (const BYTE*)src, srcPitch, &memory.learnFace);
 
 		if (top || !plain)
 			return;
@@ -3018,16 +3025,13 @@ namespace ImageReplace
 			s->entry = entry;
 		}
 
+		// the face buffer's stride is unknown here; the range is added at its first DrawFaces, which passes the real pitch
+		DropRange(s);
 		LinkStoreData(s, data);
 		s->printed = FALSE;
 		s->left = s->top = 0;
 		s->dims[0] = size[0];
 		s->dims[1] = size[1];
-
-		LONG pitch = *(const LONG*)(buffer + 0x18) >> 1;
-		if (pitch < (LONG)size[0] || pitch > (LONG)size[0] * 8)
-			pitch = size[0];
-		AddRange(s, data, pitch, &memory.learnFace);
 		return ok;
 	}
 
@@ -3195,7 +3199,7 @@ namespace ImageReplace
 		DebugLog("image stats builds=%d draws=%d unknown=%d ground chunks=%d builds=%d ops=%d unnamed=%d unmasked=%d rejected=%d",
 			stats.builds, stats.draws, stats.unknown, ground.chunkCount, ground.builds, ground.ops, ground.unnamed, ground.unmasked, ground.rejected);
 		DebugLog("image ground published=%d arts=%d notReady=%d retried=%d mismatched=%d", ground.published, ground.arts, ground.notReady, ground.retried, ground.mismatched);
-		DebugLog("image memory ranges=%d hits=%d misses=%d dropped=%d learn store=%d face=%d", memory.count, memory.hits, memory.misses, memory.dropped, memory.learnStore, memory.learnFace);
+		DebugLog("image memory ranges=%d hits=%d misses=%d dropped=%d rejected=%d learn store=%d face=%d", memory.count, memory.hits, memory.misses, memory.dropped, memory.rejected, memory.learnStore, memory.learnFace);
 		DebugLog("image store drawLinks=%d faceLinks=%d faceLoads=%d faceCopies=%d faceMisses=%d faceRejects=%d takes=%d takeLinks=%d takeFrames=%d",
 			storeStats.drawLinks, storeStats.faceLinks, storeStats.faceLoads, storeStats.faceCopies, storeStats.faceMisses, storeStats.faceRejects, storeStats.takes, storeStats.takeLinks, storeStats.takeFrames);
 		DebugLog("image art begins=%d notReady=%d noFrame=%d zoomed=%d truncated=%d", art.begins, art.notReady, art.noFrame, art.zoomed, art.truncated);
