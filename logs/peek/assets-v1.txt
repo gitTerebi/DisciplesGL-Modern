@@ -1,0 +1,13 @@
+== Sprites unit-face/g000uu0013 frames 1
+   frame 0 {"Width": 70, "Height": 85, "PixelWidth": 140, "PixelHeight": 170, "OffsetX": 0, "OffsetY": 0, "Additive": false, "PixelScale": 2} offset 107096448 length 32126
+== Sprites unit-portrait/g000uu0013 frames 1
+   frame 0 {"Width": 130, "Height": 142, "PixelWidth": 260, "PixelHeight": 284, "OffsetX": 0, "OffsetY": 0, "Additive": false, "PixelScale": 2} offset 107128574 length 86592
+== Sprites unit-event-portrait/g000uu0013 frames 1
+   frame 0 {"Width": 350, "Height": 450, "PixelWidth": 700, "PixelHeight": 900, "OffsetX": 0, "OffsetY": 0, "Additive": false, "PixelScale": 2} offset 107215166 length 405076
+== Sprites unit-face/g000uu5017 frames 1
+   frame 0 {"Width": 70, "Height": 85, "PixelWidth": 140, "PixelHeight": 170, "OffsetX": 0, "OffsetY": 0, "Additive": false, "PixelScale": 2} offset 162431016 length 25788
+== Sprites unit-portrait/g000uu5017 frames 1
+   frame 0 {"Width": 130, "Height": 142, "PixelWidth": 260, "PixelHeight": 284, "OffsetX": 0, "OffsetY": 0, "Additive": false, "PixelScale": 2} offset 162456804 length 77698
+== Sprites unit-event-portrait/g000uu5017 frames 1
+   frame 0 {"Width": 350, "Height": 450, "PixelWidth": 700, "PixelHeight": 900, "OffsetX": 0, "OffsetY": 0, "Additive": false, "PixelScale": 2} offset 162534502 length 389896
+assets-v1 matches 6

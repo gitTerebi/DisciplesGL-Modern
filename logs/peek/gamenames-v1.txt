@@ -1,0 +1,7 @@
+== Sprites G000UU0013 frames 1
+   frame 0 {"Width": 350, "Height": 450, "PixelWidth": 700, "PixelHeight": 900, "OffsetX": 0, "OffsetY": 0, "Additive": false, "PixelScale": 2} offset 372894262 length 405076
+== Sprites G000UU5017FACEB.PNG frames 1
+   frame 0 {"Width": 130, "Height": 142, "PixelWidth": 260, "PixelHeight": 284, "OffsetX": 0, "OffsetY": 0, "Additive": false, "PixelScale": 2} offset 428135900 length 77698
+== Sprites G000UU5017 frames 1
+   frame 0 {"Width": 350, "Height": 450, "PixelWidth": 700, "PixelHeight": 900, "OffsetX": 0, "OffsetY": 0, "Additive": false, "PixelScale": 2} offset 428213598 length 389896
+gamenames-v1 matches 3
