@@ -41,6 +41,7 @@ BOOL __stdcall DllMain(HMODULE hModule, DWORD fdwReason, LPVOID lpReserved)
 		hDllModule = hModule;
 		Main::WaitForRestart();
 		DebugLog("DllMain attach");
+		CrashArm();
 		if (Config::Load())
 		{
 			DebugLog("Config loaded exe version major=%08X minor=%08X renderer=%u mode=%ux%u",

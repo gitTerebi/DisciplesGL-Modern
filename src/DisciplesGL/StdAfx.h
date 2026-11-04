@@ -128,6 +128,7 @@ extern HANDLE hActCtx;
 extern CHAR snapshotName[];
 
 void DebugLog(const char* format, ...);
+VOID CrashArm();
 
 VOID LoadKernel32();
 VOID LoadShcore();

@@ -223,6 +223,8 @@
       <AdditionalLibraryDirectories>$(ProjectDir)..\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <GenerateDebugInformation>false</GenerateDebugInformation>
       <AssemblyDebug>false</AssemblyDebug>
+      <GenerateMapFile>true</GenerateMapFile>
+      <MapFileName>$(OutDir)C4dll-R.map</MapFileName>
       <SectionAlignment>4096</SectionAlignment>
       <BaseAddress>0x60000000</BaseAddress>
       <RandomizedBaseAddress>false</RandomizedBaseAddress>

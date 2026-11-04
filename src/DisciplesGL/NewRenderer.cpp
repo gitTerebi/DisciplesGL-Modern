@@ -39,6 +39,7 @@ NewRenderer::NewRenderer(OpenDraw* ddraw)
 
 VOID NewRenderer::Begin()
 {
+	CrashArm();
 	config.zoom.glallow = TRUE;
 	config.mapZoom.allowed = MAP_ZOOM_ENABLED;
 	this->mapZoomDrawn = 1.0f;

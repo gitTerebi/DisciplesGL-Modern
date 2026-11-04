@@ -72,6 +72,103 @@ void DebugLog(const char* format, ...)
 	CloseHandle(file);
 }
 
+typedef BOOL(__stdcall* MINIDUMPWRITEDUMP)(HANDLE, DWORD, HANDLE, DWORD, VOID*, VOID*, VOID*);
+
+struct CrashDumpInfo {
+	DWORD threadId;
+	EXCEPTION_POINTERS* exception;
+	BOOL clientPointers;
+};
+
+LPTOP_LEVEL_EXCEPTION_FILTER crashPrevious;
+volatile LONG crashOnce;
+
+DWORD CrashModule(DWORD address, CHAR* name, DWORD size)
+{
+	HMODULE module = NULL;
+	if (!GetModuleHandleEx(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, (LPCSTR)address, &module) || !module)
+	{
+		lstrcpyn(name, "?", size);
+		return 0;
+	}
+
+	CHAR path[MAX_PATH];
+	DWORD length = GetModuleFileName(module, path, MAX_PATH);
+	const CHAR* file = path + length;
+	while (file > path && file[-1] != '\\')
+		--file;
+	lstrcpyn(name, file, size);
+	return (DWORD)module;
+}
+
+LONG __stdcall CrashFilter(EXCEPTION_POINTERS* info)
+{
+	if (InterlockedExchange(&crashOnce, 1))
+		return crashPrevious ? crashPrevious(info) : EXCEPTION_CONTINUE_SEARCH;
+
+	EXCEPTION_RECORD* record = info->ExceptionRecord;
+	CONTEXT* context = info->ContextRecord;
+	CHAR name[64];
+	DWORD base = CrashModule((DWORD)record->ExceptionAddress, name, sizeof(name));
+	DebugLog("CRASH code %08X at %08X %s+%X thread %u", record->ExceptionCode, (DWORD)record->ExceptionAddress, name, (DWORD)record->ExceptionAddress - base, GetCurrentThreadId());
+	if (record->ExceptionCode == EXCEPTION_ACCESS_VIOLATION && record->NumberParameters >= 2)
+		DebugLog("CRASH %s of %08X", record->ExceptionInformation[0] == 8 ? "execute" : (record->ExceptionInformation[0] ? "write" : "read"), (DWORD)record->ExceptionInformation[1]);
+	DebugLog("CRASH eax=%08X ebx=%08X ecx=%08X edx=%08X esi=%08X edi=%08X ebp=%08X esp=%08X eip=%08X",
+		context->Eax, context->Ebx, context->Ecx, context->Edx, context->Esi, context->Edi, context->Ebp, context->Esp, context->Eip);
+
+	const DWORD* stack = (const DWORD*)context->Esp;
+	DWORD found = 0;
+	for (DWORD i = 0; i < 4096 && found < 32; ++i)
+	{
+		if (IsBadReadPtr(stack + i, sizeof(DWORD)))
+			break;
+
+		DWORD value = stack[i];
+		MEMORY_BASIC_INFORMATION memory;
+		if (value < 0x10000 || !VirtualQuery((LPCVOID)value, &memory, sizeof(memory)) || memory.State != MEM_COMMIT
+			|| !(memory.Protect & (PAGE_EXECUTE | PAGE_EXECUTE_READ | PAGE_EXECUTE_READWRITE | PAGE_EXECUTE_WRITECOPY)))
+			continue;
+
+		base = CrashModule(value, name, sizeof(name));
+		if (!base)
+			continue;
+
+		DebugLog("CRASH stack +%04X %08X %s+%X", i * 4, value, name, value - base);
+		++found;
+	}
+
+	HMODULE dbghelp = LoadLibrary("dbghelp.dll");
+	MINIDUMPWRITEDUMP write = dbghelp ? (MINIDUMPWRITEDUMP)GetProcAddress(dbghelp, "MiniDumpWriteDump") : NULL;
+	if (write)
+	{
+		CHAR path[MAX_PATH];
+		DWORD length = GetModuleFileName(NULL, path, sizeof(path));
+		while (length && path[length - 1] != '\\')
+			--length;
+		StrCopy(path + length, "DisciplesGL-crash.dmp");
+
+		HANDLE file = CreateFile(path, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+		if (file != INVALID_HANDLE_VALUE)
+		{
+			CrashDumpInfo dump = { GetCurrentThreadId(), info, FALSE };
+			// MiniDumpWithIndirectlyReferencedMemory | MiniDumpWithDataSegs: enough to walk the stack and read the globals the hooks use
+			BOOL ok = write(GetCurrentProcess(), GetCurrentProcessId(), file, 0x41, &dump, NULL, NULL);
+			CloseHandle(file);
+			DebugLog("CRASH minidump %s", ok ? "written" : "failed");
+		}
+	}
+
+	return crashPrevious ? crashPrevious(info) : EXCEPTION_CONTINUE_SEARCH;
+}
+
+VOID CrashArm()
+{
+	LPTOP_LEVEL_EXCEPTION_FILTER previous = SetUnhandledExceptionFilter(CrashFilter);
+	if (previous != CrashFilter)
+		crashPrevious = previous;
+}
+
+
 CREATEACTCTXA CreateActCtxC;
 RELEASEACTCTX ReleaseActCtxC;
 ACTIVATEACTCTX ActivateActCtxC;
