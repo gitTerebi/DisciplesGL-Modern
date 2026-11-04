@@ -15,6 +15,8 @@ namespace Twin
 	VOID OnWrite(const VOID* first, LONG pitch, LONG width, LONG height);
 	VOID OnWriteAll(StateBuffer* buffer);
 	VOID OnPresent(StateBuffer* screen, LONG left, LONG top);
+	VOID BeginArt(LONG frame, const RECT* place, const RECT* clip, BOOL flipped);
+	VOID EndArt();
 	VOID LogStats();
 
 	// render thread

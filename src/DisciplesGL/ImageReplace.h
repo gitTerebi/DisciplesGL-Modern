@@ -23,4 +23,6 @@ namespace ImageReplace
 	BOOL Prepare(StateBufferAligned* frame, BOOL active);
 	VOID Draw(const Rect* rect, LONG offset, DWORD frameWidth, DWORD frameHeight);
 	VOID ReleaseGL();
+	BOOL ArtTexture(LONG frame, GLuint* id, LONG* width, LONG* height);
+	BOOL ArtReady(LONG frame);
 }

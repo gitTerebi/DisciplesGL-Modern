@@ -252,6 +252,13 @@ namespace ImageReplace
 		DWORD flagCheck;
 	} trace;
 
+	#define ART_LOG 32
+
+	struct {
+		DWORD depth;
+		DWORD begins, notReady, noFrame, zoomed;
+	} art;
+
 	struct {
 		HANDLE file;
 		BOOL gameNames;
@@ -1494,17 +1501,84 @@ namespace ImageReplace
 		return missing;
 	}
 
-	VOID Queue(Entry* entry, DWORD rec)
+	BOOL ArtReady(LONG frame)
+	{
+		return pack.ready && frame >= 0 && (DWORD)frame < pack.frameCount && pack.texs[frame].state == TexUploaded;
+	}
+
+	LONG Queue(Entry* entry, DWORD rec)
 	{
 		if (!Enabled())
-			return;
+			return -1;
 
 		LONG index = Resolve(entry, rec);
 		if (index < 0)
-			return;
+			return -1;
 
 		BOOL missing = Touch(&pack.texs[index], index);
 		Prefetch(entry->anim, index, missing);
+		return index;
+	}
+
+	BOOL BeginArt(const Entry* entry, LONG index, DWORD rec, const POINT* start, const POINT* offset, const POINT* size, const RECT* area)
+	{
+		if (index < 0 || !start)
+		{
+			++art.noFrame;
+			return FALSE;
+		}
+		if (!ArtReady(index))
+		{
+			++art.notReady;
+			return FALSE;
+		}
+
+		const PackFrame* frame = &pack.frames[index];
+		const DWORD* dims = (const DWORD*)rec;
+		LONG canvasW = (LONG)dims[0], canvasH = (LONG)dims[1];
+		LONG ox = frame->ox, oy = frame->oy;
+		if (entry->origin == OriginCentre)
+		{
+			ox += canvasW / 2;
+			oy += canvasH / 2;
+		}
+		else if (entry->origin == OriginSprite)
+			ox = oy = 0;
+
+		RECT place;
+		place.left = start->x + (entry->flipped ? canvasW - ox - frame->w : ox);
+		place.top = start->y + oy;
+		place.right = place.left + frame->w;
+		place.bottom = place.top + frame->h;
+
+		LONG offX = offset ? offset->x : 0, offY = offset ? offset->y : 0;
+		LONG sizeX = size ? size->x : canvasW, sizeY = size ? size->y : canvasH;
+		RECT clip = { start->x + offX, start->y + offY, start->x + sizeX, start->y + sizeY };
+		if (area)
+		{
+			clip.left = max(clip.left, area->left);
+			clip.top = max(clip.top, area->top);
+			clip.right = min(clip.right, area->right);
+			clip.bottom = min(clip.bottom, area->bottom);
+		}
+
+		if (Config::IsMapZoomed())
+		{
+			RECT zoom;
+			Config::GetMapZoomRect(&zoom);
+			if (place.left < zoom.right && place.top < zoom.bottom && place.right > zoom.left && place.bottom > zoom.top)
+			{
+				++art.zoomed;
+				return FALSE;
+			}
+		}
+
+		if (art.begins < ART_LOG)
+			DebugLog("image art name=%s frame=%d place=%d,%d,%d,%d clip=%d,%d,%d,%d flipped=%d", entry->name, index,
+				place.left, place.top, place.right, place.bottom, clip.left, clip.top, clip.right, clip.bottom, entry->flipped);
+		++art.begins;
+		Twin::BeginArt(index, &place, &clip, entry->flipped);
+		return TRUE;
 	}
 
 	DWORD StoreImageKey(DWORD value)
@@ -2321,6 +2395,18 @@ namespace ImageReplace
 		}
 	}
 
+	BOOL ArtTexture(LONG frame, GLuint* id, LONG* width, LONG* height)
+	{
+		if (!pack.ready || frame < 0 || (DWORD)frame >= pack.frameCount || pack.texs[frame].state != TexUploaded)
+			return FALSE;
+
+		TouchGpu(frame);
+		*id = pack.texs[frame].id;
+		*width = pack.frames[frame].w;
+		*height = pack.frames[frame].h;
+		return TRUE;
+	}
+
 	VOID RenderGround(DWORD index)
 	{
 		GroundChunk* c = &ground.chunks[index];
@@ -2872,6 +2958,7 @@ namespace ImageReplace
 			stats.builds, stats.draws, stats.unknown, ground.chunkCount, ground.builds, ground.ops, ground.unnamed, ground.unmasked, ground.rejected);
 		DebugLog("image store drawLinks=%d faceLinks=%d faceLoads=%d faceCopies=%d faceMisses=%d faceRejects=%d takes=%d takeLinks=%d takeFrames=%d",
 			storeStats.drawLinks, storeStats.faceLinks, storeStats.faceLoads, storeStats.faceCopies, storeStats.faceMisses, storeStats.faceRejects, storeStats.takes, storeStats.takeLinks, storeStats.takeFrames);
+		DebugLog("image art begins=%d notReady=%d noFrame=%d zoomed=%d", art.begins, art.notReady, art.noFrame, art.zoomed);
 		DebugLog("image tables entries=%d/%d full=%d stores=%d/%d archives=%d queue demand=%d prefetch=%d decoded=%d (%d MB) gpu=%d (%d MB of %d MB budget)",
 			entries.count, entries.used, stats.full, stores.count, stores.used, archives.count, demand, prefetch,
 			decodedCount, pack.decoded >> 20, pack.gpuList.count, pack.gpu >> 20, pack.gpuBudget >> 20);
@@ -2879,9 +2966,9 @@ namespace ImageReplace
 
 	VOID __fastcall Render(VOID* thisObj, DWORD /*edx*/, VOID* renderer, const POINT* start, const POINT* offset, const POINT* size, const RECT* area)
 	{
-		((VOID(__thiscall*)(VOID*, VOID*, const POINT*, const POINT*, const POINT*, const RECT*))sub_Render)(thisObj, renderer, start, offset, size, area);
 		++stats.draws;
 
+		BOOL began = FALSE;
 		DWORD rec = GetRecord(thisObj);
 		Entry* entry = rec ? Find(rec, FALSE) : NULL;
 		if (!entry || !entry->name[0])
@@ -2889,8 +2976,16 @@ namespace ImageReplace
 		else
 		{
 			++entry->draws;
-			Queue(entry, rec);
+			LONG index = Queue(entry, rec);
+			if (!art.depth && Enabled())
+				began = BeginArt(entry, index, rec, start, offset, size, area);
 		}
+
+		++art.depth;
+		((VOID(__thiscall*)(VOID*, VOID*, const POINT*, const POINT*, const POINT*, const RECT*))sub_Render)(thisObj, renderer, start, offset, size, area);
+		--art.depth;
+		if (began)
+			Twin::EndArt();
 
 		DWORD tick = GetTickCount();
 		BOOL key = (GetAsyncKeyState(VK_F12) & 0x8000) != 0;
