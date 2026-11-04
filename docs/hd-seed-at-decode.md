@@ -15,7 +15,6 @@ This page describes the `seed` mode of the twin renderer. It replaces the old wa
 | `SeedLoadWait` | ms a decode may wait while the game is loading, that is when no present came for more than 100 ms (0 to 2000) | 100 |
 | `WriteTrap` | `1` keeps the pages of every offscreen surface read-only until the game's first write, to name the code that writes it (see First-write trap); `0` off | 1 |
 | `TrapCopy` | `1` replays a trapped `rep movs` from one twin into another as a twin copy when the 1x rows are equal (see Map view) | 1 |
-| `LoadSeed` | `1` seeds an image the game converts from indices outside `StoreDraw` when its size equals an image the store just loaded by name (see Map view); `0` only logs the match | 0 |
 | `GpuCheck` | `1` runs the GPU check every 5 s and takes the screenshots 15 s after the first seed, as before; `0` only on F12 | 0 |
 
 The environment variable `DGL_TWIN_MODE=match` overrides the ini. The first log line names the mode and where it came from: `twin mode seed (Twin.Mode=seed, seed wait 0 ms)`.
@@ -31,6 +30,7 @@ All seeds go through `ImageReplace.cpp:AddRange`. That is the one place where na
 | Store image (`StoreLoad` / `StoreDraw`) | `ImageReplace.cpp:StoreDraw`, after the game decoded the file into `desc` (data, rect, pitch) | `SeedStore`: when the file is a packer sheet, a sheet seed (below). Otherwise one piece, the pack frame the file name resolves to (`StoreFrame`), over the whole image |
 | Packer sheet behind `Build`/`Render` images | Loaded through the image store too: the sheet PNG is a file of the `.ff`, decoded by `StoreDraw`. Evidence: `_CUDEFAUL` is a `Build` image with one 24x54 part, and its store decode resolved to the same pack frame | `ImageReplace.cpp:SeedSheet` builds the sheet from the archive's `-INDEX.OPT`, `-IMAGES.OPT` and `-ANIMS.OPT` (`LoadSheets`) |
 | Face | `ImageReplace.cpp:FaceLoad` decodes it, but the stride is unknown there; `OnFaceCopy` registers it at its first `DrawFaces` with the real pitch. That happens before the hook's twin calls | `SeedStore`, kind `face`, one piece |
+| Image decoded by a loader other than the store (full-screen backgrounds, battle backgrounds, the map buffers' art) | The `.ff` record the game read last with that image's size, then the indexed blit of exactly that size out of the scratch (see Record reads) | `RecordDecode` builds the pieces like `SeedStore`/`SeedSheet`; they are seeded at the blit's destination, the 1152x1152 scratch, and travel with the copy out of it |
 | Ground tile and border textures (`TileFactory` / `BorderFactory`) | Not seeded | Nothing replays from them; see Ground |
 
 `StoreDraw` now reseeds on every call in seed mode. The match path returned early when the same image was drawn into the same memory again, but a repeat decode through a hooked routine marks the memory dirty, and that drops the earlier seed. A repeat decode over the image's own range keeps the range and its twin (`AddRange`, `rangeW`/`rangeH`). If no hook saw a write since the last seed there, the seed is skipped as still intact (`repeat decodes still intact`).
@@ -149,6 +149,72 @@ The 4K follows the pixels by provenance: the latest named decode, and the lock, 
 3. If the guard accepts, the decode's pieces are seeded into the surface twin itself (`XferSeed` → `SeedAt`, the second half of `SeedArt`). That record lives on the surface twin, so it survives the decode buffer's reuse, defers like any seed, and is redrawn after a rebuild like any intact seed.
 4. Each surface takes a whole decode once (`Arrival.xferSeq`); parts of one decode from indexed blits can land in the same surface several times. A surface that doesn't hold it is counted once per decode (`rejected`). A decode older than 600 frames is no candidate.
 
+## Record reads: naming every decode
+
+### What the 16:53 run showed
+
+The main menu background and many interface parts were still 1x: `from 1x-only twins 834M px` against 162M px from 4K sources. The top 1x sources (990x600, 730x519, 800x600, 800x664, 688x1014, 748x896) are all filled the same way:
+
+1. 8-bit indices are decoded into the scratch at `1FF30000` (pitch 1152), the same buffer `StoreDraw` decodes into.
+2. `Pixel_Blit_Indexed_to_565` converts them into twin 4, the 1152x1152 scratch surface. The first such blit's caller is `Discipl2.exe+105107`.
+3. A `Blt` (`+267FB8 < +267EEE`) copies twin 4 into the surface of the image's size, which is then copied to the screen.
+
+None of these decodes passes `StoreDraw`: the `twin indexed blit #n from other memory` lines show `latest decode #0 -` or a small, older store decode. So some other loader decodes them, and nothing named them.
+
+The binary is not in the repository, so the loader's address could not be found from the code alone. Every image loader reads its PNG from a `.ff` record, though, and the game does that through its own `ReadFile` import. So the record read is hooked at the import, not inside the game.
+
+### The hook
+
+- `Hooks.cpp:CreateFileHook` passes every `.ff` the game opens to `ImageReplace::OnFileOpen`. That function finds or loads the archive by full path (`FindArchive`, shared with the store's `FindArchiveFile`) and opens a reader handle of its own.
+- `Hooks.cpp:ReadRecordHook` (the game's `ReadFile` import, V2 only) takes the file position before the read and calls `OnFileRead` after it. Handles that are not tracked `.ff` files pass straight through.
+- `OnFileRead` works out which record was read. A read starting with `MQRC` carries its 28-byte header, and a read of 28 bytes or fewer is the header alone. Otherwise the 28 bytes in front of the read, read through the reader handle, must be an `MQRC` header whose size covers the read. The record id gives the file name (the archive's file table, record 2). For a `.PNG`, the PNG header (`IHDR` at +16) gives the size, from the buffer or the reader. The read goes into a ring of 64 with its caller and the frame. On the game thread, the 4K is asked for right away (`PrefetchSheet` or `PrefetchPlain`).
+- `CloseHandleHook` forgets the handle.
+
+### Naming a decode by its record
+
+When an indexed blit comes from memory that is not the latest store decode (`XferIndexedTry`'s "other" case), `Twin::XferRecordSeed` asks `ImageReplace::RecordDecode` for the newest unclaimed record read of exactly the blit's size within 600 frames. A store decode (`StoreDraw`) claims the read of its own file first (`RecordTaken`), so a store image never names a later blit. The read that matches is claimed, so it names only one decode.
+
+`RecordDecode` builds the pieces the same way the store decode does:
+- **sheet**: when an `-INDEX.OPT` entry points at the file, `SheetPieces` (the old `SeedSheet` body, factored out);
+- **plain**: otherwise one piece, the pack frame of the file name (`PlainFrame`), if the frame has the image's size and is not additive.
+
+They are seeded at the blit's destination (`SeedAt`, as a transfer), so into twin 4 at 0,0. The copy out of twin 4 into the sized surface then carries the 4K, or, while the art is still decoding, the pending pieces (`SeedDerive`). This is identity by provenance; no pixels are compared.
+
+`SeedDerive` used to skip every screen-sized target, which included the 800x600 main menu background in 800x600 mode. Now it skips only twins that were presented (`Record.screen`, set in `OnPresent`).
+
+`LoadSeed` (b087412) is removed. It matched the blit against the store's `StoreLoad` calls, which these loaders never make: the 16:53 log had `seed load matches 0`. The record read replaces it. `StoreLoad` still prefetches, now also for plain images in archives that have sheets (`PrefetchPlain`; the old `NoteLoad` skipped the whole archive).
+
+### Store decodes without 4K
+
+`FOG.PNG`, `FOGCORNERS.PNG`, `G000UU5130STO27.PNG` and others are named by the store, but `SeedSheet` found no piece. `FOG*` frames are `no-pack` in `imagecoverage.txt`, and the `STO27` sheet's 8 frames are all additive. Their decode kept the name but was not `valid`, so its blit was logged as `latest decode #n -` and counted as unnamed memory. Now `XferCapture` keeps the 8-bit source of a named decode without art, and its blits are logged as `twin decode without 4K #n` with the reason (additive, not in the pack, no frame). They stay 1x because there is no 4K to seed. Sheets that seed nothing are logged further (`image seed sheet`, 64 more), so `MRK*` shows whether it is unmapped or additive.
+
+### Faces
+
+Faces are seeded on their memory twin at their first `DrawFaces`, and the same call copies them on into the scratch, mirrored for units facing the other way (`PixelCopy` with `PixelMirror`). Since b087412 (`SeedWait=0`), the face seed is deferred when its 4K is not decoded yet. Only the unkeyed `CopyTwins` path carried pending pieces; the mirrored pixel copy did not, so the scratch, and the 70x85 surface copied from it, stayed 1x for good: `twin arrival` shows a single copy in. Two changes:
+
+- **Mirrored copies carry pending pieces.** `SeedDerive(..., mirror)` mirrors each piece's rect about the copy and mirrors its place too (`place.left > place.right`). `PieceUv` then samples the 4K right to left, and `SeedAt` now accepts a mirrored place.
+- **Prefetch at `FaceLoad`.** The face's 4K is asked for when the face cache reads it, so it is usually decoded by the first `DrawFaces`.
+
+The 70x17 and 116x41 bars next to the faces come out of the same scratch through the same copy. If they are store or record images, they now follow the same way; otherwise the unnamed line names their loader.
+
+### Code dump
+
+The DLL writes the game's code around the addresses the logs name to `twin-code.bin` in the game folder (`Twin::CodeDump`, `CodeFlush` at the 5 s log), and `test.bat` collects it. The layout is:
+
+- `DGLCODE1`;
+- region count, exe base, `SizeOfImage` and `TimeDateStamp` (4 DWORDs);
+- per region: its address, size, file offset and a 20-byte reason;
+- the bytes.
+
+There is at most 64 KB in 64 regions; overlapping regions are merged. The regions are:
+
+- v2.02b only: ±0x400 around `0x00505107`, `0x0050515E`, `0x00667FB8`, `0x00667EEE` and `0x0067298E`;
+- ±0x400 around `StoreDraw` and `StoreLoad`, and ±0x200 around the `FaceLoad` call;
+- ±0x200 around each of the first 6 `call` targets in `StoreDraw`'s first 0x200 bytes (the decode routine is one of them);
+- ±0x400 around each frame of every new call chain of an unnamed or record-named indexed blit, and around each `.ff` `ReadFile` caller.
+
+Call chains come from `Twin::WalkFrames`. It takes the return address in the blit's own slot (`_AddressOfReturnAddress()` in `Pixel_Blit_Indexed_to_565`), then the first saved-EBP and return-address pair above it, then the EBP chain, up to 6 frames, each checked to follow a `call` in the game. To disassemble one region: `dd if=twin-code.bin bs=1 skip=<offset> count=<size> of=r.bin` and `objdump -D -b binary -m i386 --adjust-vma=<address> r.bin`.
+
 ## Streaming
 
 The game thread no longer waits for 4K (`SeedWait=0`). A seed whose art is not decoded yet is deferred: the 1x stays, and `SeedPoll` emits the pieces at a later present once the art is there. The only waits left are while the game is loading (`SeedLoadWait`, when no present came for more than 100 ms), at most 1 s in all between two presents.
@@ -187,7 +253,7 @@ Ruled out in the code: `GetDC` and `SetSurfaceDesc` are stubs, so there is no GD
 
 - **Copies in are logged** (`twin copy in #n`, first 96, for copies of at least 400x400 or into a priority surface): source twin, rect, 4K or 1x, the game code behind the `Blt`/`BltFast` (return address and the caller above the game's wrapper), the source's arrival counters, and the last write that reached that rect of the source: hooked write, indexed blit (with its source pointer), copy from an untwinned surface, fill, pixel op or trapped game write, with the game caller found on the stack. Each twin keeps its last 8 writes for this. The arrival line for the top 4 gets the first and last copy in (`twin arrival copies in`).
 - **Indexed blits from other memory are logged** (`twin indexed blit #n from other memory`, first 32): source pointer (twin or store image if known), size, destination twin and pixel, the latest decode, and the game caller.
-- **Load seed, behind `LoadSeed`.** The store's file loads are kept with their pack frame (plain images only; sheets go through `StoreDraw`). An indexed blit from unnamed indices of exactly a just-loaded image's size (within 30 frames) is a candidate, seeded at the blit's destination when `LoadSeed=1`. The copy out of the scratch then carries the 4K, or the pending seed, into the map buffer. With `LoadSeed=0` the match is only logged, so the next log shows whether name and size agree.
+- **Record seed** (replaces the load seed of b087412, see Record reads). An indexed blit from unnamed indices of exactly the size of a `.ff` record the game just read is seeded at the blit's destination, and the copy out of the scratch carries the 4K, or the pending seed, into the map buffer.
 - **Trapped CPU copies, behind `TrapCopy`.** If the map buffer turns out to be written by a CPU loop, the trap now records the registers and the first bytes of the faulting instruction. A `rep movs` whose ESI lies in another twin becomes a copy hint (source twin, offset, rows written). At the next copy or present, if every 1x row of the hinted rect equals the source's 1x rows at that offset, it is replayed as a twin copy (`twin trap copy #n`). Otherwise it stays the 1x the trapped write marked.
 
 ## Bink
@@ -269,8 +335,13 @@ Ground in seed mode therefore keeps `GroundArt`/`DrawGround` (`CmdGround`), exac
 | `twin coverage top 1x-only copy sources ...` | every 5 s, up to 4 lines | rank, twin, kind, buffer, size, px, copies, store name. This is the coverage checklist |
 | `twin arrival copies in [rank] twin ...` | every 5 s, top 4 | count, the first and the last copy in: source twin and rect, 4K or 1x, game caller, the source's counters and its last write there |
 | `twin copy in #n` | first 96 | each copy of at least 400x400 or into a priority surface, as above; also from untwinned surfaces |
-| `twin indexed blit #n from other memory` | first 32 | an indexed blit whose indices are not the latest store decode |
-| `twin seed load match #n` / `twin seed load matches since start` | first 24 / 5 s | such a blit matching a just-loaded image by size, and whether it was seeded |
+| `twin indexed blit #n from other memory` | first 32, then each new size and call chain (96 more) | an indexed blit no store decode and no record read names: source, size, destination, the latest decode, and the call chain (6 frames, module+offset) |
+| `image record read #n` | first 48 | a `.ff` read by the game: archive, record id, file name, PNG size, position, bytes, game or other thread, `ReadFile` caller < its caller |
+| `image record reads since start` | every 5 s | `.ff` opens, reads (records, PNG, sheet or plain, header only, inside a record), reads on other threads, decodes named by a read, reads taken by `StoreDraw`, decodes no read matched, the distinct `ReadFile` callers |
+| `twin decode named #n` | first 240 | a named decode: name, size, record, archive, the loader and how the name was found. Store decodes: `StoreDraw`'s caller, first decode of each loaded file. Record reads: the `ReadFile` caller and the blit's call chain, frames between read and blit, other unread reads of the size, the target and the seed outcome or why there is no 4K |
+| `twin decode without 4K #n` | first 32 | a blit of a store decode that has a name but no 4K, with the reason |
+| `twin decode unnamed since start` | every 5 s | unnamed indexed blits (total, in 5 s, distinct sizes and chains), record seeds (seeded, deferred, no 4K, no twin), blits of named decodes without 4K, and the top 5 unnamed sizes with count, age and the first 3 frames of their chain |
+| `twin code dump #n` | when a region was added, at the 5 s log | `twin-code.bin`: regions, bytes, refused regions, exe base and timestamp, each region's exe offset and size |
 | `twin trap priority ...` | every 5 s | the priority surfaces with their trapped writes, arms, pairs, skipped quick re-arms, trapped writes marked dirty, `rep movs` hints replayed or failing the guard |
 | `twin trap priority write #n` | first 96 | a new writer on a priority surface, with registers |
 | `twin trap copy #n` | first 24 | a `rep movs` hint replayed as a twin copy, or why not |
@@ -287,7 +358,7 @@ The tile check (`twin tiles check`, `twin repair`), the GPU check (`twin check t
 
 ## Open gaps
 
-1. **The loader of the big images (map buffers, full-screen backgrounds) is not named yet.** See Map view; the next log's `twin indexed blit #n from other memory` and `twin seed load match #n` lines settle it, and `LoadSeed=1` turns the match into seeds.
+1. **Record reads are assumed, not seen.** If the game memory-maps the `.ff` files or reads them through a CRT DLL, `ReadRecordHook` sees nothing: `image record reads since start` then shows 0 reads, and the unnamed line still names the loader's call chain. `twin-code.bin` holds that code for the next round, which can hook the record read or the loader directly. A record read that is not followed by its decode, then another image of the same size decoded with no read, would take the wrong name; `twin decode named` logs the number of unread reads of the size, and the read is claimed by its first match.
 1. **The routine that writes the decode into the surface is still unknown.** The 15:32 run showed it uses no lock. The trap names it in the next run (`twin trap writer`), and its first write into a fresh surface is itself a transfer candidate. If the writer is plainly a copy from the decode scratch (or from another seeded record) into the surface, that EIP is the transfer point to hook directly. The 8-bit reading of the snapshot is still a suspicion until the `twin seed decode` lines show format byte 0.
 2. **Flipped records** (`Build` with flipped = 1) use a mirrored sheet. Only the decoded, unflipped sheet is seeded. If the game mirrors with a hooked op, the 4K follows. If it uses an unhooked CPU loop, the tile check repairs it to 1x.
 3. **The store's decode buffer is reused at once.** Its own seed only matters for hooked copies out of it (none were seen). A transfer copies the pieces to the surface, which defers on its own, so the `SeedWait` wait only decides how soon the surface shows 4K.

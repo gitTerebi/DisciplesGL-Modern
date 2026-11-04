@@ -5,6 +5,7 @@
 #include "ImageReplace.h"
 #include "MapOrder.h"
 #include "Twin.h"
+#include "intrin.h"
 #include "../libwebp/src/webp/decode.h"
 
 #define f(a) (a + baseOffset)
@@ -228,6 +229,7 @@ namespace ImageReplace
 		SheetLink* links;
 		DWORD linkMask;
 		DWORD linkCount;
+		HANDLE reader;
 	};
 
 	struct {
@@ -249,6 +251,7 @@ namespace ImageReplace
 		Entry* entry;
 		ArchiveFile* file;
 		DWORD nextFree;
+		BOOL decodeLogged;
 		BOOL printed;
 		ULONGLONG printMask;
 		DWORD print[FACE_PRINT * FACE_PRINT];
@@ -1936,6 +1939,7 @@ namespace ImageReplace
 		DropRange(s);
 		UnlinkStoreData(s);
 		s->printed = FALSE;
+		s->decodeLogged = FALSE;
 		Release(s->entry);
 		s->entry = NULL;
 		s->file = file;
@@ -3073,6 +3077,45 @@ namespace ImageReplace
 		return path && !IsBadReadPtr(path, 4) ? path : NULL;
 	}
 
+	CRITICAL_SECTION archiveCs;
+	BOOL archiveCsReady;
+
+	// the store names an archive by the path its MqDB holds, the record reads by the path CreateFileA got; both are compared as full paths
+	Archive* FindArchive(const CHAR* path)
+	{
+		CHAR full[MAX_PATH];
+		DWORD length = GetFullPathName(path, MAX_PATH, full, NULL);
+		if (!length || length >= MAX_PATH)
+			return NULL;
+
+		if (archiveCsReady)
+			EnterCriticalSection(&archiveCs);
+		Archive* archive = NULL;
+		for (DWORD i = 0; i < archives.count && !archive; ++i)
+			if (!StrCompareInsensitive(archives.list[i].path, full))
+				archive = &archives.list[i];
+		if (!archive && archives.count < ARCHIVE_LIMIT)
+		{
+			archive = &archives.list[archives.count];
+			StrCopy(archive->path, full);
+			LoadArchive(archive);
+			++archives.count;
+		}
+		if (archiveCsReady)
+			LeaveCriticalSection(&archiveCs);
+		return archive;
+	}
+
+	ArchiveFile* ArchiveRecord(Archive* archive, DWORD rec)
+	{
+		if (!archive || !archive->files || !rec)
+			return NULL;
+		for (DWORD slot = (rec * 2654435761u) & archive->mask; archive->files[slot].id; slot = (slot + 1) & archive->mask)
+			if (archive->files[slot].id == rec)
+				return &archive->files[slot];
+		return NULL;
+	}
+
 	ArchiveFile* FindArchiveFile(const VOID* factory, DWORD id)
 	{
 		DWORD offset;
@@ -3080,27 +3123,8 @@ namespace ImageReplace
 		if (!path)
 			return NULL;
 
-		Archive* archive = NULL;
-		for (DWORD i = 0; i < archives.count && !archive; ++i)
-			if (!StrCompareInsensitive(archives.list[i].path, path))
-				archive = &archives.list[i];
-
-		if (!archive)
-		{
-			if (archives.count >= ARCHIVE_LIMIT || StrLength(path) >= MAX_PATH)
-				return NULL;
-			archive = &archives.list[archives.count++];
-			StrCopy(archive->path, path);
-			LoadArchive(archive);
-		}
-		if (!archive->files)
-			return NULL;
-
-		DWORD rec = id > offset ? id - offset : id;
-		for (DWORD slot = (rec * 2654435761u) & archive->mask; archive->files[slot].id; slot = (slot + 1) & archive->mask)
-			if (archive->files[slot].id == rec)
-				return &archive->files[slot];
-		return NULL;
+		Archive* archive = FindArchive(path);
+		return ArchiveRecord(archive, id > offset ? id - offset : id);
 	}
 
 	#define SHEET_RECORD_LIMIT (64 * 1024 * 1024)
@@ -3108,7 +3132,7 @@ namespace ImageReplace
 	#define SHEET_LOGS 32
 
 	struct {
-		DWORD archives, logs;
+		DWORD archives, logs, emptyLogs;
 	} sheets;
 
 	DWORD HashUpper(const CHAR* text)
@@ -3317,13 +3341,16 @@ namespace ImageReplace
 		return NULL;
 	}
 
+	Twin::SeedPiece sheetPieces[4096];
+	Twin::SeedConflict sheetConflicts[256];
+	BYTE sheetShared[4096];
+
 	// the packer's frames sit in deduped blocks of one sheet; each block gets the 4K of the first frame that uses it, at that frame's canvas position
-	BOOL SeedSheet(StoreImage* s, Archive* a, const BYTE* first, LONG pitch, BOOL* seeded)
+	// FALSE when no -INDEX.OPT entry points at the file; the pieces are in the static tables until the next call
+	BOOL SheetPieces(Archive* a, DWORD fileId, LONG w, LONG h, DWORD* pieceCount, DWORD* conflictOut, Twin::SeedSheetStats* statsOut, DWORD* blockOut)
 	{
-		*seeded = FALSE;
 		DWORD offsets[SHEET_BLOCKS];
 		DWORD blocks = 0;
-		DWORD fileId = s->file->id;
 		for (DWORD value = a->itemHeads[(fileId * 2654435761u) & a->itemMask]; value; value = a->items[value - 1].next)
 		{
 			const SheetItem* item = &a->items[value - 1];
@@ -3338,14 +3365,13 @@ namespace ImageReplace
 		if (!blocks)
 			return FALSE;
 
-		static Twin::SeedPiece pieces[4096];
-		static Twin::SeedConflict conflicts[256];
-		static BYTE shared[4096];
-		const DWORD pieceLimit = sizeof(pieces) / sizeof(*pieces), conflictLimit = sizeof(conflicts) / sizeof(*conflicts);
+		Twin::SeedPiece* pieces = sheetPieces;
+		Twin::SeedConflict* conflicts = sheetConflicts;
+		BYTE* shared = sheetShared;
+		const DWORD pieceLimit = sizeof(sheetPieces) / sizeof(*sheetPieces), conflictLimit = sizeof(sheetConflicts) / sizeof(*sheetConflicts);
 		DWORD count = 0, conflictCount = 0;
 		Twin::SeedSheetStats stats;
 		MemoryZero(&stats, sizeof(stats));
-		LONG w = (LONG)s->dims[0], h = (LONG)s->dims[1];
 		const BYTE* end = a->images + a->imagesSize;
 
 		for (DWORD b = 0; b < blocks; ++b)
@@ -3441,14 +3467,51 @@ namespace ImageReplace
 			}
 		}
 
-		const CHAR* label = s->file->name;
+		*pieceCount = count;
+		*conflictOut = conflictCount;
+		*statsOut = stats;
+		*blockOut = blocks;
+		return TRUE;
+	}
+
+	VOID SheetLog(const CHAR* label, DWORD fileId, LONG w, LONG h, DWORD blocks, const Twin::SeedSheetStats* stats, DWORD count, DWORD conflictCount)
+	{
+		// sheets that seed nothing are logged further, so the next round knows whether they are unmapped or additive
+		if (sheets.logs >= SHEET_LOGS && (count || sheets.emptyLogs >= SHEET_LOGS * 2))
+			return;
 		if (sheets.logs < SHEET_LOGS)
-		{
 			++sheets.logs;
-			DebugLog("image seed sheet %s file %u %dx%d: blocks %u frames %u (unmapped %u, additive %u) pieces %u shared blocks %u conflicts %u parts outside %u", label, fileId, w, h,
-				blocks, stats.frames, stats.unmapped, stats.additive, count, stats.shared, conflictCount, stats.outside);
-		}
-		Twin::SeedArt(first, pitch, w, h, Twin::SeedSheet, label, count ? pieces : NULL, count, conflicts, conflictCount, &stats);
+		else
+			++sheets.emptyLogs;
+		DebugLog("image seed sheet %s file %u %dx%d: blocks %u frames %u (unmapped %u, additive %u) pieces %u shared blocks %u conflicts %u parts outside %u", label, fileId, w, h,
+			blocks, stats->frames, stats->unmapped, stats->additive, count, stats->shared, conflictCount, stats->outside);
+	}
+
+	const CHAR* SheetReason(const Twin::SeedSheetStats* stats)
+	{
+		if (!stats->frames)
+			return "the sheet's blocks list no frame";
+		if (stats->additive == stats->frames)
+			return "every frame is additive (aura or glow), which is not seeded";
+		if (stats->unmapped == stats->frames)
+			return "no frame name is in the pack";
+		if (stats->unmapped + stats->additive == stats->frames)
+			return "its frames are additive or not in the pack";
+		return "every part falls outside the sheet";
+	}
+
+	BOOL SeedSheet(StoreImage* s, Archive* a, const BYTE* first, LONG pitch, BOOL* seeded)
+	{
+		*seeded = FALSE;
+		LONG w = (LONG)s->dims[0], h = (LONG)s->dims[1];
+		DWORD count, conflictCount, blocks;
+		Twin::SeedSheetStats stats;
+		if (!SheetPieces(a, s->file->id, w, h, &count, &conflictCount, &stats, &blocks))
+			return FALSE;
+
+		const CHAR* label = s->file->name;
+		SheetLog(label, s->file->id, w, h, blocks, &stats, count, conflictCount);
+		Twin::SeedArt(first, pitch, w, h, Twin::SeedSheet, label, count ? sheetPieces : NULL, count, sheetConflicts, conflictCount, &stats);
 		*seeded = count != 0;
 		return TRUE;
 	}
@@ -3512,11 +3575,14 @@ namespace ImageReplace
 		return asked;
 	}
 
+	VOID LogRecords();
+
 	VOID LogSeedSources()
 	{
 		DebugLog("image seed sources since start: store draws %d (new memory %d) | faces loaded %d, face copies %d | ranges %d, decodes with art store %d face %d | archives with sheet tables %u | ground chunks %d builds %d published %d | prefetch at store load: files %u, frames asked %u",
 			storeStats.draws, storeStats.drawLinks, storeStats.faceLoads, storeStats.faceCopies, memory.count, memory.learnStore, memory.learnFace, sheets.archives,
 			ground.chunkCount, ground.builds, ground.published, storeStats.prefetchLoads, storeStats.prefetchFrames);
+		LogRecords();
 	}
 
 	BOOL SeedStore(StoreImage* s, const BYTE* first, LONG pitch)
@@ -3546,53 +3612,406 @@ namespace ImageReplace
 		return TRUE;
 	}
 
-	#define RECENT_LOADS 16
-	#define RECENT_FRAMES 30
-
-	// store loads by name and pack frame: an image the game converts outside StoreDraw is only known by this
-	struct {
-		CHAR name[32];
-		LONG frame;
-		LONG w;
-		LONG h;
-		LONG frameNo;
-	} recentLoads[RECENT_LOADS];
-	DWORD recentHead;
-
-	VOID NoteLoad(ArchiveFile* file)
+	BOOL SheetFile(const Archive* a, DWORD id)
 	{
-		Archive* a = FileArchive(file);
-		if (a && a->itemCount)
-			return;
-		Origin origin = OriginCanvas;
-		const PackAnim* anim;
-		LONG frame = PackFrameFor(file->name, 0, 0, 0, &origin, &anim);
-		if (frame < 0 || pack.frames[frame].additive)
-			return;
-		ArtState(frame);
-		DWORD slot = recentHead++ % RECENT_LOADS;
-		DWORD length = min((DWORD)StrLength(file->name), (DWORD)sizeof(recentLoads[slot].name) - 1);
-		MemoryCopy(recentLoads[slot].name, file->name, length);
-		recentLoads[slot].name[length] = 0;
-		recentLoads[slot].frame = frame;
-		recentLoads[slot].w = pack.frames[frame].w;
-		recentLoads[slot].h = pack.frames[frame].h;
-		recentLoads[slot].frameNo = game.frameNo;
+		if (!a->itemCount)
+			return FALSE;
+		for (DWORD value = a->itemHeads[(id * 2654435761u) & a->itemMask]; value; value = a->items[value - 1].next)
+			if (a->items[value - 1].id == id)
+				return TRUE;
+		return FALSE;
 	}
 
-	BOOL RecentLoad(LONG width, LONG height, LONG* frame, CHAR* name, DWORD* framesAgo)
+	// a plain image (no -INDEX.OPT entry points at it, even in an archive that has sheets) is one pack frame of its own size
+	LONG PlainFrame(const ArchiveFile* file, LONG w, LONG h, const CHAR** reason)
 	{
-		for (DWORD k = 0; k < RECENT_LOADS && k < recentHead; ++k)
+		Origin origin = OriginCanvas;
+		const PackAnim* anim;
+		LONG frame = pack.ready ? PackFrameFor(file->name, 0, w, h, &origin, &anim) : -1;
+		if (frame < 0)
 		{
-			DWORD slot = (recentHead - 1 - k) % RECENT_LOADS;
-			if (recentLoads[slot].w != width || recentLoads[slot].h != height || game.frameNo - recentLoads[slot].frameNo > RECENT_FRAMES)
+			*reason = pack.ready ? "its name is not in the pack" : "the pack is not loaded";
+			return -1;
+		}
+		if (pack.frames[frame].additive)
+		{
+			*reason = "its pack frame is additive, which is not seeded";
+			return -1;
+		}
+		if (w && h && (pack.frames[frame].w != w || pack.frames[frame].h != h))
+		{
+			*reason = "its pack frame has another size";
+			return -1;
+		}
+		return frame;
+	}
+
+	VOID PrefetchPlain(ArchiveFile* file)
+	{
+		Archive* a = FileArchive(file);
+		if (a && !a->sheetsLoaded)
+			LoadSheets(a);
+		if (a && SheetFile(a, file->id))
+			return;
+		const CHAR* reason;
+		LONG frame = PlainFrame(file, 0, 0, &reason);
+		if (frame >= 0)
+			ArtState(frame);
+	}
+
+	#define RECORD_FILES 48
+	#define RECORD_READS 64
+	#define RECORD_FRAMES 600
+	#define RECORD_LOGS 48
+	#define RECORD_CALLERS 16
+	#define RECORD_HEAD 28
+
+	struct RecordRead {
+		Archive* archive;
+		ArchiveFile* file;
+		LONG w, h;
+		LONG frameNo;
+		DWORD caller;
+		DWORD outer;
+		BOOL consumed;
+	};
+
+	// the game reads every .ff record through ReadFile; the record header in front of the data names the file, its PNG header the size
+	struct {
+		BOOL ready;
+		CRITICAL_SECTION cs;
+		struct {
+			HANDLE handle;
+			Archive* archive;
+		} files[RECORD_FILES];
+		RecordRead list[RECORD_READS];
+		DWORD head;
+		DWORD gameThread;
+		DWORD opens, untracked, reads, records, headers, inside, pngs, sheets, plains, noSize, otherThread, named, takenByStore, unmatched, logs;
+		DWORD callers[RECORD_CALLERS];
+		DWORD callerCount, callersDumped;
+	} records;
+
+	VOID CodeText(DWORD address, CHAR* text)
+	{
+		if (!address)
+		{
+			StrCopy(text, "-");
+			return;
+		}
+		CHAR name[24];
+		DWORD base = CrashModule(address, name, sizeof(name));
+		StrPrint(text, "%s+%X", name, address - base);
+	}
+
+	BOOL EndsWith(const CHAR* text, const CHAR* tail)
+	{
+		DWORD a = StrLength(text), b = StrLength(tail);
+		return a >= b && !StrCompareInsensitive(text + a - b, tail);
+	}
+
+	VOID OnFileOpen(const CHAR* path, HANDLE handle)
+	{
+		if (!records.ready || !path || handle == INVALID_HANDLE_VALUE || !EndsWith(path, ".ff") || !Twin::SeedMode())
+			return;
+
+		Archive* a = FindArchive(path);
+		EnterCriticalSection(&records.cs);
+		++records.opens;
+		if (a && !a->reader)
+		{
+			a->reader = CreateFile(a->path, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+			if (a->reader == INVALID_HANDLE_VALUE)
+				a->reader = NULL;
+		}
+		DWORD slot = RECORD_FILES;
+		for (DWORD i = 0; i < RECORD_FILES; ++i)
+			if (records.files[i].handle == handle || (slot == RECORD_FILES && !records.files[i].handle))
+				slot = i;
+		if (a && a->files && slot < RECORD_FILES)
+		{
+			records.files[slot].handle = handle;
+			records.files[slot].archive = a;
+		}
+		else
+			++records.untracked;
+		LeaveCriticalSection(&records.cs);
+	}
+
+	// read without the lock: every ReadFile of the game asks, and a handle is only ever added before the game reads it
+	BOOL RecordFile(HANDLE handle)
+	{
+		if (!records.ready || !handle)
+			return FALSE;
+		for (DWORD i = 0; i < RECORD_FILES; ++i)
+			if (records.files[i].handle == handle)
+				return TRUE;
+		return FALSE;
+	}
+
+	VOID OnFileClose(HANDLE handle)
+	{
+		if (!records.ready || !handle)
+			return;
+		EnterCriticalSection(&records.cs);
+		for (DWORD i = 0; i < RECORD_FILES; ++i)
+			if (records.files[i].handle == handle)
+				records.files[i].handle = NULL;
+		LeaveCriticalSection(&records.cs);
+	}
+
+	DWORD BigEndian(const BYTE* p)
+	{
+		return ((DWORD)p[0] << 24) | ((DWORD)p[1] << 16) | ((DWORD)p[2] << 8) | p[3];
+	}
+
+	VOID OnFileRead(HANDLE handle, LONGLONG position, const VOID* buffer, DWORD size, DWORD caller, DWORD outer)
+	{
+		if (!records.ready || !buffer || !size)
+			return;
+
+		EnterCriticalSection(&records.cs);
+		Archive* a = NULL;
+		for (DWORD i = 0; i < RECORD_FILES && !a; ++i)
+			if (records.files[i].handle == handle)
+				a = records.files[i].archive;
+		if (!a)
+		{
+			LeaveCriticalSection(&records.cs);
+			return;
+		}
+
+		++records.reads;
+		const BYTE* data = (const BYTE*)buffer;
+		BYTE head[RECORD_HEAD];
+		DWORD id = 0, inBuffer = 0;
+		LONGLONG start = position;
+		if (size >= 4 && !MemoryCompare(data, "MQRC", 4))
+		{
+			// the header alone: the data read that follows is the record read
+			if (size <= RECORD_HEAD)
+			{
+				++records.headers;
+				LeaveCriticalSection(&records.cs);
+				return;
+			}
+			id = *(const DWORD*)(data + 8);
+			start = position + RECORD_HEAD;
+			data += RECORD_HEAD;
+			inBuffer = size - RECORD_HEAD;
+		}
+		else if (a->reader && position >= RECORD_HEAD && ReadAt(a->reader, position - RECORD_HEAD, head, sizeof(head)) && !MemoryCompare(head, "MQRC", 4) &&
+			*(const DWORD*)(head + 12) >= size)
+		{
+			id = *(const DWORD*)(head + 8);
+			inBuffer = size;
+		}
+		ArchiveFile* file = id ? ArchiveRecord(a, id) : NULL;
+		if (!file)
+		{
+			++records.inside;
+			LeaveCriticalSection(&records.cs);
+			return;
+		}
+		++records.records;
+
+		LONG w = 0, h = 0;
+		BOOL png = EndsWith(file->name, ".PNG");
+		if (png)
+		{
+			BYTE ihdr[24];
+			const BYTE* p = NULL;
+			if (inBuffer >= sizeof(ihdr))
+				p = data;
+			else if (a->reader && ReadAt(a->reader, start, ihdr, sizeof(ihdr)))
+				p = ihdr;
+			if (p && p[0] == 0x89 && p[1] == 'P' && !MemoryCompare(p + 12, "IHDR", 4))
+			{
+				w = (LONG)BigEndian(p + 16);
+				h = (LONG)BigEndian(p + 20);
+				++records.pngs;
+			}
+			else
+				++records.noSize;
+		}
+		BOOL onGame = records.gameThread == GetCurrentThreadId();
+		if (!onGame)
+			++records.otherThread;
+
+		if (w > 0 && h > 0)
+		{
+			RecordRead* r = &records.list[records.head++ % RECORD_READS];
+			r->archive = a;
+			r->file = file;
+			r->w = w;
+			r->h = h;
+			r->frameNo = game.frameNo;
+			r->caller = caller;
+			r->outer = outer;
+			r->consumed = FALSE;
+		}
+
+		DWORD k = 0;
+		while (k < records.callerCount && records.callers[k] != caller)
+			++k;
+		if (k == records.callerCount && k < RECORD_CALLERS && caller)
+			records.callers[records.callerCount++] = caller;
+
+		BOOL log = records.logs < RECORD_LOGS;
+		if (log)
+			++records.logs;
+		LeaveCriticalSection(&records.cs);
+
+		if (log)
+		{
+			CHAR from[48], above[48];
+			CodeText(caller, from);
+			CodeText(outer, above);
+			const CHAR* archive = StrLastChar(a->path, '\\');
+			DebugLog("image record read #%u: %s record %u %.40s %dx%d at %u, %u bytes%s | %s thread | caller %08X %s < %08X %s", records.logs, archive ? archive + 1 : a->path, id, file->name, w, h,
+				(DWORD)start, size, inBuffer < size ? " (header in front)" : "", onGame ? "game" : "other", caller, from, outer, above);
+		}
+
+		// the 4K is asked for at the read, ahead of the decode; only the game thread touches the pack's queues
+		if (onGame && png && Twin::SeedMode())
+		{
+			if (!a->sheetsLoaded)
+				LoadSheets(a);
+			if (SheetFile(a, file->id))
+			{
+				++records.sheets;
+				PrefetchSheet(file);
+			}
+			else
+			{
+				++records.plains;
+				PrefetchPlain(file);
+			}
+		}
+	}
+
+	// a decode by StoreDraw takes the read of its own file, so that read cannot name a later decode of the same size
+	VOID RecordTaken(const ArchiveFile* file)
+	{
+		if (!records.ready || !file)
+			return;
+		EnterCriticalSection(&records.cs);
+		for (DWORD k = 0; k < RECORD_READS && k < records.head; ++k)
+		{
+			RecordRead* r = &records.list[(records.head - 1 - k) % RECORD_READS];
+			if (r->file == file && !r->consumed)
+			{
+				r->consumed = TRUE;
+				++records.takenByStore;
+				break;
+			}
+		}
+		LeaveCriticalSection(&records.cs);
+	}
+
+	BOOL RecordDecode(LONG width, LONG height, RecordName* out)
+	{
+		MemoryZero(out, sizeof(RecordName));
+		if (!records.ready || width <= 0 || height <= 0)
+			return FALSE;
+
+		EnterCriticalSection(&records.cs);
+		RecordRead found;
+		BOOL any = FALSE;
+		for (DWORD k = 0; k < RECORD_READS && k < records.head; ++k)
+		{
+			RecordRead* r = &records.list[(records.head - 1 - k) % RECORD_READS];
+			if (r->consumed || r->w != width || r->h != height || game.frameNo - r->frameNo > RECORD_FRAMES)
 				continue;
-			*frame = recentLoads[slot].frame;
-			StrCopy(name, recentLoads[slot].name);
-			*framesAgo = DWORD(game.frameNo - recentLoads[slot].frameNo);
+			++out->candidates;
+			if (!any)
+			{
+				found = *r;
+				r->consumed = TRUE;
+				any = TRUE;
+			}
+		}
+		if (any)
+			++records.named;
+		else
+			++records.unmatched;
+		LeaveCriticalSection(&records.cs);
+		if (!any)
+			return FALSE;
+
+		Archive* a = found.archive;
+		ArchiveFile* file = found.file;
+		DWORD length = min((DWORD)StrLength(file->name), (DWORD)sizeof(out->name) - 1);
+		MemoryCopy(out->name, file->name, length);
+		out->name[length] = 0;
+		const CHAR* tail = StrLastChar(a->path, '\\');
+		tail = tail ? tail + 1 : a->path;
+		length = min((DWORD)StrLength(tail), (DWORD)sizeof(out->archive) - 1);
+		MemoryCopy(out->archive, tail, length);
+		out->archive[length] = 0;
+		out->record = file->id;
+		out->caller = found.caller;
+		out->outer = found.outer;
+		out->framesAgo = DWORD(game.frameNo - found.frameNo);
+
+		if (!pack.ready)
+		{
+			out->reason = "the pack is not loaded";
 			return TRUE;
 		}
-		return FALSE;
+		if (!a->sheetsLoaded)
+			LoadSheets(a);
+		DWORD count = 0, conflictCount = 0, blocks = 0;
+		Twin::SeedSheetStats stats;
+		if (a->itemCount && SheetPieces(a, file->id, width, height, &count, &conflictCount, &stats, &blocks))
+		{
+			out->sheet = TRUE;
+			SheetLog(file->name, file->id, width, height, blocks, &stats, count, conflictCount);
+			out->pieces = count ? sheetPieces : NULL;
+			out->count = count;
+			out->conflicts = sheetConflicts;
+			out->conflictCount = conflictCount;
+			if (!count)
+				out->reason = SheetReason(&stats);
+			return TRUE;
+		}
+
+		static Twin::SeedPiece piece;
+		LONG frame = PlainFrame(file, width, height, &out->reason);
+		if (frame < 0)
+			return TRUE;
+		SetRect(&piece.to, 0, 0, width, height);
+		piece.place = piece.to;
+		piece.frame = frame;
+		out->pieces = &piece;
+		out->count = 1;
+		return TRUE;
+	}
+
+	VOID LogRecords()
+	{
+		if (!records.ready)
+			return;
+		EnterCriticalSection(&records.cs);
+		DWORD callers[RECORD_CALLERS];
+		DWORD count = records.callerCount;
+		MemoryCopy(callers, records.callers, count * sizeof(DWORD));
+		LeaveCriticalSection(&records.cs);
+
+		CHAR text[RECORD_CALLERS * 40 + 1];
+		CHAR* at = text;
+		*at = 0;
+		for (DWORD i = 0; i < count; ++i)
+		{
+			CHAR name[48];
+			CodeText(callers[i], name);
+			at += StrPrint(at, " %s", name);
+		}
+		DebugLog("image record reads since start: .ff opens %u (untracked %u) | reads %u: records %u (PNG %u: sheets %u, plain %u, PNG header unread %u), header only %u, inside a record %u | on other threads %u | decodes named by a read %u, reads taken by StoreDraw %u, decodes no read matched %u | callers:%s",
+			records.opens, records.untracked, records.reads, records.records, records.pngs, records.sheets, records.plains, records.noSize, records.headers, records.inside,
+			records.otherThread, records.named, records.takenByStore, records.unmatched, *text ? text : " none");
+		for (; records.callersDumped < count; ++records.callersDumped)
+			Twin::CodeDump(callers[records.callersDumped], 0x400, "record read caller");
 	}
 
 	VOID* __fastcall StoreLoad(VOID* thisObj, DWORD /*edx*/, DWORD id, DWORD flag, VOID* out)
@@ -3610,29 +4029,46 @@ namespace ImageReplace
 			{
 				++storeStats.prefetchLoads;
 				storeStats.prefetchFrames += PrefetchSheet(file);
-				NoteLoad(file);
+				PrefetchPlain(file);
 			}
 		}
 
 		return image;
 	}
 
-	VOID StoreDrawn(VOID* thisObj, const BYTE* desc);
+	VOID StoreDrawn(VOID* thisObj, const BYTE* desc, DWORD caller);
 
 	// desc is the game's BlitObject (data, clip rect, pitch); the store decodes into a reused scratch one, and the surface that shows the art is written from it after
 	VOID __fastcall StoreDraw(VOID* thisObj, DWORD /*edx*/, const BYTE* desc)
 	{
+		records.gameThread = GetCurrentThreadId();
 		Twin::DecodeBegin();
 		((VOID(__thiscall*)(VOID*, const BYTE*))sub_StoreDraw)(thisObj, desc);
-		StoreDrawn(thisObj, desc);
+		StoreDrawn(thisObj, desc, (DWORD)_ReturnAddress());
 		Twin::DecodeEnd();
 	}
 
-	VOID StoreDrawn(VOID* thisObj, const BYTE* desc)
+	VOID StoreDrawn(VOID* thisObj, const BYTE* desc, DWORD caller)
 	{
 		StoreImage* s = FindStore(thisObj, FALSE);
 		if (!s || !s->file || !desc)
 			return;
+		RecordTaken(s->file);
+		if (!s->decodeLogged)
+		{
+			s->decodeLogged = TRUE;
+			DWORD n = Twin::DecodeLogNumber();
+			if (n)
+			{
+				const LONG* r = (const LONG*)(desc + 8);
+				Archive* a = FileArchive(s->file);
+				const CHAR* archive = a ? StrLastChar(a->path, '\\') : NULL;
+				CHAR from[48];
+				CodeText(caller, from);
+				DebugLog("twin decode named #%u: %.40s %dx%d record %u (%s) | loader %08X %s | found by the store decode (StoreDraw of the file the store loaded by id), format byte %u",
+					n, s->file->name, r[2] - r[0], r[3] - r[1], s->file->id, archive ? archive + 1 : "?", caller, from, desc[0]);
+			}
+		}
 
 		const LONG* rect = (const LONG*)(desc + 8);
 		const BYTE* data = *(const BYTE* const*)(desc + 4);
@@ -3703,6 +4139,13 @@ namespace ImageReplace
 		s->left = s->top = 0;
 		s->dims[0] = size[0];
 		s->dims[1] = size[1];
+		// the face is seeded at its first DrawFaces, which copies it on at once; asked for now, its 4K is usually there by then
+		if (Twin::SeedMode() && Enabled())
+		{
+			LONG frame = StoreFrame(s);
+			if (frame >= 0)
+				ArtState(frame);
+		}
 		return ok;
 	}
 
@@ -3928,8 +4371,48 @@ namespace ImageReplace
 		}
 	}
 
+	// the code the next round disassembles: the store's hooks and, in v2.02b, the code the 16:53 run named around the big images' conversion and copy
+	VOID DumpCode(HOOKER hooker, const Hooks::AddressSpaceV2* hookSpace, DWORD baseOffset)
+	{
+		if (hookSpace->image_store_draw == 0x00520C53)
+		{
+			// Discipl2.exe v2.02b: +105107 calls the indexed blit into the scratch, +10515E the face copy, +267FB8 < +267EEE copy the scratch into the sized surface, +27298E wrote it
+			const DWORD seen[] = { 0x00505107, 0x0050515E, 0x00667FB8, 0x00667EEE, 0x0067298E };
+			for (DWORD i = 0; i < sizeof(seen) / sizeof(*seen); ++i)
+				Twin::CodeDump(f(seen[i]), 0x400, "seen in the 16:53 log");
+		}
+		Twin::CodeDump(f(hookSpace->image_store_draw), 0x400, "StoreDraw");
+		Twin::CodeDump(f(hookSpace->image_store_load), 0x400, "StoreLoad");
+		if (hookSpace->face_load)
+			Twin::CodeDump(f(hookSpace->face_load), 0x200, "FaceLoad call");
+
+		// the decode routine is one of the calls near the start of StoreDraw
+		BYTE code[0x200];
+		if (!ReadBlock(hooker, hookSpace->image_store_draw, code, sizeof(code)))
+			return;
+		DWORD targets[6], count = 0;
+		for (DWORD i = 0; i + 5 <= sizeof(code) && count < sizeof(targets) / sizeof(*targets); ++i)
+		{
+			if (code[i] != 0xE8)
+				continue;
+			DWORD target = f(hookSpace->image_store_draw) + i + 5 + *(const DWORD*)(code + i + 1);
+			BOOL seen = FALSE;
+			for (DWORD k = 0; k < count && !seen; ++k)
+				seen = targets[k] == target;
+			if (seen || target - f(0x00401000) >= 0x00400000)
+				continue;
+			targets[count++] = target;
+			Twin::CodeDump(target, 0x200, "called by StoreDraw");
+		}
+	}
+
 	VOID Load(HOOKER hooker, const Hooks::AddressSpaceV2* hookSpace, DWORD baseOffset)
 	{
+		if (!archiveCsReady)
+		{
+			InitializeCriticalSection(&archiveCs);
+			archiveCsReady = TRUE;
+		}
 		if (!hookSpace->image_render_slot)
 			return;
 
@@ -4000,6 +4483,10 @@ namespace ImageReplace
 			PatchDWord(hooker, hookSpace->ground_mask_slot, (DWORD)MaskData);
 		}
 		StartPack();
+		InitializeCriticalSection(&records.cs);
+		records.gameThread = GetCurrentThreadId();
+		records.ready = TRUE;
+		DumpCode(hooker, hookSpace, baseOffset);
 		DebugLog("image replace loaded");
 	}
 #pragma endregion

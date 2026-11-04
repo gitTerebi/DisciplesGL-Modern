@@ -4,6 +4,7 @@
 #include "Hooks.h"
 #include "OpenDrawSurface.h"
 #include "StateBuffer.h"
+#include "Twin.h"
 
 namespace ImageReplace
 {
@@ -28,8 +29,28 @@ namespace ImageReplace
 	LONG ArtState(LONG frame);
 	BOOL ArtUpload(LONG frame);
 	LONG ArtBytes(LONG frame);
-	// the latest store load of a whole image of this 1x size, within the last frames
-	BOOL RecentLoad(LONG width, LONG height, LONG* frame, CHAR* name, DWORD* framesAgo);
+	// .ff record reads by the game (CreateFileA, ReadFile, CloseHandle from Discipl2.exe's imports): the record names the image that is decoded next
+	VOID OnFileOpen(const CHAR* path, HANDLE handle);
+	VOID OnFileClose(HANDLE handle);
+	BOOL RecordFile(HANDLE handle);
+	VOID OnFileRead(HANDLE handle, LONGLONG position, const VOID* buffer, DWORD size, DWORD caller, DWORD outer);
+	struct RecordName {
+		CHAR name[40];
+		CHAR archive[24];
+		DWORD record;
+		DWORD caller;
+		DWORD outer;
+		DWORD framesAgo;
+		DWORD candidates;
+		BOOL sheet;
+		const Twin::SeedPiece* pieces;
+		DWORD count;
+		const Twin::SeedConflict* conflicts;
+		DWORD conflictCount;
+		const CHAR* reason;
+	};
+	// the latest record read of an image of exactly this size that no decode took yet; the pieces stay valid until the next call
+	BOOL RecordDecode(LONG width, LONG height, RecordName* out);
 	const CHAR* MemoryName(const VOID* ptr);
 	VOID LogSeedSources();
 	BOOL FindMemory(const VOID* ptr, const VOID** base, LONG* pitch, LONG* width, LONG* height, LONG* frame, BOOL* flipped);

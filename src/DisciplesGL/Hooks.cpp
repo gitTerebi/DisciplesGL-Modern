@@ -2076,7 +2076,7 @@ namespace Hooks
 		}
 
 		// the store decodes indexed art; this is where its pixels can reach a surface, so the decode's seed can follow them
-		Twin::OnIndexedBlit(firstSrc, srcPitch, palette, firstDst, dstPitch, width, rows);
+		Twin::OnIndexedBlit(firstSrc, srcPitch, palette, firstDst, dstPitch, width, rows, (const DWORD*)_AddressOfReturnAddress());
 	}
 
 	DWORD __stdcall Pixel_ConvertPixel_565(BYTE red, BYTE green, BYTE blue)
@@ -7044,6 +7044,8 @@ namespace Hooks
 	HANDLE __stdcall CreateFileHook(LPCSTR lpFileName, DWORD dwDesiredAccess, DWORD dwShareMode, LPSECURITY_ATTRIBUTES lpSecurityAttributes, DWORD dwCreationDisposition, DWORD dwFlagsAndAttributes, HANDLE hTemplateFile)
 	{
 		HANDLE hFile = CreateFile(lpFileName, dwDesiredAccess, dwShareMode, lpSecurityAttributes, dwCreationDisposition, dwFlagsAndAttributes, hTemplateFile);
+		if (hFile != INVALID_HANDLE_VALUE)
+			ImageReplace::OnFileOpen(lpFileName, hFile);
 
 		CHAR* p = StrLastChar((CHAR*)lpFileName, '\\');
 		if (p && !StrCompareInsensitive(p, !config.type.editor ? "\\Interf.dlg" : "\\ScenEdit.dlg"))
@@ -7197,8 +7199,39 @@ namespace Hooks
 		return FALSE;
 	}
 
+	// the game reads .ff records through its own ReadFile import; where the read starts says which record it is
+	BOOL __stdcall ReadRecordHook(HANDLE hFile, LPVOID lpBuffer, DWORD nNumberOfBytesToRead, LPDWORD lpNumberOfBytesRead, LPOVERLAPPED lpOverlapped)
+	{
+		if (!ImageReplace::RecordFile(hFile))
+			return ReadFile(hFile, lpBuffer, nNumberOfBytesToRead, lpNumberOfBytesRead, lpOverlapped);
+
+		LONGLONG position = -1;
+		if (lpOverlapped)
+			position = ((LONGLONG)lpOverlapped->OffsetHigh << 32) | lpOverlapped->Offset;
+		else
+		{
+			LONG high = 0;
+			SetLastError(NO_ERROR);
+			DWORD low = SetFilePointer(hFile, 0, &high, FILE_CURRENT);
+			if (low != INVALID_SET_FILE_POINTER || GetLastError() == NO_ERROR)
+				position = ((LONGLONG)high << 32) | low;
+		}
+
+		BOOL ok = ReadFile(hFile, lpBuffer, nNumberOfBytesToRead, lpNumberOfBytesRead, lpOverlapped);
+		if (ok && position >= 0 && lpNumberOfBytesRead && *lpNumberOfBytesRead)
+		{
+			DWORD error = GetLastError();
+			DWORD frames[2] = { 0, 0 };
+			Twin::WalkFrames((const DWORD*)_AddressOfReturnAddress(), frames, 2);
+			ImageReplace::OnFileRead(hFile, position, lpBuffer, *lpNumberOfBytesRead, (DWORD)_ReturnAddress(), frames[1]);
+			SetLastError(error);
+		}
+		return ok;
+	}
+
 	BOOL __stdcall CloseHandleHook(HANDLE hObject)
 	{
+		ImageReplace::OnFileClose(hObject);
 		if (hInterf && hObject == hInterf)
 			hInterf = NULL;
 		else if (hAutoSave && hObject == hAutoSave)
@@ -9771,6 +9804,8 @@ namespace Hooks
 				PatchImportByName(hooker, "GetPrivateProfileStringA", GetPrivateProfileStringHook);
 				PatchImportByName(hooker, "CreateFileA", CreateFileHook);
 				PatchImportByName(hooker, "CloseHandle", CloseHandleHook);
+				if (!PatchImportByName(hooker, "ReadFile", ReadRecordHook))
+					DebugLog("image record reads: the game does not import ReadFile");
 
 				if (PatchImportByName(hooker, "RegOpenKeyExA", RegOpenKeyExHook))
 				{

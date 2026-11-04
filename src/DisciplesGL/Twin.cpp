@@ -166,6 +166,13 @@
 #define COPYIN_BIG (400 * 400)
 #define WRITE_RING 8
 #define INDEXED_OTHER_LOGS 32
+#define INDEXED_CHAIN 6
+#define UNNAMED_SIZES 32
+#define UNNAMED_LOGS 96
+#define DECODE_LOGS 240
+#define ARTLESS_LOGS 32
+#define CODE_LIMIT (64 * 1024)
+#define CODE_REGIONS 64
 #define SEED_PENDING_FRAMES 3600
 #define SEED_WAIT_DEFAULT 0
 #define SEED_CONFLICT_CELL 16
@@ -415,6 +422,7 @@ namespace Twin
 		DWORD seedCount;
 		DWORD coverPx;
 		DWORD coverCopies;
+		BOOL screen;
 		Arrival arrive;
 	};
 
@@ -721,7 +729,39 @@ namespace Twin
 		LONG width;
 		LONG height;
 		DWORD palette[256];
+		DWORD chain[INDEXED_CHAIN];
+		DWORD chainCount;
 	};
+
+	// indexed blits from memory that neither the latest store decode nor a record read names, by size and call chain
+	struct UnnamedDecode {
+		LONG w, h;
+		DWORD count;
+		DWORD chain[INDEXED_CHAIN];
+		DWORD chainCount;
+		DWORD frameNo;
+	};
+
+	struct {
+		UnnamedDecode list[UNNAMED_SIZES];
+		DWORD count;
+		DWORD full;
+		DWORD total;
+		DWORD interval;
+		DWORD logs;
+	} unnamed;
+
+	// the game's code around addresses the logs name, written to twin-code.bin
+	struct {
+		DWORD lo[CODE_REGIONS];
+		DWORD hi[CODE_REGIONS];
+		CHAR why[CODE_REGIONS][20];
+		DWORD count;
+		DWORD bytes;
+		DWORD refused;
+		BOOL dirty;
+		DWORD writes;
+	} code;
 
 	enum XferLayout { Layout32 = 1, Layout16 = 2, Layout8 = 4 };
 
@@ -807,9 +847,18 @@ namespace Twin
 		DWORD indexedOther;
 		DWORD indexedInsideDropped;
 		DWORD unlockLarge;
-		DWORD loadMatches;
-		DWORD loadSeeds;
-		DWORD loadLogs;
+		// the latest decode has a name but no pack art; its blits are not unnamed memory
+		const BYTE* artSrc;
+		LONG artSrcPitch;
+		const CHAR* artReason;
+		DWORD indexedArtless;
+		DWORD artlessLogs;
+		DWORD recordMatches;
+		DWORD recordSeeded;
+		DWORD recordDeferred;
+		DWORD recordNoArt;
+		DWORD recordNoFit;
+		DWORD namedLogs;
 		DWORD blank;
 		DWORD exact[5];
 		DWORD tolerant[5];
@@ -975,6 +1024,7 @@ namespace Twin
 	VOID RegText(DWORD value, CHAR* text);
 	VOID TrapName(DWORD address, CHAR* text);
 	VOID LogCopyIns(const DWORD* top, DWORD found);
+	VOID CodeFlush();
 	VOID TrapDrain();
 	VOID TrapReopen();
 	VOID TrapOpen(Record* twin, const RECT* rect);
@@ -2082,6 +2132,7 @@ namespace Twin
 		twin->repairPx = 0;
 		twin->keyed = FALSE;
 		twin->artCount = 0;
+		twin->screen = FALSE;
 
 		while (game.top && !game.twins[game.top - 1].owner)
 			--game.top;
@@ -3865,7 +3916,7 @@ namespace Twin
 		}
 	}
 
-	VOID XferCapture(const VOID* first, LONG pitch, LONG width, LONG height, SeedKind kind, const CHAR* label, const SeedPiece* pieces, DWORD count, const SeedConflict* conflicts, DWORD conflictCount);
+	VOID XferCapture(const VOID* first, LONG pitch, LONG width, LONG height, SeedKind kind, const CHAR* label, const SeedPiece* pieces, DWORD count, const SeedConflict* conflicts, DWORD conflictCount, const SeedSheetStats* sheet);
 	VOID XferResolve(BOOL final);
 
 	// returns 0 when nothing was recorded, 1 done, 2 deferred
@@ -3934,8 +3985,9 @@ namespace Twin
 		for (DWORD i = 0; i < count; ++i)
 		{
 			const SeedPiece* p = &pieces[i];
+			// a piece carried by a mirrored copy has its place mirrored too: left > right
 			if (p->to.left < 0 || p->to.top < 0 || p->to.right > width || p->to.bottom > height || p->to.left >= p->to.right || p->to.top >= p->to.bottom ||
-				p->place.left >= p->place.right || p->place.top >= p->place.bottom || p->frame < 0)
+				p->place.left == p->place.right || p->place.top >= p->place.bottom || p->frame < 0)
 			{
 				++seeds.skippedPieces;
 				continue;
@@ -4035,11 +4087,12 @@ namespace Twin
 	}
 
 	// an unkeyed copy out of memory whose seed still waits for its art takes the waiting pieces along, so the 4K lands where the pixels went even after the source is reused
-	VOID SeedDerive(Record* target, DWORD dstId, const RECT* to, Record* source, const RECT* from)
+	VOID SeedDerive(Record* target, DWORD dstId, const RECT* to, Record* source, const RECT* from, BOOL mirror)
 	{
 		if (!source->seedCount || target == source)
 			return;
-		if (target->width == *(LONG*)&config.mode->width && target->height == *(LONG*)&config.mode->height)
+		// a buffer that was presented is redrawn every frame; an offscreen surface of the screen's size (a full-screen background) takes the pieces
+		if (target->screen)
 			return;
 
 		LONG ox = to->left - from->left, oy = to->top - from->top;
@@ -4063,9 +4116,17 @@ namespace Twin
 					continue;
 				SeedPiece* p = &pieces[count++];
 				p->frame = r->pieces[k].frame;
-				p->to = g;
 				p->place = r->pieces[k].place;
 				OffsetRect(&p->place, r->rect.left, r->rect.top);
+				if (mirror)
+				{
+					// column x of the source lands at from.left + from.right - 1 - x; the place is mirrored with it, so its left edge ends up right
+					LONG axis = from->left + from->right;
+					SetRect(&g, axis - g.right, g.top, axis - g.left, g.bottom);
+					p->place.left = axis - p->place.left;
+					p->place.right = axis - p->place.right;
+				}
+				p->to = g;
 				if (count == 1)
 					bound = g;
 				else
@@ -4120,7 +4181,7 @@ namespace Twin
 
 		// faces are copied out by hooked DrawFaces copies, which replay the memory twin's seed
 		if (kind != SeedFace)
-			XferCapture(first, pitch, width, height, kind, label, pieces, count, conflicts, conflictCount);
+			XferCapture(first, pitch, width, height, kind, label, pieces, count, conflicts, conflictCount, sheet);
 
 		RECT local = { 0, 0, width, height };
 		if (!pieces || !count)
@@ -4174,7 +4235,22 @@ namespace Twin
 		xfer.srcRect = *rect;
 	}
 
-	VOID XferCapture(const VOID* first, LONG pitch, LONG width, LONG height, SeedKind kind, const CHAR* label, const SeedPiece* pieces, DWORD count, const SeedConflict* conflicts, DWORD conflictCount)
+	const CHAR* ArtlessReason(SeedKind kind, const SeedSheetStats* sheet)
+	{
+		if (!sheet)
+			return "no pack frame has its name and size";
+		if (!sheet->frames)
+			return "its sheet blocks list no frame";
+		if (sheet->additive == sheet->frames)
+			return "every frame is additive (aura or glow), which is not seeded";
+		if (sheet->unmapped == sheet->frames)
+			return "no frame name of the sheet is in the pack";
+		if (sheet->unmapped + sheet->additive == sheet->frames)
+			return "its frames are additive or not in the pack";
+		return "every part falls outside the sheet";
+	}
+
+	VOID XferCapture(const VOID* first, LONG pitch, LONG width, LONG height, SeedKind kind, const CHAR* label, const SeedPiece* pieces, DWORD count, const SeedConflict* conflicts, DWORD conflictCount, const SeedSheetStats* sheet)
 	{
 		TrapDrain();
 		// whatever was watched for the previous decode is complete by now
@@ -4196,6 +4272,15 @@ namespace Twin
 		DWORD length = min((DWORD)StrLength(label), (DWORD)sizeof(xfer.name) - 1);
 		MemoryCopy(xfer.name, label, length);
 		xfer.name[length] = 0;
+		// a named decode with no art still names its blits: they are logged with the reason instead of as unnamed memory
+		xfer.artSrc = NULL;
+		xfer.artReason = NULL;
+		if ((!pieces || !count) && xfer.srcSet && xfer.srcTrue == 0 && xfer.srcPitchField > 0)
+		{
+			xfer.artSrc = xfer.srcData + xfer.srcRect.top * xfer.srcPitchField + xfer.srcRect.left;
+			xfer.artSrcPitch = xfer.srcPitchField;
+			xfer.artReason = ArtlessReason(kind, sheet);
+		}
 		if (pieces && count && XferSnapshot(first, pitch, width, height, pieces, count, conflicts, conflictCount))
 		{
 			xfer.valid = TRUE;
@@ -4837,50 +4922,159 @@ namespace Twin
 		resolving = FALSE;
 	}
 
-	// the hooked indexed blit names its source: when that is the decode's 8-bit snapshot, the provenance is exact and the blit's palette converts the snapshot
-	BOOL LoadSeedWanted()
+	DWORD DecodeLogNumber()
 	{
-		static INT wanted = -1;
-		if (wanted < 0)
-			wanted = Config::Get("Twin", "LoadSeed", 0) != 0;
-		return wanted;
+		if (xfer.namedLogs >= DECODE_LOGS)
+			return 0;
+		return ++xfer.namedLogs;
 	}
 
-	// a whole image converted from indices no store decode named, of exactly the size of an image the store just loaded by name: that load is its provenance
-	VOID XferLoadSeed(const DWORD* dst, LONG dstPitch, LONG width, LONG height)
+	VOID ChainText(const DWORD* chain, DWORD count, CHAR* text)
 	{
-		LONG frame;
-		CHAR name[32];
-		DWORD ago;
-		if (!ImageReplace::RecentLoad(width, height, &frame, name, &ago))
-			return;
-		++xfer.loadMatches;
+		CHAR* at = text;
+		*at = 0;
+		for (DWORD i = 0; i < count; ++i)
+		{
+			CHAR name[48];
+			TrapName(chain[i], name);
+			// the address alone repeats in the module+offset, which is what the next round disassembles
+			const CHAR* space = StrChar(name, ' ');
+			at += StrPrint(at, "%s%s", i ? " < " : "", space ? space + 1 : name);
+		}
+		if (!count)
+			StrCopy(text, "-");
+	}
+
+	// the latest store decode named the image but has no 4K for it: its blit is named, with the reason
+	BOOL XferArtless(const BYTE* src, LONG srcPitch, const DWORD* dst, LONG dstPitch, LONG width, LONG height)
+	{
+		if (xfer.valid || !xfer.artSrc || srcPitch != xfer.artSrcPitch || src < xfer.artSrc || game.frameNo - xfer.frameNo > 2)
+			return FALSE;
+		LONG offset = LONG(src - xfer.artSrc);
+		LONG sx = offset % srcPitch, sy = offset / srcPitch;
+		if (sx + width > xfer.width || sy + height > xfer.height)
+			return FALSE;
+
+		++xfer.indexedArtless;
+		if (xfer.artlessLogs < ARTLESS_LOGS)
+		{
+			++xfer.artlessLogs;
+			CHAR to[96];
+			RegText((DWORD)dst, to);
+			DebugLog("twin decode without 4K #%u: %.32s %dx%d (decode #%u) blitted at %d,%d %dx%d -> %s | no 4K: %s", xfer.artlessLogs, xfer.name, xfer.width, xfer.height, xfer.seq,
+				sx, sy, width, height, to, xfer.artReason ? xfer.artReason : "-");
+		}
+		return TRUE;
+	}
+
+	// a whole image converted from indices no store decode named, of exactly the size of a .ff record the game just read: that read names it
+	BOOL XferRecordSeed(const DWORD* dst, LONG dstPitch, LONG width, LONG height, const DWORD* chain, DWORD chainCount)
+	{
+		ImageReplace::RecordName rn;
+		if (!ImageReplace::RecordDecode(width, height, &rn))
+			return FALSE;
+
+		++xfer.recordMatches;
+		// kept in the code dump as well, so the next round can check the loader the read named
+		for (DWORD k = 0; k < chainCount; ++k)
+			CodeDump(chain[k], 0x400, "named blit caller");
 		DWORD id;
-		LONG x, y;
+		LONG x = -1, y = -1;
 		Record* twin = FindAddress(dst, &id);
 		BOOL fits = twin && PixelPos(twin, dst, dstPitch, width, height, &x, &y);
+		SeedKind kind = rn.sheet ? SeedSheet : SeedStore;
 		DWORD outcome = 0;
-		if (fits && LoadSeedWanted())
+		if (!rn.count)
+			++xfer.recordNoArt;
+		else if (!fits)
+			++xfer.recordNoFit;
+		else
 		{
-			SeedPiece piece;
-			SetRect(&piece.to, 0, 0, width, height);
-			piece.place = piece.to;
-			piece.frame = frame;
+			Sync();
 			RECT at = { x, y, x + width, y + height };
-			outcome = SeedAt(twin, id, &at, twin->pitch, SeedStore, name, &piece, 1, NULL, 0, TRUE);
+			++seeds.kinds[kind].events;
+			outcome = SeedAt(twin, id, &at, twin->pitch, kind, rn.name, rn.pieces, rn.count, rn.conflicts, rn.conflictCount, TRUE);
 			if (outcome)
-				++xfer.loadSeeds;
+				++xfer.recordSeeded;
+			if (outcome == 2)
+				++xfer.recordDeferred;
 		}
-		if (xfer.loadLogs < 24)
+
+		DWORD n = DecodeLogNumber();
+		if (n)
 		{
-			++xfer.loadLogs;
-			DebugLog("twin seed load match #%u: indexed blit %dx%d from memory no decode named -> twin %d %s at %d,%d matches the store load %.32s (frame %d, %u frames ago) | %s",
-				xfer.loadLogs, width, height, twin ? (INT)id : -1, twin ? TwinKind(twin) : "none", fits ? x : -1, fits ? y : -1, name, frame, ago,
-				!fits ? "no twin fits" : !LoadSeedWanted() ? "not seeded (Twin.LoadSeed=0)" : outcome == 2 ? "seed deferred" : outcome ? "seeded" : "not seeded");
+			CHAR reader[48], outer[48], blit[200];
+			TrapName(rn.caller, reader);
+			TrapName(rn.outer, outer);
+			ChainText(chain, chainCount, blit);
+			DebugLog("twin decode named #%u: %.40s %dx%d record %u (%s) %s | loader: read by %s < %s, converted by %s | found by the record read %u frames before its indexed blit (%u unread reads of this size) | -> twin %d %s at %d,%d | %s",
+				n, rn.name, width, height, rn.record, rn.archive, rn.sheet ? "sheet" : "plain", reader, outer, blit, rn.framesAgo, rn.candidates, twin ? (INT)id : -1, twin ? TwinKind(twin) : "none", x, y,
+				!rn.count ? (rn.reason ? rn.reason : "no piece") : !fits ? "no twin fits the blit" : outcome == 2 ? "seeded, art deferred" : outcome ? "seeded" : "nothing recorded (repeat)");
 		}
+		return TRUE;
 	}
 
-	VOID XferIndexedTry(const BYTE* src, LONG srcPitch, const DWORD* palette, const DWORD* dst, LONG dstPitch, LONG width, LONG height)
+	// returns TRUE for a size and chain not seen before
+	BOOL UnnamedNote(LONG width, LONG height, const DWORD* chain, DWORD chainCount)
+	{
+		++unnamed.total;
+		++unnamed.interval;
+		for (DWORD i = 0; i < unnamed.count; ++i)
+		{
+			UnnamedDecode* u = &unnamed.list[i];
+			if (u->w == width && u->h == height && u->chainCount == chainCount && !MemoryCompare(u->chain, chain, chainCount * sizeof(DWORD)))
+			{
+				++u->count;
+				u->frameNo = game.frameNo;
+				return FALSE;
+			}
+		}
+		if (unnamed.count == UNNAMED_SIZES)
+		{
+			++unnamed.full;
+			return FALSE;
+		}
+		UnnamedDecode* u = &unnamed.list[unnamed.count++];
+		u->w = width;
+		u->h = height;
+		u->count = 1;
+		u->chainCount = chainCount;
+		MemoryCopy(u->chain, chain, chainCount * sizeof(DWORD));
+		u->frameNo = game.frameNo;
+		for (DWORD k = 0; k < chainCount; ++k)
+			CodeDump(chain[k], 0x400, "indexed blit caller");
+		return TRUE;
+	}
+
+	VOID LogUnnamed()
+	{
+		DWORD order[UNNAMED_SIZES];
+		for (DWORD i = 0; i < unnamed.count; ++i)
+		{
+			DWORD k = i;
+			while (k && unnamed.list[order[k - 1]].count < unnamed.list[i].count)
+			{
+				order[k] = order[k - 1];
+				--k;
+			}
+			order[k] = i;
+		}
+		CHAR text[720];
+		CHAR* at = text;
+		*at = 0;
+		for (DWORD i = 0; i < unnamed.count && i < 5; ++i)
+		{
+			const UnnamedDecode* u = &unnamed.list[order[i]];
+			CHAR chain[200];
+			ChainText(u->chain, min(u->chainCount, (DWORD)3), chain);
+			at += StrPrint(at, " %dx%d x%u %u frames ago: %.80s;", u->w, u->h, u->count, game.frameNo - u->frameNo, chain);
+		}
+		DebugLog("twin decode unnamed since start: %u indexed blits (%u in 5s) of %u sizes and chains (table full %u) | named by a record read %u (seeded %u, deferred %u, no 4K %u, no twin %u), blits of named decodes without 4K %u | left:%s",
+			unnamed.total, unnamed.interval, unnamed.count, unnamed.full, xfer.recordMatches, xfer.recordSeeded, xfer.recordDeferred, xfer.recordNoArt, xfer.recordNoFit, xfer.indexedArtless, *text ? text : " none");
+		unnamed.interval = 0;
+	}
+
+	VOID XferIndexedTry(const BYTE* src, LONG srcPitch, const DWORD* palette, const DWORD* dst, LONG dstPitch, LONG width, LONG height, const DWORD* chain, DWORD chainCount)
 	{
 		if (xfer.valid && (xfer.layouts & Layout32) && (const BYTE*)dst >= xfer.rawData && (const BYTE*)dst < xfer.rawData + (xfer.rawTop + xfer.height) * xfer.rawPitch * 2)
 		{
@@ -4893,19 +5087,26 @@ namespace Twin
 		if (!xfer.valid || !(xfer.layouts & Layout8) || srcPitch != xfer.rawPitch || sx < 0 || sy < 0 || sx + width > xfer.width || sy + height > xfer.height)
 		{
 			++xfer.indexedOther;
-			// indices that are not the latest store decode: big images may come this way, decoded by a loader no hook names
-			if (game.indexedOtherLogs < INDEXED_OTHER_LOGS)
+			if (XferArtless(src, srcPitch, dst, dstPitch, width, height))
+				return;
+			// indices that are not the latest store decode: the big images come this way, from a loader that reads the .ff record itself
+			if (XferRecordSeed(dst, dstPitch, width, height, chain, chainCount))
+				return;
+			BOOL fresh = UnnamedNote(width, height, chain, chainCount);
+			if (game.indexedOtherLogs < INDEXED_OTHER_LOGS || (fresh && unnamed.logs < UNNAMED_LOGS))
 			{
-				++game.indexedOtherLogs;
-				CHAR from[96], to[96], caller[48];
+				if (game.indexedOtherLogs < INDEXED_OTHER_LOGS)
+					++game.indexedOtherLogs;
+				else
+					++unnamed.logs;
+				CHAR from[96], to[96], text[200];
 				RegText((DWORD)src, from);
 				RegText((DWORD)dst, to);
-				TrapName(GameCaller(), caller);
-				DebugLog("twin indexed blit #%u from other memory: src %s pitch %d %dx%d -> %s pitch %d | latest decode #%u %.32s %dx%d raw %08X pitch %d (at %d,%d of it) %u frames ago | caller %s",
-					game.indexedOtherLogs, from, srcPitch, width, height, to, dstPitch, xfer.seq, xfer.valid ? xfer.name : "-", xfer.width, xfer.height, xfer.rawData, xfer.rawPitch, sx, sy,
-					game.frameNo - xfer.frameNo, caller);
+				ChainText(chain, chainCount, text);
+				DebugLog("twin indexed blit #%u from other memory: src %s pitch %d %dx%d -> %s pitch %d | latest decode #%u %.32s %dx%d raw %08X pitch %d (at %d,%d of it) %u frames ago | no record read of this size | chain %s",
+					game.indexedOtherLogs + unnamed.logs, from, srcPitch, width, height, to, dstPitch, xfer.seq, xfer.name[0] ? xfer.name : "-", xfer.width, xfer.height, xfer.rawData, xfer.rawPitch, sx, sy,
+					game.frameNo - xfer.frameNo, text);
 			}
-			XferLoadSeed(dst, dstPitch, width, height);
 			return;
 		}
 
@@ -4960,7 +5161,7 @@ namespace Twin
 		XferLogAccept(via, twin, id, x, y, &sub, outcome, &g, verdict, format);
 	}
 
-	VOID OnIndexedBlit(const BYTE* src, LONG srcPitch, const DWORD* palette, const DWORD* dst, LONG dstPitch, LONG width, LONG height)
+	VOID OnIndexedBlit(const BYTE* src, LONG srcPitch, const DWORD* palette, const DWORD* dst, LONG dstPitch, LONG width, LONG height, const DWORD* slot)
 	{
 		Timed timed("OnIndexedBlit");
 		if (!src || !dst || !palette || width <= 0 || height <= 0 || !Active())
@@ -4996,9 +5197,12 @@ namespace Twin
 			b->width = width;
 			b->height = height;
 			MemoryCopy(b->palette, palette, sizeof(b->palette));
+			b->chainCount = WalkFrames(slot, b->chain, INDEXED_CHAIN);
 			return;
 		}
-		XferIndexedTry(src, srcPitch, palette, dst, dstPitch, width, height);
+		DWORD chain[INDEXED_CHAIN];
+		DWORD chainCount = WalkFrames(slot, chain, INDEXED_CHAIN);
+		XferIndexedTry(src, srcPitch, palette, dst, dstPitch, width, height, chain, chainCount);
 	}
 
 	VOID DecodeBegin()
@@ -5034,7 +5238,7 @@ namespace Twin
 		for (DWORD i = 0; i < blits; ++i)
 		{
 			const XferIndexed* b = &xfer.indexedInside[i];
-			XferIndexedTry(b->src, b->srcPitch, b->palette, b->dst, b->dstPitch, b->width, b->height);
+			XferIndexedTry(b->src, b->srcPitch, b->palette, b->dst, b->dstPitch, b->width, b->height, b->chain, b->chainCount);
 		}
 	}
 
@@ -5111,7 +5315,8 @@ namespace Twin
 		DebugLog("twin seed transfer guard since start: exact rgb32 %u bgr32 %u 565 %u indices %u palette %u | tolerant 565 %u indices %u palette %u | indexed blits %u: from the decode %u (part of it %u, no surface twin %u), into the decode %u, other sources %u, dropped inside a decode %u",
 			xfer.exact[GuardRgb], xfer.exact[GuardBgr], xfer.exact[Guard565], xfer.exact[GuardIndexed], xfer.exact[GuardPalette], xfer.tolerant[Guard565], xfer.tolerant[GuardIndexed], xfer.tolerant[GuardPalette],
 			xfer.indexed, xfer.indexedFromDecode, xfer.indexedPartial, xfer.indexedNoTwin, xfer.indexedIntoDecode, xfer.indexedOther, xfer.indexedInsideDropped);
-		DebugLog("twin seed load matches since start: indexed blits from unnamed memory of a just-loaded image's size %u, seeded %u (Twin.LoadSeed=%u)", xfer.loadMatches, xfer.loadSeeds, LoadSeedWanted());
+		LogUnnamed();
+		CodeFlush();
 	}
 #pragma endregion
 
@@ -5161,8 +5366,7 @@ namespace Twin
 
 	VOID TrapModule(HMODULE module, DWORD* low, DWORD* high);
 
-	// the first return address into the game above the wrapper's frames: the game code that asked for this write
-	__declspec(noinline) DWORD GameCaller()
+	VOID TrapModules()
 	{
 		if (!trap.exeHi)
 		{
@@ -5170,6 +5374,146 @@ namespace Twin
 			if (!trap.selfHi)
 				TrapModule(hDllModule, &trap.selfLo, &trap.selfHi);
 		}
+	}
+
+	DWORD WalkFrames(const DWORD* slot, DWORD* frames, DWORD count)
+	{
+		for (DWORD k = 0; k < count; ++k)
+			frames[k] = 0;
+		if (!slot || !count)
+			return 0;
+		TrapModules();
+		const NT_TIB* tib = (const NT_TIB*)__readfsdword(0x18);
+		DWORD high = (DWORD)tib->StackBase;
+		if ((DWORD)slot < (DWORD)tib->StackLimit || (DWORD)slot + sizeof(DWORD) > high || ((DWORD)slot & 3))
+			return 0;
+
+		DWORD n = 0;
+		if (TrapExe(slot[0]))
+			frames[n++] = slot[0];
+		// the game is not built with frame pointers everywhere: the chain starts at the first saved EBP above the slot that points further up and is followed by a return address into the game
+		const DWORD* frame = NULL;
+		for (DWORD i = 1; i < 256 && (DWORD)(slot + i + 2) <= high && !frame; ++i)
+		{
+			const DWORD* f = slot + i;
+			if (f[0] > (DWORD)f && f[0] + 2 * sizeof(DWORD) <= high && !(f[0] & 3) && TrapExe(f[1]) && TrapReturn(f[1]))
+				frame = f;
+		}
+		while (frame && n < count)
+		{
+			frames[n++] = frame[1];
+			const DWORD* next = (const DWORD*)frame[0];
+			if ((DWORD)next <= (DWORD)frame || (DWORD)next + 2 * sizeof(DWORD) > high || ((DWORD)next & 3) || !TrapExe(next[1]) || !TrapReturn(next[1]))
+				break;
+			frame = next;
+		}
+		return n;
+	}
+
+	VOID CodeDump(DWORD address, DWORD radius, const CHAR* why)
+	{
+		TrapModules();
+		if (!TrapExe(address))
+			return;
+		DWORD lo = (address - min(radius, address - trap.exeLo)) & ~15u;
+		DWORD hi = (min(address + radius, trap.exeHi) + 15) & ~15u;
+		if (hi > trap.exeHi)
+			hi = trap.exeHi;
+		if (hi <= lo)
+			return;
+		for (DWORD i = 0; i < code.count; ++i)
+		{
+			if (lo >= code.lo[i] && hi <= code.hi[i])
+				return;
+			if (lo <= code.hi[i] && hi >= code.lo[i])
+			{
+				DWORD newLo = min(lo, code.lo[i]), newHi = max(hi, code.hi[i]);
+				DWORD added = (newHi - newLo) - (code.hi[i] - code.lo[i]);
+				if (code.bytes + added > CODE_LIMIT)
+				{
+					++code.refused;
+					return;
+				}
+				code.bytes += added;
+				code.lo[i] = newLo;
+				code.hi[i] = newHi;
+				code.dirty = TRUE;
+				return;
+			}
+		}
+		if (code.count == CODE_REGIONS || code.bytes + (hi - lo) > CODE_LIMIT)
+		{
+			++code.refused;
+			return;
+		}
+		DWORD k = code.count++;
+		code.lo[k] = lo;
+		code.hi[k] = hi;
+		lstrcpyn(code.why[k], why, sizeof(code.why[k]));
+		code.bytes += hi - lo;
+		code.dirty = TRUE;
+	}
+
+	// twin-code.bin: "DGLCODE1", region count, exe base, SizeOfImage, TimeDateStamp, then per region its address, size, file offset and a 20-byte reason, then the bytes
+	VOID CodeFlush()
+	{
+		if (!code.dirty)
+			return;
+		code.dirty = FALSE;
+
+		CHAR path[MAX_PATH];
+		DWORD length = GetModuleFileName(NULL, path, sizeof(path));
+		while (length && path[length - 1] != '\\')
+			--length;
+		StrCopy(path + length, "twin-code.bin");
+		HANDLE file = CreateFile(path, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+		if (file == INVALID_HANDLE_VALUE)
+		{
+			DebugLog("twin code dump: %s could not be written", path);
+			return;
+		}
+
+		const BYTE* exe = (const BYTE*)GetModuleHandle(NULL);
+		const IMAGE_NT_HEADERS* nt = (const IMAGE_NT_HEADERS*)(exe + ((const IMAGE_DOS_HEADER*)exe)->e_lfanew);
+		DWORD head[5] = { 0, code.count, (DWORD)exe, nt->OptionalHeader.SizeOfImage, nt->FileHeader.TimeDateStamp };
+		DWORD written;
+		WriteFile(file, "DGLCODE1", 8, &written, NULL);
+		WriteFile(file, head + 1, 4 * sizeof(DWORD), &written, NULL);
+		DWORD offset = 8 + 4 * sizeof(DWORD) + code.count * (3 * sizeof(DWORD) + sizeof(code.why[0]));
+		for (DWORD i = 0; i < code.count; ++i)
+		{
+			DWORD entry[3] = { code.lo[i], code.hi[i] - code.lo[i], offset };
+			WriteFile(file, entry, sizeof(entry), &written, NULL);
+			WriteFile(file, code.why[i], sizeof(code.why[i]), &written, NULL);
+			offset += entry[1];
+		}
+		CHAR text[CODE_REGIONS * 24 + 1];
+		CHAR* at = text;
+		*at = 0;
+		for (DWORD i = 0; i < code.count; ++i)
+		{
+			DWORD size = code.hi[i] - code.lo[i];
+			if (IsBadReadPtr((const VOID*)code.lo[i], size))
+			{
+				static BYTE zero[4096];
+				for (DWORD left = size; left; left -= min(left, (DWORD)sizeof(zero)))
+					WriteFile(file, zero, min(left, (DWORD)sizeof(zero)), &written, NULL);
+			}
+			else
+				WriteFile(file, (const VOID*)code.lo[i], size, &written, NULL);
+			if (at < text + sizeof(text) - 24 && i < 40)
+				at += StrPrint(at, " %X+%X", code.lo[i] - (DWORD)exe, size);
+		}
+		CloseHandle(file);
+		++code.writes;
+		DebugLog("twin code dump #%u: twin-code.bin, %u regions, %u bytes (limit %u, refused %u), Discipl2.exe base %08X stamp %08X | exe offset+size:%s",
+			code.writes, code.count, code.bytes, CODE_LIMIT, code.refused, (DWORD)exe, head[4], text);
+	}
+
+	// the first return address into the game above the wrapper's frames: the game code that asked for this write
+	__declspec(noinline) DWORD GameCaller()
+	{
+		TrapModules();
 		const DWORD* slot = (const DWORD*)_AddressOfReturnAddress();
 		const NT_TIB* tib = (const NT_TIB*)__readfsdword(0x18);
 		for (DWORD i = 0; i < 96 && (DWORD)(slot + i + 1) <= (DWORD)tib->StackBase; ++i)
@@ -6794,7 +7138,7 @@ namespace Twin
 		if (keyed)
 			++game.list->counters.keyed;
 		else if (SeedMode() && source->seedCount)
-			SeedDerive(target, dstId, &to, source, &from);
+			SeedDerive(target, dstId, &to, source, &from, FALSE);
 
 		// an unkeyed copy replaces the whole rect, so the 1x copy goes first and the art lands on top; transparent art then shows the source, not stale destination
 		if (hasArt && RecordArt(target, dstId, &to, srcId, &from, plan.frame, plan.flipped, &plan.place, keyed, key, plan.cached, FALSE))
@@ -7076,6 +7420,10 @@ namespace Twin
 		cmd->value = key;
 		cmd->flags = mode;
 		cmd->extra = param;
+
+		// the face copy (DrawFaces) is mirrored for units facing the other way; it replaces its rect like any unkeyed copy
+		if (mode == PixelCopy && mirror && SeedMode() && source->seedCount)
+			SeedDerive(target, dstId, &to, source, &from, TRUE);
 
 		if (mode != PixelAdd && mode != PixelSub && mode != PixelBlend)
 		{
@@ -7513,6 +7861,10 @@ namespace Twin
 			return;
 
 		Sync();
+		DWORD screenId;
+		Record* shown = Find(screen, &screenId);
+		if (shown)
+			shown->screen = TRUE;
 
 		DWORD now = GetTickCount();
 		if (!game.started)

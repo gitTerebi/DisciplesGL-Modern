@@ -29,7 +29,7 @@ pause >nul
 
 :send
 if not exist "%LOGS%" mkdir "%LOGS%"
-del /Q "%LOGS%\*-*.log" "%LOGS%\*.old" "%LOGS%\*.png" "%LOGS%\*.dmp" "%LOGS%\*.map" 2>nul
+del /Q "%LOGS%\*-*.log" "%LOGS%\*.old" "%LOGS%\*.png" "%LOGS%\*.dmp" "%LOGS%\*.map" "%LOGS%\*.bin" 2>nul
 if exist "%ROOT%build\C4dll-R.map" copy /Y "%ROOT%build\C4dll-R.map" "%LOGS%\C4dll-R.map" >nul
 call :grab "Disciples 2" d2
 call :grab "Disciples 2 - Rise of the Elves" rote
@@ -59,6 +59,7 @@ if exist "%GAME%\DisciplesGL-debug.log.old" (
   echo found %GAME%\DisciplesGL-debug.log.old
   powershell -NoProfile -Command "Get-Content -LiteralPath '%GAME%\DisciplesGL-debug.log.old' -Tail 60000 | Set-Content -LiteralPath '%LOGS%\%~2-DisciplesGL-debug.old.log'"
 )
-for %%P in (twin-screen.png twin-sheet.png twin-1x.png DisciplesGL-crash.dmp) do if exist "%GAME%\%%P" copy /Y "%GAME%\%%P" "%LOGS%\%~2-%%P" >nul
+rem twin-code.bin holds the game code around the addresses the log names, for disassembly in the next round
+for %%P in (twin-screen.png twin-sheet.png twin-1x.png twin-code.bin DisciplesGL-crash.dmp) do if exist "%GAME%\%%P" copy /Y "%GAME%\%%P" "%LOGS%\%~2-%%P" >nul
 if exist "%GAME%\imagecoverage.txt" copy /Y "%GAME%\imagecoverage.txt" "%LOGS%\%~2-imagecoverage.txt" >nul
 exit /b 0
