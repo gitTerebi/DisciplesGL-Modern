@@ -31,7 +31,7 @@ All seeds go through `ImageReplace.cpp:AddRange`. That is the one place where na
 
 | Source | Where it enters game memory | Seed |
 |---|---|---|
-| Store image (`StoreLoad` / `StoreDraw`) | `ImageReplace.cpp:StoreDraw`, after the game decoded the file into `desc` (data, rect, pitch) | `SeedStore`: when the file is a packer sheet, a sheet seed (below). Otherwise one piece, the pack frame the file name resolves to (`StoreFrame`), over the whole image |
+| Store image (`StoreLoad` / `StoreDraw`) | `ImageReplace.cpp:StoreDraw`, after the game decoded the file into `desc` (data, rect, pitch) | `SeedStore`: when the file is a packer sheet, a sheet seed (below). Otherwise one piece, the pack frame the file name resolves to (`StoreFrame`), over the whole image, never for a file whose `-IMAGES.OPT` parts move pixels (see Plain seeds never take a packed sheet) |
 | Packer sheet behind `Build`/`Render` images | Loaded through the image store too: the sheet PNG is a file of the `.ff`, decoded by `StoreDraw`. Evidence: `_CUDEFAUL` is a `Build` image with one 24x54 part, and its store decode resolved to the same pack frame | `ImageReplace.cpp:SeedSheet` builds the sheet from the archive's `-INDEX.OPT`, `-IMAGES.OPT` and `-ANIMS.OPT` (`LoadSheets`) |
 | Face | `ImageReplace.cpp:FaceLoad` decodes it, but the stride is unknown there; `OnFaceCopy` registers it at its first `DrawFaces` with the real pitch. That happens before the hook's twin calls | `SeedStore`, kind `face`, one piece |
 | Full-screen backgrounds, dialog panels, battle sheets, the map buffers' art | Also `StoreDraw` (see The loader is StoreDraw). The 8-bit decode is too big for the store's 32 bpp range, so it is captured for the transfer only, and the indexed blit out of the scratch is named by its source pointer | The decode snapshot path (`XferIndexedTry`), or the loader's own pieces (`XferLoaderSeed`), seeded at the blit's destination in the 1152x1152 scratch; the copy out of it carries the 4K |
@@ -397,6 +397,36 @@ Logs:
 
 Repack-side fix (proposed, not applied): in `repack.py`, keep Gallean's offsets for SPRITE origins instead of zeroing them (`elif origin == SPRITE: pass`). For Gallean's full-canvas sprites they are 0 anyway, and a crop would keep its real place. `tools/repack/bbox.py` already compares each pack box with the parts union, and `verify.py` computes the non-transparent 1x box, so the tooling can check every SPRITE entry: its box must be the frame's canvas at 0,0 or a crop inside the union.
 
+### Plain seeds never take a packed sheet
+
+The screenshot taken before f792150 shows the unit card's event portrait (`G000UU5017.PNG` 301x364, `Events.ff` record 2747) as a coherent 4K portrait cut into about 4 full-width bands, each a different vertical slice in the wrong order. That is the 4K read in the sheet's own coordinates: an entry laid over the file at 0,0 (identity) instead of mapped part by part from canvas to sheet. It is not the uniform shift with edge streaks that a zeroed crop offset gives (above).
+
+**Every path that can lay a pack entry over a decode at identity** (one piece, `to` = `place` = the whole file):
+
+| Path | Where | Reached when |
+|---|---|---|
+| plain store or face seed | `ImageReplace.cpp:SeedStore`, the fallback after `SeedSheet` (one piece from `StoreFrame`) | the file has no archive (faces), its archive has no sheet tables, or no `-INDEX.OPT` entry points at its record (`SheetPieces` returns FALSE only then, at its `if (!blocks)`) |
+| plain loader or record seed | `ImageReplace.cpp:NamePieces`, the fallback after `SheetPieces` (one piece from `PlainFrame`), used by `LoaderDecode` (`XferLoaderSeed`) and `RecordDecode` (`XferRecordSeed`) | the same |
+| match mode | `AddRange` (`LearnArt` over the range with `StoreFrame`) and memory twins (`FindMemory` → `CreateMemoryTwin` → `LearnBlock`) | `Twin.Mode=match`. Here a sheet file was learned whole at identity whenever an entry of its size resolved from the file name |
+| transfers and derived copies | `Twin.cpp:XferSeed`, `XferLoaderSeed`, `SeedDerive` | never by themselves: they move the pieces the decode was given, clipped and offset (`ClipPieces`) |
+
+**Which one the portrait took.** None of the identity paths. In every logged run the portrait was seeded as a sheet: 17:48 (`f758520`) and 18:27 (`87ff310`) have `twin seed #258/#227 sheet ... G000UU5017.PNG ... pieces 14 ... frames 479..479` on the decode, `sheet transfer` into twin 4, and `sheet completed later` into the 301x364 surface (twin 142, twin 134); `G000UU0013.PNG` (6 pieces, pack frame 170) likewise in 18:27, 19:07 and 19:26. `twin seed store since start: events 0` in all of them: the plain path never seeded anything but faces. That is expected from the code, because `Events.ff` has sheet tables (`image sheets ... Events.ff: 215 frame entries`) and the portrait's record has `-INDEX.OPT` entries, so `SeedStore` and `NamePieces` always go through `SheetPieces`. So the bands came through `SheetPieces` with pack frame 479. That gives the file's layout on screen only if frame 479 holds the file's layout and not the frame's canvas (an entry of the file's size, named like the file), or if the card's reassembly of the parts is not replayed on the twins. The current code seeds the portrait exactly as the 18:27 build did (`DeriveOffset` takes a 301x364 entry at 0,0 as the full canvas), so if the cause is the entry, the bands come back with it. The `image sheet pieces G000UU5017.PNG ... (event portrait ...)` lines in the next log list the parts and settle it.
+
+**Guard.** The identity reading is now refused for any file whose `-IMAGES.OPT` frames move pixels, whatever path asks for it:
+
+- `StoreFrame` (the plain store and face seed, and match mode's `LearnArt` and memory twins) asks `PlainAllowed`, worked out once per store image (`StoreImage.plainState`, reset with the store).
+- `PlainFrame` (the loader and record seeds) asks `PlainCheck` itself.
+- `PlainCheck` reads every `-IMAGES.OPT` block of the file's record (`FileFrames`, the same `-INDEX.OPT` lookup as `SheetPieces`, but with no block-size filter). If any part's canvas position `{SourceX, SourceY}` differs from its sheet position `{DestX, DestY}`, the file is a packed sheet and is never seeded as one plain image. It is mapped by `SheetPieces` (canvas → sheet, with fcb7132's offsets) or stays 1x. A file without frames, or whose every part is at its canvas position, is let through.
+- Faces carry no archive, so their file is looked up by name (`FindFileByName`, `Faces.ff` first) and checked the same way. A face whose file is in no tracked archive is let through as before and counted as not verifiable.
+
+In seed mode, store and loader decodes reach the plain path only for files with no `-INDEX.OPT` entry, so the guard should never refuse there. If it does, a file is reached by a sheet frame that the record lookup missed. In match mode it refuses every packed sheet that used to be learned whole.
+
+Logs:
+
+- `image plain seed refused: <file> WxH (<archive> record <id>)[ face] | a packed sheet: <n> -IMAGES.OPT frames, <n> parts, <n> of them not at their canvas position (frame <name>: canvas x,y <- sheet x,y wxh) | ...`: one line per refused file (256 files). The loader line's no-4K reason then reads `its -IMAGES.OPT parts move pixels (a packed sheet) ...`.
+- `image plain seed check <file> ...: allowed, no -IMAGES.OPT frame (...)` or `allowed, <n> -IMAGES.OPT frames with <n> parts, every part at its canvas position (identity)`, or `allowed, not verified: ...`: the first 24 faces and identity-frame files. Each face's first line shows that faces are plain files.
+- `image plain seeds (one pack entry over the whole file at 0,0) since start` (every 5 s): checks; allowed with no frame, with identity frames, not verifiable; refused files and calls.
+
 ### Sheets with 0 pieces
 
 `G000UU0019HMOVA2A00.PNG` 577x590 (`BatUnits.ff`) is the attack aura layer (`A2`) of unit 0019, and every frame in it is additive. The same holds for `MRKCURSMALLA.PNG`, `DEATH_NEUTRAL_S10.PNG` and `G000UU9999DYIN8.PNG`. Their lines say `every frame is additive (aura or glow), which is not seeded`. `FOG.PNG` is not in the pack. All of this is by design (see Sheet construction).
@@ -586,6 +616,9 @@ Ground in seed mode therefore keeps `GroundArt`/`DrawGround` (`CmdGround`), exac
 | `image pack offsets zeroed by the repack, since start` | every 5 s | entries placed at the union, at the key box, full-canvas entries kept, left 1x |
 | `twin game-thread cost 5000ms` | every 5 s | present interval histogram, ms per present by category, total |
 | `twin hitch` | each present interval of 50 ms or more (20 per 5 s) | the frame's twin time by category, the seed sub-steps, log lines written on the game thread and their time, slowest call, seeds, uploads, base uploads, copies, ground blits |
+| `image plain seed refused` | one per file (256) | a file whose -IMAGES.OPT parts move pixels was refused the plain (identity) seed, with the first moving part (see Plain seeds never take a packed sheet) |
+| `image plain seed check` | first 24 faces and identity-frame files | why the plain seed was allowed: no frame, identity frames, or not verifiable |
+| `image plain seeds ... since start` | every 5 s | plain-seed checks, allowed and refused |
 | `image pack duplicate name` | first 32, at load | a name the pack holds twice: the kept and the dropped image's size and offset |
 | `twin render show interval` | every 5 s | render-thread time between shows, as a histogram |
 
@@ -609,5 +642,5 @@ The tile check (`twin tiles check`, `twin repair`), the GPU check (`twin check t
 8. **The seed draw assumes `StoreDraw` overwrites its rect.** If the game ever composites a store image onto existing content through `StoreDraw`, then 4K-transparent texels over opaque background 1x pixels come out transparent.
 9. **Streaming risks.** Pieces of a sheet now land over several presents, so a frame can briefly show a mix of 1x and 4K. A derived seed assumes the unkeyed copy replaced its rect; a later keyed copy or write over it drops the pieces it touches.
 10. **Trap risks.** A write into a trapped page from kernel mode (`ReadFile` into a surface, a GDI call writing it) fails with an error instead of faulting, so the trap would break it. No such path is known. The VEH also sees every exception in the process, but it returns at once for anything that is not a write AV inside a trapped page. Each fault costs a few microseconds; the page budget bounds it at about 2048 a second plus first writes. `WriteTrap=0`, now the default, turns it off and goes back to heap-allocated surfaces.
-11. **Event portraits are still wrong on screen** (`G000UU0013.PNG` in the 19:07 run) for a reason the layout does not explain. See The portrait in terms of this layout.
+11. **Event portraits are still wrong on screen** (`G000UU0013.PNG` in the 19:07 run) for a reason the layout does not explain. See The portrait in terms of this layout. The plain (identity) path did not cause it: every logged event portrait went through `SheetPieces`, and the plain path is now refused for packed sheets anyway (see Plain seeds never take a packed sheet).
 12. **No tile check by default.** A CPU write that no hook sees now stays on the GPU twin as stale pixels until the twin is next uploaded. In every logged run the check repaired nothing.

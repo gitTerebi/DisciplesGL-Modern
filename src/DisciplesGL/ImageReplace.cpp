@@ -252,6 +252,8 @@ namespace ImageReplace
 		ArchiveFile* file;
 		DWORD nextFree;
 		BOOL decodeLogged;
+		// PlainState: whether the whole file may be read as one pack frame at 0,0 (StoreFrame), worked out once from its -IMAGES.OPT frames
+		BYTE plainState;
 		BOOL printed;
 		ULONGLONG printMask;
 		DWORD print[FACE_PRINT * FACE_PRINT];
@@ -1809,6 +1811,10 @@ namespace ImageReplace
 			stores.byData[slot] = (DWORD)(s - stores.list) + 1;
 	}
 
+	BOOL PlainAllowed(StoreImage* s);
+
+	// the whole file as one pack frame laid over it at 0,0 (identity). Every caller reads it that way: the plain store and face seed (SeedStore), match mode's
+	// LearnArt and memory twins. A packed sheet, whose -IMAGES.OPT parts sit elsewhere in the file than in the frame's canvas, never gets it (PlainAllowed)
 	LONG StoreFrame(StoreImage* s)
 	{
 		if (!s->entry)
@@ -1816,6 +1822,8 @@ namespace ImageReplace
 
 		LONG index = Resolve(s->entry, (DWORD)s->dims);
 		if (index < 0 || pack.frames[index].w != (LONG)s->dims[0] || pack.frames[index].h != (LONG)s->dims[1])
+			return -1;
+		if (!PlainAllowed(s))
 			return -1;
 		return index;
 	}
@@ -1994,6 +2002,7 @@ namespace ImageReplace
 		UnlinkStoreData(s);
 		s->printed = FALSE;
 		s->decodeLogged = FALSE;
+		s->plainState = 0;
 		Release(s->entry);
 		s->entry = NULL;
 		s->file = file;
@@ -4222,6 +4231,236 @@ namespace ImageReplace
 		return asked;
 	}
 
+	// The plain path lays one pack entry over the whole decoded file at 0,0. That is right only when the file's pixels sit where the frame's canvas has them.
+	// A packed sheet (an event portrait cut into strips, a dialog's parts) has -IMAGES.OPT parts whose canvas position {SourceX, SourceY} is not their sheet position
+	// {DestX, DestY} (Gallean ImagesExtractor.BuildImage). Its entry over the file at 0,0 puts each strip's 4K at the strip's sheet place, so once the game
+	// reassembles the parts the portrait comes out in bands in the sheet's order. Such a file is only seeded part by part (SheetPieces) or stays 1x. Geometry only
+	enum PlainState { PlainUnchecked, PlainAllowedState, PlainRefusedState };
+
+	#define PLAIN_LOGGED 256
+	#define PLAIN_CHECK_LOGS 24
+
+	struct FileFrameCheck {
+		DWORD blocks, frames, parts, moved;
+		// the first part that moves pixels
+		const CHAR* frame;
+		LONG cx, cy, sx, sy, pw, ph;
+	};
+
+	struct {
+		DWORD checks, noFrames, identity, unverified, refused, refusedCalls;
+		DWORD checkLogs;
+		DWORD logged[PLAIN_LOGGED];
+		DWORD loggedCount;
+	} plain;
+
+	// every -IMAGES.OPT frame of the file's blocks (all of them, a block of another sheet size included, so nothing is let through by a size filter)
+	VOID FileFrames(Archive* a, DWORD fileId, FileFrameCheck* out)
+	{
+		MemoryZero(out, sizeof(FileFrameCheck));
+		if (!a)
+			return;
+		if (!a->sheetsLoaded)
+			LoadSheets(a);
+		if (!a->itemCount || !a->images)
+			return;
+
+		DWORD offsets[SHEET_BLOCKS];
+		DWORD blocks = 0;
+		for (DWORD value = a->itemHeads[(fileId * 2654435761u) & a->itemMask]; value; value = a->items[value - 1].next)
+		{
+			const SheetItem* item = &a->items[value - 1];
+			if (item->id != fileId)
+				continue;
+			BOOL seen = FALSE;
+			for (DWORD k = 0; k < blocks && !seen; ++k)
+				seen = offsets[k] == item->offset;
+			if (!seen && blocks < SHEET_BLOCKS)
+				offsets[blocks++] = item->offset;
+		}
+		out->blocks = blocks;
+
+		const BYTE* end = a->images + a->imagesSize;
+		for (DWORD b = 0; b < blocks; ++b)
+		{
+			if (offsets[b] > a->imagesSize || a->imagesSize - offsets[b] < 1 + 2 + 4 + 4 + 1024 + 4)
+				continue;
+			const BYTE* p = a->images + offsets[b] + 1 + 2 + 4 + 4 + 1024;
+			DWORD frames = *(const DWORD*)p;
+			p += 4;
+			for (DWORD f = 0; f < frames; ++f)
+			{
+				const BYTE* next;
+				const CHAR* name = TextAt(p, end, &next);
+				if (!name || next + 12 > end)
+					break;
+				DWORD parts = *(const DWORD*)next;
+				p = next + 12;
+				if (parts > (DWORD)(end - p) / 24)
+					break;
+				const LONG* part = (const LONG*)p;
+				p += parts * 24;
+				++out->frames;
+				for (DWORD i = 0; i < parts; ++i, part += 6)
+				{
+					++out->parts;
+					if (part[0] == part[2] && part[1] == part[3])
+						continue;
+					if (!out->moved++)
+					{
+						out->frame = name;
+						out->cx = part[0];
+						out->cy = part[1];
+						out->sx = part[2];
+						out->sy = part[3];
+						out->pw = part[4];
+						out->ph = part[5];
+					}
+				}
+			}
+		}
+	}
+
+	// a stem compare that stops at the first differing character (FindFileByName runs over every file of every archive)
+	BOOL StemEquals(const CHAR* name, const CHAR* stem, DWORD stemLength)
+	{
+		DWORD i = 0;
+		for (; i < stemLength; ++i)
+		{
+			CHAR x = name[i], y = stem[i];
+			if (!x)
+				return FALSE;
+			if (x >= 'a' && x <= 'z')
+				x -= 32;
+			if (x != y)
+				return FALSE;
+		}
+		return !name[i] || !StrCompareInsensitive(name + i, ".PNG");
+	}
+
+	// faces never pass the store, so they carry no archive; their file is looked up by name, Faces.ff first
+	ArchiveFile* FindFileByName(const CHAR* name, Archive** archive)
+	{
+		*archive = NULL;
+		CHAR stem[NAME_LENGTH];
+		DWORD length = 0;
+		for (; name[length] && length < NAME_LENGTH - 1; ++length)
+		{
+			CHAR c = name[length];
+			stem[length] = c >= 'a' && c <= 'z' ? c - 32 : c;
+		}
+		stem[length] = 0;
+		if (length > 4 && !StrCompare(stem + length - 4, ".PNG"))
+			stem[length -= 4] = 0;
+		if (!length)
+			return NULL;
+
+		ArchiveFile* found = NULL;
+		if (archiveCsReady)
+			EnterCriticalSection(&archiveCs);
+		for (DWORD pass = 0; pass < 2 && !found; ++pass)
+			for (DWORD i = 0; i < archives.count && !found; ++i)
+			{
+				Archive* a = &archives.list[i];
+				DWORD pathLength = StrLength(a->path);
+				BOOL faces = pathLength >= 9 && !StrCompareInsensitive(a->path + pathLength - 9, "\\Faces.ff");
+				if (!a->files || faces != (pass == 0))
+					continue;
+				for (DWORD slot = 0; slot <= a->mask; ++slot)
+					if (a->files[slot].id && StemEquals(a->files[slot].name, stem, length))
+					{
+						found = &a->files[slot];
+						*archive = a;
+						break;
+					}
+			}
+		if (archiveCsReady)
+			LeaveCriticalSection(&archiveCs);
+		return found;
+	}
+
+	const CHAR* ArchiveTail(const Archive* a)
+	{
+		if (!a)
+			return "no archive";
+		const CHAR* tail = StrLastChar(a->path, '\\');
+		return tail ? tail + 1 : a->path;
+	}
+
+	// TRUE when the whole file may be seeded as one plain image at 0,0: it has no -IMAGES.OPT frame, or every part of every frame sits at its canvas position.
+	// One line per refused file, with the first part that moves pixels
+	BOOL PlainCheck(Archive* a, const ArchiveFile* file, const CHAR* name, LONG w, LONG h, BOOL face)
+	{
+		++plain.checks;
+		const CHAR* label = name ? name : file ? file->name : "?";
+		if (!file)
+		{
+			// only faces come without an archive file; one the game never opened through an archive we track cannot be checked, and is let through as before
+			++plain.unverified;
+			if (plain.checkLogs < PLAIN_CHECK_LOGS)
+			{
+				++plain.checkLogs;
+				DebugLog("image plain seed check %s %dx%d%s: allowed, not verified: no archive the game opened holds a file of that name, so its -IMAGES.OPT frames are unknown",
+					label, w, h, face ? " (face)" : "");
+			}
+			return TRUE;
+		}
+
+		FileFrameCheck c;
+		FileFrames(a, file->id, &c);
+		if (!c.moved)
+		{
+			if (c.frames)
+				++plain.identity;
+			else
+				++plain.noFrames;
+			// faces and identity sheets are listed, so the next log shows that the plain seed is safe for them
+			if ((face || c.frames) && plain.checkLogs < PLAIN_CHECK_LOGS)
+			{
+				++plain.checkLogs;
+				if (c.frames)
+					DebugLog("image plain seed check %s %dx%d (%s record %u)%s: allowed, %u -IMAGES.OPT frames with %u parts, every part at its canvas position (identity)",
+						label, w, h, ArchiveTail(a), file->id, face ? " face" : "", c.frames, c.parts);
+				else
+					DebugLog("image plain seed check %s %dx%d (%s record %u)%s: allowed, no -IMAGES.OPT frame (%s), a plain file",
+						label, w, h, ArchiveTail(a), file->id, face ? " face" : "", a && a->itemCount ? "no -INDEX.OPT entry points at it" : "the archive has no sheet tables");
+			}
+			return TRUE;
+		}
+
+		++plain.refusedCalls;
+		DWORD key = HashUpper(label) ^ (DWORD)a;
+		for (DWORD i = 0; i < plain.loggedCount; ++i)
+			if (plain.logged[i] == key)
+				return FALSE;
+		++plain.refused;
+		if (plain.loggedCount < PLAIN_LOGGED)
+		{
+			plain.logged[plain.loggedCount++] = key;
+			DebugLog("image plain seed refused: %s %dx%d (%s record %u)%s | a packed sheet: %u -IMAGES.OPT frames, %u parts, %u of them not at their canvas position (frame %s: canvas %d,%d <- sheet %d,%d %dx%d) "
+				"| one entry over the file at 0,0 would put each part's 4K at its sheet place, which the game's reassembly shows as bands; only SheetPieces (canvas -> sheet) seeds it, or it stays 1x",
+				label, w, h, ArchiveTail(a), file->id, face ? " face" : "", c.frames, c.parts, c.moved, c.frame ? c.frame : "?", c.cx, c.cy, c.sx, c.sy, c.pw, c.ph);
+		}
+		return FALSE;
+	}
+
+	BOOL PlainAllowed(StoreImage* s)
+	{
+		if (s->plainState != PlainUnchecked)
+			return s->plainState == PlainAllowedState;
+
+		Archive* a = NULL;
+		ArchiveFile* file = s->file;
+		const CHAR* name = s->entry && s->entry->owner[0] ? s->entry->owner : file ? file->name : NULL;
+		if (file)
+			a = FileArchive(file);
+		else if (name)
+			file = FindFileByName(name, &a);
+		BOOL ok = PlainCheck(a, file, name, (LONG)s->dims[0], (LONG)s->dims[1], IsFace(s));
+		s->plainState = (BYTE)(ok ? PlainAllowedState : PlainRefusedState);
+		return ok;
+	}
+
 	VOID LogRecords();
 
 	VOID LogSeedSources()
@@ -4233,6 +4472,8 @@ namespace ImageReplace
 			sheetCheck.dropped, sheetCheck.wrongSize, sheetCheck.fileNamed, sheetCheck.fileNamedDiffer, sheetCheck.notFrame, sheetCheck.overlaps, sheetCheck.duplicates, sheetCheck.unchecked);
 		DebugLog("image pack offsets zeroed by the repack, since start: entries placed at their parts union %u, at the 1x key's non-transparent box %u, full-canvas entries kept at 0,0 %u, left 1x %u (frames seeded without them %u), decodes without 8-bit indices at hand %u",
 			derived.placedUnion, derived.placedKey, derived.fullCanvas, derived.unplaced, sheetCheck.offsetLost, derived.noKey);
+		DebugLog("image plain seeds (one pack entry over the whole file at 0,0) since start: checks %u | allowed: no -IMAGES.OPT frame %u, identity frames %u, not verifiable (face file in no tracked archive) %u | refused as packed sheets: files %u, calls %u",
+			plain.checks, plain.noFrames, plain.identity, plain.unverified, plain.refused, plain.refusedCalls);
 		LogRecords();
 	}
 
@@ -4292,6 +4533,12 @@ namespace ImageReplace
 		if (w && h && (pack.frames[frame].w != w || pack.frames[frame].h != h))
 		{
 			*reason = "its pack frame has another size";
+			return -1;
+		}
+		// the one piece below is the identity; a packed sheet never takes it (PlainCheck)
+		if (!PlainCheck(FileArchive(file), file, file->name, w, h, FALSE))
+		{
+			*reason = "its -IMAGES.OPT parts move pixels (a packed sheet), so it is never seeded as one plain image at 0,0";
 			return -1;
 		}
 		return frame;
