@@ -2543,6 +2543,9 @@
 
 		case WM_SYSKEYDOWN:
 		case WM_KEYDOWN: {
+			if (Config::IsTwinChord(wParam))
+				return NULL;
+
 			if (config.keys.windowedMode && config.keys.windowedMode + VK_F1 - 1 == wParam)
 			{
 				return WindowProc(hWnd, WM_COMMAND, IDM_RES_FULL_SCREEN, NULL);

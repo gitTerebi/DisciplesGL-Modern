@@ -3494,10 +3494,19 @@ namespace ImageReplace
 		return image;
 	}
 
+	VOID StoreDrawn(VOID* thisObj, const BYTE* desc);
+
+	// desc is the game's BlitObject (data, clip rect, pitch); the store decodes into a reused scratch one, and the surface that shows the art is written from it after
 	VOID __fastcall StoreDraw(VOID* thisObj, DWORD /*edx*/, const BYTE* desc)
 	{
+		Twin::DecodeBegin();
 		((VOID(__thiscall*)(VOID*, const BYTE*))sub_StoreDraw)(thisObj, desc);
+		StoreDrawn(thisObj, desc);
+		Twin::DecodeEnd();
+	}
 
+	VOID StoreDrawn(VOID* thisObj, const BYTE* desc)
+	{
 		StoreImage* s = FindStore(thisObj, FALSE);
 		if (!s || !s->file || !desc)
 			return;
@@ -3778,7 +3787,8 @@ namespace ImageReplace
 		--art.depth;
 
 		DWORD tick = GetTickCount();
-		BOOL key = (GetAsyncKeyState(VK_F12) & 0x8000) != 0;
+		// Ctrl+F12 is the twin display toggle
+		BOOL key = (GetAsyncKeyState(VK_F12) & 0x8000) && !(GetAsyncKeyState(VK_CONTROL) & 0x8000);
 		if (key && !trace.key)
 			LogStats();
 		trace.key = key;

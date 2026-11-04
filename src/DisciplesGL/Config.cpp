@@ -1049,7 +1049,7 @@ namespace Config
 	INT FindBind(UINT uMsg, WPARAM wParam)
 	{
 		wParam = GetMessageKey(uMsg, wParam);
-		if (!wParam)
+		if (!wParam || (uMsg != WM_CHAR && IsTwinChord(wParam)))
 			return -1;
 
 		for (DWORD pass = 0; pass < 2; ++pass)
@@ -1101,6 +1101,12 @@ namespace Config
 	BOOL IsBindHeld(BindAction action)
 	{
 		return config.binds[action] && IsBindActive(action) && (GetAsyncKeyState(config.binds[action]) & 0x8000);
+	}
+
+	// Ctrl+F10/F11/F12 are the twin debug keys; F10 is also the default BattleLoad bind, which would remap Ctrl+F10 to the stock Ctrl+L quick load
+	BOOL IsTwinChord(WPARAM key)
+	{
+		return config.bpp32Hooked && key >= VK_F10 && key <= VK_F12 && (GetAsyncKeyState(VK_CONTROL) & 0x8000);
 	}
 
 	VOID UpdateKeyLabels()

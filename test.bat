@@ -51,8 +51,13 @@ set "GAME=G:\games\%~1"
 for %%F in (DisciplesGL-debug.log DisciplesGL-debug.prev.log) do (
   if exist "%GAME%\%%F" (
     echo found %GAME%\%%F
-    powershell -NoProfile -Command "Get-Content -LiteralPath '%GAME%\%%F' -Tail 20000 | Set-Content -LiteralPath '%LOGS%\%~2-%%F'"
+    powershell -NoProfile -Command "Get-Content -LiteralPath '%GAME%\%%F' -Tail 60000 | Set-Content -LiteralPath '%LOGS%\%~2-%%F'"
   )
+)
+rem the DLL rotates DisciplesGL-debug.log to DisciplesGL-debug.log.old at 8 MB; the start of the run is in there
+if exist "%GAME%\DisciplesGL-debug.log.old" (
+  echo found %GAME%\DisciplesGL-debug.log.old
+  powershell -NoProfile -Command "Get-Content -LiteralPath '%GAME%\DisciplesGL-debug.log.old' -Tail 60000 | Set-Content -LiteralPath '%LOGS%\%~2-DisciplesGL-debug.old.log'"
 )
 for %%P in (twin-screen.png twin-sheet.png twin-1x.png DisciplesGL-crash.dmp) do if exist "%GAME%\%%P" copy /Y "%GAME%\%%P" "%LOGS%\%~2-%%P" >nul
 if exist "%GAME%\imagecoverage.txt" copy /Y "%GAME%\imagecoverage.txt" "%LOGS%\%~2-imagecoverage.txt" >nul

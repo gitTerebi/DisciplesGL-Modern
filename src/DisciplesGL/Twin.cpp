@@ -129,7 +129,14 @@
 #define SEED_RECORDS 1024
 #define SEED_PIECES 4096
 #define SEED_CONFLICTS 256
-#define SEED_LOGS 50
+#define SEED_LOGS 300
+#define XFER_INSIDE 16
+#define XFER_WATCH 16
+#define XFER_FRAMES 600
+#define XFER_UNBOUND_FRAMES 2
+#define XFER_LOGS 200
+#define XFER_FAIL_LOGS 48
+#define ARRIVAL_TOP 12
 #define SEED_PENDING_FRAMES 3600
 #define SEED_WAIT_DEFAULT 100
 #define SEED_CONFLICT_CELL 16
@@ -278,6 +285,31 @@ namespace Twin
 		DWORD artGross;
 	};
 
+	// how a twin's content arrived, since it was created; the coverage checklist names the path that fills each 1x-only surface
+	struct Arrival {
+		DWORD uploads;
+		DWORD uploadPx;
+		DWORD seedUploads;
+		DWORD writes;
+		DWORD fills;
+		DWORD in4K;
+		DWORD in1x;
+		DWORD inUntwinned;
+		DWORD pixelIn;
+		DWORD locks;
+		DWORD unlocks;
+		DWORD lockCaller;
+		DWORD lockOuter;
+		RECT lockRect;
+		BOOL lockRectSet;
+		DWORD lockSeq;
+		DWORD transfers;
+		DWORD guardFails;
+		DWORD xferSeq;
+		DWORD failSeq;
+		DWORD watchFailSeq;
+	};
+
 	struct Record {
 		StateBuffer* owner;
 		BYTE* base;
@@ -302,6 +334,7 @@ namespace Twin
 		DWORD seedCount;
 		DWORD coverPx;
 		DWORD coverCopies;
+		Arrival arrive;
 	};
 
 	struct Vertex {
@@ -519,6 +552,9 @@ namespace Twin
 		DWORD pieces;
 		DWORD emits;
 		LONGLONG px;
+		DWORD toMemory;
+		DWORD toSurface;
+		DWORD transfers;
 	};
 
 	struct {
@@ -555,6 +591,68 @@ namespace Twin
 		DWORD maskedSkipped;
 		DWORD repeats;
 	} seeds;
+
+	struct XferWatch {
+		StateBuffer* owner;
+		DWORD id;
+		LONG x;
+		LONG y;
+		DWORD seq;
+		LONG rows;
+		DWORD frameNo;
+		BOOL created;
+	};
+
+	// the last named decode, kept so a CPU transfer of its pixels into a surface can take its seed; only the latest decode is a candidate
+	struct {
+		DWORD seq;
+		DWORD depth;
+		BOOL valid;
+		DWORD kind;
+		CHAR name[32];
+		LONG width;
+		LONG height;
+		const BYTE* first;
+		LONG pitch;
+		StateBuffer* target;
+		DWORD frameNo;
+		SeedPiece* pieces;
+		DWORD count;
+		DWORD pieceCap;
+		SeedConflict* conflicts;
+		DWORD conflictCount;
+		DWORD* pixels;
+		DWORD pixelCap;
+		XferWatch inside[XFER_INSIDE];
+		DWORD insideCount;
+		XferWatch watch[XFER_WATCH];
+		DWORD watchCount;
+		DWORD decodes;
+		DWORD named;
+		DWORD snapshotFailed;
+		DWORD locks;
+		DWORD unlocks;
+		DWORD unlocksUntwinned;
+		DWORD unlocksMemory;
+		DWORD unlocksInside;
+		DWORD tries;
+		DWORD noDecode;
+		DWORD consumed;
+		DWORD direct;
+		DWORD stale;
+		DWORD noFit;
+		DWORD guardFails;
+		DWORD partialExpired;
+		DWORD watches;
+		DWORD byDuring;
+		DWORD byBefore;
+		DWORD byInside;
+		DWORD byWrite;
+		DWORD byCreated;
+		DWORD createdWatches;
+		DWORD logs;
+		DWORD failLogs;
+	} xfer;
 
 	struct {
 		const CHAR* name;
@@ -1156,6 +1254,10 @@ namespace Twin
 
 		++game.list->counters.uploads;
 		game.list->counters.pixels += width * height;
+		++twin->arrive.uploads;
+		twin->arrive.uploadPx += width * height;
+		if (seed)
+			++twin->arrive.seedUploads;
 		// an upload only brings unchanged 1x onto the twin; real writes already dropped their regions when they were marked
 		CoverArt(twin, rect);
 
@@ -1508,18 +1610,24 @@ namespace Twin
 		++game.syncCount;
 	}
 
+	VOID XferResolve(BOOL final);
+
 	VOID Sync(BOOL drain = TRUE)
 	{
 		if (drain)
 			DrainSync();
 
 		LONG gen = shared.gen;
-		if (gen == game.seenGen)
-			return;
+		if (gen != game.seenGen)
+		{
+			game.seenGen = gen;
+			Rebuild(FALSE);
+			DebugLog("twin rebuild after GL release, twins %u", game.alive);
+		}
 
-		game.seenGen = gen;
-		Rebuild(FALSE);
-		DebugLog("twin rebuild after GL release, twins %u", game.alive);
+		// a pixel hook that defers its syncs is still mid-write
+		if (drain && xfer.watchCount)
+			XferResolve(FALSE);
 	}
 
 	VOID LoadIndex();
@@ -3332,57 +3440,15 @@ namespace Twin
 		}
 	}
 
-	VOID SeedArt(const VOID* first, LONG pitch, LONG width, LONG height, SeedKind kind, const CHAR* name, const SeedPiece* pieces, DWORD count, const SeedConflict* conflicts, DWORD conflictCount, const SeedSheetStats* sheet)
+	VOID XferCapture(const VOID* first, LONG pitch, LONG width, LONG height, SeedKind kind, const CHAR* label, const SeedPiece* pieces, DWORD count, const SeedConflict* conflicts, DWORD conflictCount);
+	VOID XferResolve(BOOL final);
+
+	// returns 0 when nothing was recorded, 1 done, 2 deferred
+	DWORD SeedAt(Record* twin, DWORD id, const RECT* at, LONG pitch, SeedKind kind, const CHAR* label, const SeedPiece* pieces, DWORD count, const SeedConflict* conflicts, DWORD conflictCount, BOOL transfer)
 	{
-		Timed timed("SeedArt");
-		if (!Active() || !SeedMode() || !first || width <= 0 || height <= 0 || pitch < width || (DWORD)kind >= SeedKinds)
-			return;
-
-		Sync();
-		const CHAR* label = name ? name : "?";
 		SeedCounters* c = &seeds.kinds[kind];
-		++c->events;
-		if (sheet)
-		{
-			++seeds.sheets;
-			seeds.sheetFrames += sheet->frames;
-			seeds.sheetUnmapped += sheet->unmapped;
-			seeds.sheetAdditive += sheet->additive;
-			seeds.sheetOutside += sheet->outside;
-			seeds.sheetShared += sheet->shared;
-			seeds.sheetPieces += count;
-		}
-
-		RECT local = { 0, 0, width, height };
-		if (!pieces || !count)
-		{
-			++c->noArt;
-			SeedLog("skipped: no piece maps to a pack frame", kind, label, NULL, TWIN_NONE, &local, pitch, NULL, 0);
-			return;
-		}
-
-		DWORD id = TWIN_NONE;
-		LONG x = 0, y = 0;
-		Record* twin = FindAddress(first, &id);
-		BOOL fits = twin && PixelPos(twin, first, pitch, width, height, &x, &y);
-		if (twin && !fits && twin->memory)
-		{
-			DropOverlapping(first, pitch, width, height);
-			twin = NULL;
-		}
-		if (!twin)
-		{
-			twin = Adopt(first, &id);
-			fits = twin && PixelPos(twin, first, pitch, width, height, &x, &y);
-		}
-		if (!twin || !fits)
-		{
-			++c->noTwin;
-			SeedLog(twin ? "skipped: pitch or rect does not fit its twin" : "skipped: no twin for this memory", kind, label, twin, id, &local, pitch, NULL, 0);
-			return;
-		}
-
-		RECT rect = { x, y, x + width, y + height };
+		RECT rect = *at;
+		LONG width = rect.right - rect.left, height = rect.bottom - rect.top;
 		if (twin->seedCount)
 			for (DWORD i = 0; i < seeds.top; ++i)
 			{
@@ -3391,7 +3457,7 @@ namespace Twin
 				if (other->owner == twin->owner && EqualRect(&other->rect, &rect) && other->kind == (DWORD)kind && !StrCompareNum(other->name, label, sizeof(other->name) - 1))
 				{
 					++seeds.repeats;
-					return;
+					return 0;
 				}
 			}
 		SeedWrite(twin, &rect);
@@ -3429,7 +3495,7 @@ namespace Twin
 				MemoryFree(r->conflicts);
 			MemoryZero(r, sizeof(SeedRecord));
 			++c->noTwin;
-			return;
+			return 0;
 		}
 
 		for (DWORD i = 0; i < count; ++i)
@@ -3464,9 +3530,15 @@ namespace Twin
 		{
 			SeedForget(r, FALSE);
 			++c->noArt;
-			SeedLog("skipped: every piece fell outside the image", kind, label, twin, id, &rect, pitch, NULL, 0);
-			return;
+			SeedLog(transfer ? "transfer skipped: every piece fell outside the image" : "skipped: every piece fell outside the image", kind, label, twin, id, &rect, pitch, NULL, 0);
+			return 0;
 		}
+		if (transfer)
+			++c->transfers;
+		else if (twin->memory)
+			++c->toMemory;
+		else
+			++c->toSurface;
 
 		// the decode worker usually finishes within a frame; waiting here lets memory the game copies out and reuses at once get its 4K
 		DWORD waitUs = 0;
@@ -3501,7 +3573,7 @@ namespace Twin
 
 		DWORD waiting = SeedEmit(r);
 		if (!r->owner)
-			return;
+			return 0;
 		if (waiting)
 		{
 			r->pending = TRUE;
@@ -3510,8 +3582,459 @@ namespace Twin
 		}
 		else
 			++c->done;
-		SeedLog(waiting ? "deferred" : "done", kind, label, twin, id, &rect, pitch, r, waitUs);
+		SeedLog(transfer ? (waiting ? "transfer deferred" : "transfer done") : (waiting ? "deferred" : "done"), kind, label, twin, id, &rect, pitch, r, waitUs);
+		return waiting ? 2 : 1;
 	}
+
+	VOID SeedArt(const VOID* first, LONG pitch, LONG width, LONG height, SeedKind kind, const CHAR* name, const SeedPiece* pieces, DWORD count, const SeedConflict* conflicts, DWORD conflictCount, const SeedSheetStats* sheet)
+	{
+		Timed timed("SeedArt");
+		if (!Active() || !SeedMode() || !first || width <= 0 || height <= 0 || pitch < width || (DWORD)kind >= SeedKinds)
+			return;
+
+		Sync();
+		const CHAR* label = name ? name : "?";
+		SeedCounters* c = &seeds.kinds[kind];
+		++c->events;
+		if (sheet)
+		{
+			++seeds.sheets;
+			seeds.sheetFrames += sheet->frames;
+			seeds.sheetUnmapped += sheet->unmapped;
+			seeds.sheetAdditive += sheet->additive;
+			seeds.sheetOutside += sheet->outside;
+			seeds.sheetShared += sheet->shared;
+			seeds.sheetPieces += count;
+		}
+
+		// faces are copied out by hooked DrawFaces copies, which replay the memory twin's seed
+		if (kind != SeedFace)
+			XferCapture(first, pitch, width, height, kind, label, pieces, count, conflicts, conflictCount);
+
+		RECT local = { 0, 0, width, height };
+		if (!pieces || !count)
+		{
+			++c->noArt;
+			SeedLog("skipped: no piece maps to a pack frame", kind, label, NULL, TWIN_NONE, &local, pitch, NULL, 0);
+			return;
+		}
+
+		DWORD id = TWIN_NONE;
+		LONG x = 0, y = 0;
+		Record* twin = FindAddress(first, &id);
+		BOOL fits = twin && PixelPos(twin, first, pitch, width, height, &x, &y);
+		if (twin && !fits && twin->memory)
+		{
+			DropOverlapping(first, pitch, width, height);
+			twin = NULL;
+		}
+		if (!twin)
+		{
+			twin = Adopt(first, &id);
+			fits = twin && PixelPos(twin, first, pitch, width, height, &x, &y);
+		}
+		if (!twin || !fits)
+		{
+			++c->noTwin;
+			SeedLog(twin ? "skipped: pitch or rect does not fit its twin" : "skipped: no twin for this memory", kind, label, twin, id, &local, pitch, NULL, 0);
+			return;
+		}
+		if (kind != SeedFace)
+			xfer.target = twin->owner;
+
+		RECT rect = { x, y, x + width, y + height };
+		SeedAt(twin, id, &rect, pitch, kind, label, pieces, count, conflicts, conflictCount, FALSE);
+	}
+
+#pragma region Transfer
+	VOID XferBind();
+	BOOL XferSnapshot(const VOID* first, LONG pitch, LONG width, LONG height, const SeedPiece* pieces, DWORD count, const SeedConflict* conflicts, DWORD conflictCount);
+
+	VOID XferCapture(const VOID* first, LONG pitch, LONG width, LONG height, SeedKind kind, const CHAR* label, const SeedPiece* pieces, DWORD count, const SeedConflict* conflicts, DWORD conflictCount)
+	{
+		// whatever was watched for the previous decode is complete by now
+		XferResolve(TRUE);
+
+		++xfer.seq;
+		++xfer.decodes;
+		xfer.valid = FALSE;
+		xfer.target = NULL;
+		xfer.frameNo = game.frameNo;
+		xfer.first = (const BYTE*)first;
+		xfer.pitch = pitch;
+		xfer.width = width;
+		xfer.height = height;
+		xfer.kind = kind;
+		DWORD length = min((DWORD)StrLength(label), (DWORD)sizeof(xfer.name) - 1);
+		MemoryCopy(xfer.name, label, length);
+		xfer.name[length] = 0;
+		if (pieces && count && XferSnapshot(first, pitch, width, height, pieces, count, conflicts, conflictCount))
+		{
+			xfer.valid = TRUE;
+			++xfer.named;
+		}
+		XferBind();
+	}
+
+	BOOL XferSnapshot(const VOID* first, LONG pitch, LONG width, LONG height, const SeedPiece* pieces, DWORD count, const SeedConflict* conflicts, DWORD conflictCount)
+	{
+		DWORD px = (DWORD)width * height;
+		if (px > xfer.pixelCap)
+		{
+			if (xfer.pixels)
+				MemoryFree(xfer.pixels);
+			xfer.pixels = (DWORD*)MemoryAlloc(px * sizeof(DWORD));
+			xfer.pixelCap = xfer.pixels ? px : 0;
+		}
+		count = min(count, (DWORD)SEED_PIECES);
+		if (count > xfer.pieceCap)
+		{
+			if (xfer.pieces)
+				MemoryFree(xfer.pieces);
+			xfer.pieces = (SeedPiece*)MemoryAlloc(count * sizeof(SeedPiece));
+			xfer.pieceCap = xfer.pieces ? count : 0;
+		}
+		if (!xfer.conflicts)
+			xfer.conflicts = (SeedConflict*)MemoryAlloc(SEED_CONFLICTS * sizeof(SeedConflict));
+		if (!xfer.pixels || !xfer.pieces || !xfer.conflicts || IsBadReadPtr(first, ((height - 1) * pitch + width) * sizeof(DWORD)))
+		{
+			++xfer.snapshotFailed;
+			return FALSE;
+		}
+
+		const DWORD* src = (const DWORD*)first;
+		for (LONG y = 0; y < height; ++y)
+			MemoryCopy(xfer.pixels + y * width, src + y * pitch, width * sizeof(DWORD));
+		MemoryCopy(xfer.pieces, pieces, count * sizeof(SeedPiece));
+		xfer.count = count;
+		xfer.conflictCount = conflicts ? min(conflictCount, (DWORD)SEED_CONFLICTS) : 0;
+		if (xfer.conflictCount)
+			MemoryCopy(xfer.conflicts, conflicts, xfer.conflictCount * sizeof(SeedConflict));
+		return TRUE;
+	}
+
+	// leading rows of the decode that the surface holds at x,y; the alpha byte is not compared
+	LONG XferGuard(const Record* twin, LONG x, LONG y, LONG fromRow, LONG* badX, DWORD* got, DWORD* want)
+	{
+		for (LONG row = fromRow; row < xfer.height; ++row)
+		{
+			const DWORD* have = (const DWORD*)twin->base + (y + row) * twin->pitch + x;
+			const DWORD* decoded = xfer.pixels + row * xfer.width;
+			for (LONG i = 0; i < xfer.width; ++i)
+				if ((have[i] ^ decoded[i]) & 0x00FFFFFF)
+				{
+					*badX = i;
+					*got = have[i];
+					*want = decoded[i];
+					return row;
+				}
+		}
+		return xfer.height;
+	}
+
+	enum XferResult { XferSkip, XferDone, XferPartial, XferFailed };
+
+	// the provenance (the latest decode, the lock or write that followed it) picks the image and its place; the pixel compare only confirms it
+	XferResult XferTry(Record* twin, DWORD id, const POINT* at, DWORD atCount, const CHAR* via, DWORD* by, BOOL final, LONG* doneRows, BOOL quiet = FALSE)
+	{
+		++xfer.tries;
+		if (!xfer.valid)
+		{
+			++xfer.noDecode;
+			return XferSkip;
+		}
+		if (twin->arrive.xferSeq == xfer.seq)
+		{
+			++xfer.consumed;
+			return XferSkip;
+		}
+		if (xfer.target == twin->owner)
+		{
+			++xfer.direct;
+			return XferSkip;
+		}
+		if (game.frameNo - xfer.frameNo > XFER_FRAMES)
+		{
+			++xfer.stale;
+			return XferSkip;
+		}
+
+		LONG rows = 0, badX = 0, badY = 0;
+		DWORD got = 0, want = 0;
+		const POINT* place = NULL;
+		BOOL fitted = FALSE;
+		for (DWORD k = 0; k < atCount && !place; ++k)
+		{
+			if (at[k].x < 0 || at[k].y < 0 || at[k].x + xfer.width > twin->width || at[k].y + xfer.height > twin->height)
+				continue;
+			fitted = TRUE;
+			LONG from = doneRows ? *doneRows : 0;
+			LONG x = 0;
+			DWORD g = 0, w = 0;
+			LONG equal = XferGuard(twin, at[k].x, at[k].y, from, &x, &g, &w);
+			if (equal == xfer.height)
+				place = &at[k];
+			else if (k == 0 || equal > rows)
+			{
+				rows = equal;
+				badX = x;
+				badY = equal;
+				got = g;
+				want = w;
+			}
+		}
+		if (!fitted)
+		{
+			++xfer.noFit;
+			return XferSkip;
+		}
+
+		if (!place)
+		{
+			// a watched surface may not be written yet; it is judged at the next decode or present
+			if (!final)
+			{
+				if (doneRows)
+					*doneRows = rows;
+				return XferPartial;
+			}
+			if (rows && doneRows)
+				++xfer.partialExpired;
+			++twin->arrive.guardFails;
+			if (twin->arrive.failSeq != xfer.seq)
+			{
+				twin->arrive.failSeq = xfer.seq;
+				++xfer.guardFails;
+				if (!quiet && xfer.failLogs < XFER_FAIL_LOGS)
+				{
+					++xfer.failLogs;
+					DebugLog("twin seed transfer guard failed via %s: decode %.32s %dx%d (#%u, %u frames ago) -> twin %u %08X %dx%d at %d,%d: equal rows %d, px %d,%d holds %08X, decode %08X | lock caller %08X<%08X locks %u",
+						via, xfer.name, xfer.width, xfer.height, xfer.seq, game.frameNo - xfer.frameNo, id, (DWORD)twin->owner, twin->width, twin->height, at[0].x, at[0].y,
+						rows, badX, badY, got, want, twin->arrive.lockCaller, twin->arrive.lockOuter, twin->arrive.locks);
+				}
+			}
+			return XferFailed;
+		}
+
+		Sync();
+		twin->arrive.xferSeq = xfer.seq;
+		++twin->arrive.transfers;
+		++*by;
+		RECT rect = { place->x, place->y, place->x + xfer.width, place->y + xfer.height };
+		++seeds.kinds[xfer.kind].events;
+		DWORD outcome = SeedAt(twin, id, &rect, twin->pitch, (SeedKind)xfer.kind, xfer.name, xfer.pieces, xfer.count, xfer.conflicts, xfer.conflictCount, TRUE);
+		if (xfer.logs < XFER_LOGS)
+		{
+			++xfer.logs;
+			DebugLog("twin seed transfer #%u via %s: decode %.32s %dx%d (#%u, %u frames ago, seeded into %08X) -> twin %u %08X %dx%d at %d,%d | %s | lock caller %08X<%08X",
+				xfer.logs, via, xfer.name, xfer.width, xfer.height, xfer.seq, game.frameNo - xfer.frameNo, (DWORD)xfer.target, id, (DWORD)twin->owner, twin->width, twin->height,
+				place->x, place->y, outcome == 1 ? "seeded" : outcome == 2 ? "seeded, art deferred" : "nothing recorded (repeat or no piece)", twin->arrive.lockCaller, twin->arrive.lockOuter);
+		}
+		return XferDone;
+	}
+
+	VOID XferAdd(XferWatch* list, DWORD* count, DWORD limit, Record* twin, DWORD id, LONG x, LONG y, DWORD seq, BOOL created)
+	{
+		for (DWORD i = 0; i < *count; ++i)
+			if (list[i].owner == twin->owner)
+				return;
+
+		XferWatch* w = NULL;
+		if (*count < limit)
+			w = &list[(*count)++];
+		else
+		{
+			// surfaces made for text and the like crowd the list; the newest unbound one is the likely texture
+			for (DWORD i = 0; i < *count; ++i)
+				if (!list[i].seq && (!w || list[i].frameNo < w->frameNo))
+					w = &list[i];
+			if (!w)
+				return;
+		}
+		w->owner = twin->owner;
+		w->id = id;
+		w->x = x;
+		w->y = y;
+		w->seq = seq;
+		w->rows = 0;
+		w->frameNo = game.frameNo;
+		w->created = created;
+	}
+
+	// a hooked write announces itself before the CPU writes, so the surface is checked at the next twin call
+	VOID XferWatchWrite(Record* twin, DWORD id, const RECT* rect)
+	{
+		if (twin->memory || !SeedMode())
+			return;
+		// inside the decode call the decode it belongs to is not captured yet
+		if (xfer.depth)
+		{
+			XferAdd(xfer.inside, &xfer.insideCount, XFER_INSIDE, twin, id, rect->left, rect->top, 0, FALSE);
+			return;
+		}
+		if (!xfer.valid || twin->arrive.xferSeq == xfer.seq || twin->arrive.watchFailSeq == xfer.seq || xfer.target == twin->owner || game.frameNo - xfer.frameNo > XFER_FRAMES)
+			return;
+		DWORD before = xfer.watchCount;
+		XferAdd(xfer.watch, &xfer.watchCount, XFER_WATCH, twin, id, rect->left, rect->top, xfer.seq, FALSE);
+		if (xfer.watchCount != before)
+			++xfer.watches;
+	}
+
+	// the game creates the surface for a texture, then decodes the art into scratch memory and writes it into the surface itself; the next decode is that surface's content
+	VOID XferWatchCreated(Record* twin, DWORD id)
+	{
+		if (twin->memory || !SeedMode())
+			return;
+		DWORD before = xfer.watchCount;
+		XferAdd(xfer.watch, &xfer.watchCount, XFER_WATCH, twin, id, 0, 0, 0, TRUE);
+		if (xfer.watchCount != before)
+			++xfer.createdWatches;
+	}
+
+	VOID XferBind()
+	{
+		for (DWORD i = 0; i < xfer.watchCount;)
+		{
+			XferWatch* w = &xfer.watch[i];
+			if (!w->seq && xfer.valid)
+			{
+				w->seq = xfer.seq;
+				w->rows = 0;
+				++i;
+			}
+			else if (w->seq)
+				++i;
+			else
+				xfer.watch[i] = xfer.watch[--xfer.watchCount];
+		}
+	}
+
+	VOID XferResolve(BOOL final)
+	{
+		static BOOL resolving;
+		if (!xfer.watchCount || resolving)
+			return;
+		resolving = TRUE;
+		for (DWORD i = 0; i < xfer.watchCount;)
+		{
+			XferWatch* w = &xfer.watch[i];
+			Record* twin = &game.twins[w->id];
+			XferResult result = XferSkip;
+			if (twin->owner == w->owner && !w->seq && game.frameNo - w->frameNo <= XFER_UNBOUND_FRAMES)
+				result = XferPartial;
+			else if (twin->owner == w->owner && w->seq == xfer.seq)
+			{
+				POINT at = { w->x, w->y };
+				// several surfaces can be made before one decode; only those of the decode's size (even width) are worth a log line when they miss
+				BOOL sized = twin->height == xfer.height && (twin->width == xfer.width || twin->width == xfer.width + 1);
+				result = XferTry(twin, w->id, &at, 1, w->created ? "surface created before the decode" : "hooked write", w->created ? &xfer.byCreated : &xfer.byWrite, final, &w->rows,
+					w->created && !sized && !w->rows);
+				if (result == XferFailed)
+					twin->arrive.watchFailSeq = xfer.seq;
+			}
+			if (result == XferPartial)
+				++i;
+			else
+				xfer.watch[i] = xfer.watch[--xfer.watchCount];
+		}
+		resolving = FALSE;
+	}
+
+	VOID DecodeBegin()
+	{
+		++xfer.depth;
+	}
+
+	VOID DecodeEnd()
+	{
+		if (xfer.depth)
+			--xfer.depth;
+		if (xfer.depth)
+			return;
+		DWORD count = xfer.insideCount;
+		xfer.insideCount = 0;
+		if (!count || !Active())
+			return;
+
+		Sync();
+		for (DWORD i = 0; i < count; ++i)
+		{
+			const XferWatch* w = &xfer.inside[i];
+			Record* twin = &game.twins[w->id];
+			if (twin->owner != w->owner)
+				continue;
+			POINT at[2] = { { w->x, w->y }, { 0, 0 } };
+			XferTry(twin, w->id, at, w->x || w->y ? 2 : 1, "unlock or hooked write inside the decode call", &xfer.byInside, TRUE, NULL);
+		}
+	}
+
+	VOID OnLock(StateBuffer* buffer, const RECT* rect, DWORD caller, DWORD outer)
+	{
+		if (!buffer || !Active())
+			return;
+
+		++xfer.locks;
+		DWORD id;
+		Record* twin = Find(buffer, &id);
+		if (!twin)
+			return;
+
+		Arrival* a = &twin->arrive;
+		++a->locks;
+		a->lockCaller = caller;
+		a->lockOuter = outer;
+		a->lockSeq = xfer.seq;
+		a->lockRectSet = rect != NULL;
+		if (rect)
+			a->lockRect = *rect;
+	}
+
+	VOID OnUnlock(StateBuffer* buffer)
+	{
+		Timed timed("OnUnlock");
+		if (!buffer || !Active())
+			return;
+
+		++xfer.unlocks;
+		DWORD id;
+		Record* twin = Find(buffer, &id);
+		if (!twin)
+		{
+			++xfer.unlocksUntwinned;
+			return;
+		}
+
+		++twin->arrive.unlocks;
+		if (twin->memory)
+		{
+			++xfer.unlocksMemory;
+			return;
+		}
+		// the decode that fills it has not been seen yet; it is checked when the decode call returns
+		if (xfer.depth)
+		{
+			++xfer.unlocksInside;
+			const Arrival* a = &twin->arrive;
+			XferAdd(xfer.inside, &xfer.insideCount, XFER_INSIDE, twin, id, a->lockRectSet ? a->lockRect.left : 0, a->lockRectSet ? a->lockRect.top : 0, 0, FALSE);
+			return;
+		}
+		if (!xfer.valid || twin->arrive.xferSeq == xfer.seq)
+			return;
+
+		const Arrival* a = &twin->arrive;
+		BOOL during = a->lockSeq != xfer.seq;
+		POINT at[2] = { { a->lockRectSet ? a->lockRect.left : 0, a->lockRectSet ? a->lockRect.top : 0 }, { 0, 0 } };
+		XferTry(twin, id, at, at[0].x || at[0].y ? 2 : 1, during ? "unlock, decoded while locked" : "unlock, decoded before the lock", during ? &xfer.byDuring : &xfer.byBefore, TRUE, NULL);
+	}
+
+	VOID LogTransfers()
+	{
+		DebugLog("twin seed transfer since start: decodes %u (named %u, snapshot failed %u) | locks %u unlocks %u (untwinned %u, memory twins %u, inside a decode %u) | tries %u: no decode %u, already taken %u, decoded there %u, stale %u, does not fit %u",
+			xfer.decodes, xfer.named, xfer.snapshotFailed, xfer.locks, xfer.unlocks, xfer.unlocksUntwinned, xfer.unlocksMemory, xfer.unlocksInside, xfer.tries, xfer.noDecode, xfer.consumed, xfer.direct, xfer.stale, xfer.noFit);
+		DebugLog("twin seed transfer done: unlock with the decode during the lock %u, before the lock %u | inside the decode call %u | hooked write %u (watched %u) | surface created before the decode %u (watched %u) | guard failed %u surfaces (partial at the end %u)",
+			xfer.byDuring, xfer.byBefore, xfer.byInside, xfer.byWrite, xfer.watches, xfer.byCreated, xfer.createdWatches, xfer.guardFails, xfer.partialExpired);
+	}
+#pragma endregion
 
 	VOID CountCoverage(Record* source, const RECT* from)
 	{
@@ -3542,9 +4065,9 @@ namespace Twin
 		{
 			const SeedCounters* c = &seeds.kinds[k];
 			DWORD mb10 = DWORD(c->px * mbScale * 10 / (1024 * 1024));
-			DebugLog("twin seed %s since start: events %u done %u deferred %u (completed later %u, expired %u) dropped %u (memory written %u, freed %u) | overwritten after seeding %u | no twin %u no art %u | pieces %u emits %u px %u (%u.%u MB at N)",
+			DebugLog("twin seed %s since start: events %u done %u deferred %u (completed later %u, expired %u) dropped %u (memory written %u, freed %u) | overwritten after seeding %u | no twin %u no art %u | pieces %u emits %u px %u (%u.%u MB at N) | into memory twins %u, surface twins %u, by transfer %u",
 				seedKindNames[k], c->events, c->done, c->deferred, c->later, c->expired, c->dropped + c->released, c->dropped, c->released, c->overwritten, c->noTwin, c->noArt,
-				c->pieces, c->emits, (DWORD)c->px, mb10 / 10, mb10 % 10);
+				c->pieces, c->emits, (DWORD)c->px, mb10 / 10, mb10 % 10, c->toMemory, c->toSurface, c->transfers);
 		}
 
 		DWORD pending = 0;
@@ -3602,6 +4125,23 @@ namespace Twin
 			DebugLog("twin coverage top 1x-only copy sources (rank twin kind buffer size px copies store):%s", text);
 		}
 
+		LogTransfers();
+		for (DWORD line = 0; line * 3 < found && line * 3 < ARRIVAL_TOP; ++line)
+		{
+			CHAR text[3 * 240 + 1];
+			CHAR* ptr = text;
+			*ptr = 0;
+			for (DWORD k = line * 3; k < found && k < line * 3 + 3 && k < ARRIVAL_TOP; ++k)
+			{
+				const Record* twin = &game.twins[top[k]];
+				const Arrival* a = &twin->arrive;
+				ptr += StrPrint(ptr, " [%u] %u %dx%d up %u/%u s%u wr %u fi %u in %u/%u/%u px %u lk %u/%u %08X<%08X x%u f%u;",
+					k + 1, top[k], twin->width, twin->height, a->uploads, a->uploadPx, a->seedUploads, a->writes, a->fills, a->in4K, a->in1x, a->inUntwinned, a->pixelIn,
+					a->locks, a->unlocks, a->lockCaller, a->lockOuter, a->transfers, a->guardFails);
+			}
+			DebugLog("twin arrival top 1x-only (up n/px, s seed ups, wr hooked writes, fi fills, in 4K/1x/untwinned, px pixel ops, lk lock/unlock caller<outer, x transfers, f guard fails):%s", text);
+		}
+
 		for (DWORD i = 0; i < game.top; ++i)
 			game.twins[i].coverPx = game.twins[i].coverCopies = 0;
 	}
@@ -3636,6 +4176,10 @@ namespace Twin
 
 		Sync();
 		CreateTwin(buffer, width, height);
+		DWORD id;
+		Record* twin = Find(buffer, &id);
+		if (twin)
+			XferWatchCreated(twin, id);
 	}
 
 	VOID CreateTwin(StateBuffer* buffer, LONG width, LONG height)
@@ -3687,6 +4231,7 @@ namespace Twin
 		twin->lastUse = game.frameNo;
 		twin->seedCount = 0;
 		twin->coverPx = twin->coverCopies = 0;
+		MemoryZero(&twin->arrive, sizeof(twin->arrive));
 		twin->mirror = (DWORD*)MemoryAlloc(width * height * sizeof(DWORD));
 		if (twin->mirror)
 			MemoryCopy(twin->mirror, twin->base, width * height * sizeof(DWORD));
@@ -3876,6 +4421,8 @@ namespace Twin
 			if (game.list || CurrentList())
 				++game.list->counters.unknown;
 			CountCoverage(NULL, &whole);
+			++target->arrive.inUntwinned;
+			XferWatchWrite(target, dstId, &whole);
 			MarkDirty(target, whole);
 			return;
 		}
@@ -3912,6 +4459,13 @@ namespace Twin
 		FlushRegion(source, srcId, &from);
 		Verify(source, srcId, &from, NULL, 0, FALSE);
 		CountCoverage(source, &from);
+		if (source != target)
+		{
+			if (Carries4K(source, &from))
+				++target->arrive.in4K;
+			else
+				++target->arrive.in1x;
+		}
 
 		FlushRegion(target, dstId, &to, TRUE);
 		ArtPlan plan;
@@ -4046,6 +4600,7 @@ namespace Twin
 			return;
 
 		SeedWrite(twin, &area);
+		++twin->arrive.fills;
 		Cover(twin, &area);
 		FlushRegion(twin, id, &area, TRUE);
 		CoverArt(twin, &area);
@@ -4120,6 +4675,8 @@ namespace Twin
 		if (!Clip(twin, &rect))
 			return;
 
+		++twin->arrive.writes;
+		XferWatchWrite(twin, id, &rect);
 		MarkDirty(twin, rect);
 	}
 
@@ -4136,6 +4693,7 @@ namespace Twin
 		if (twin)
 		{
 			RECT whole = { 0, 0, twin->width, twin->height };
+			++twin->arrive.writes;
 			SeedWrite(twin, &whole);
 			MarkAll(twin);
 		}
@@ -4210,6 +4768,8 @@ namespace Twin
 					dstId, TwinKind(target), trace.outcome, known ? "knows it" : "doesn't know it", base, pitch, w, h, frame, game.frameNo);
 			}
 			CountCoverage(NULL, &to);
+			++target->arrive.inUntwinned;
+			XferWatchWrite(target, dstId, &to);
 			MarkDirty(target, to);
 			return;
 		}
@@ -4235,6 +4795,7 @@ namespace Twin
 		FlushRegion(source, srcId, &from);
 		Verify(source, srcId, &from, NULL, 0, FALSE);
 		CountCoverage(source, &from);
+		++target->arrive.pixelIn;
 		FlushRegion(target, dstId, &to, TRUE);
 		DropRegions(target, &to);
 
@@ -4409,6 +4970,7 @@ namespace Twin
 		FlushRegion(source, srcId, &from);
 		Verify(source, srcId, &from, NULL, 0, FALSE);
 		CountCoverage(source, &from);
+		++target->arrive.pixelIn;
 		FlushRegion(target, dstId, &to, TRUE);
 		DropRegions(target, &to);
 
@@ -4727,6 +5289,7 @@ namespace Twin
 			game.checkRequest = TRUE;
 		}
 
+		XferResolve(TRUE);
 		if (seeds.active)
 			SeedPoll();
 

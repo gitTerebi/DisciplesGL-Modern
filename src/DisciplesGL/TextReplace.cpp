@@ -201,7 +201,8 @@ namespace TextReplace
 	VOID TraceFrame()
 	{
 		++traceFrame;
-		BOOL key = (GetAsyncKeyState(VK_F11) & 0x8000) != 0;
+		// Ctrl+F11 is the twin tile check toggle
+		BOOL key = (GetAsyncKeyState(VK_F11) & 0x8000) && !(GetAsyncKeyState(VK_CONTROL) & 0x8000);
 		DWORD frames = 4;
 		if (!(traceFrame & 255))
 		{

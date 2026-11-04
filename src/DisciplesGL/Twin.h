@@ -58,6 +58,11 @@ namespace Twin
 		DWORD shared;
 	};
 	VOID SeedArt(const VOID* first, LONG pitch, LONG width, LONG height, SeedKind kind, const CHAR* name, const SeedPiece* pieces, DWORD count, const SeedConflict* conflicts, DWORD conflictCount, const SeedSheetStats* sheet);
+	// the game decodes store art into a scratch buffer and then writes it into a surface by CPU; these follow it there
+	VOID DecodeBegin();
+	VOID DecodeEnd();
+	VOID OnLock(StateBuffer* buffer, const RECT* rect, DWORD caller, DWORD outer);
+	VOID OnUnlock(StateBuffer* buffer);
 
 	// render thread
 	BOOL Prepare();

@@ -42,7 +42,7 @@ void DebugLog(const char* format, ...)
 	if (file == INVALID_HANDLE_VALUE)
 		return;
 
-	if (GetFileSize(file, NULL) >= 2 * 1024 * 1024)
+	if (GetFileSize(file, NULL) >= 8 * 1024 * 1024)
 	{
 		CloseHandle(file);
 
@@ -56,7 +56,8 @@ void DebugLog(const char* format, ...)
 			return;
 	}
 
-	CHAR text[512];
+	// wvsprintf writes at most 1024 chars
+	CHAR text[1100];
 	SYSTEMTIME time;
 	GetLocalTime(&time);
 	INT offset = wsprintf(text, "%02u:%02u:%02u.%03u ", time.wHour, time.wMinute, time.wSecond, time.wMilliseconds);

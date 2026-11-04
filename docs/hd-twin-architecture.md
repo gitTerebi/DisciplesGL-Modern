@@ -546,16 +546,15 @@ Taken once, 15 s after the first art draw, and on every F12. Written next to the
 11. **`HashKey` depends on history.** (`:1698`) The key used when hashing depends on whether the twin has seen a keyed copy yet, so learn-time and lookup-time hashes can differ for keys other than magenta. *Low.*
 12. **Concurrent saves.** `ReleaseGL` (`:5392`) can run `SaveIndex` while `SaveWorker` is running. The second save fails to open the tmp file and logs `save failed`. Benign.
 13. **Hotkey overlaps.**
-    - Ctrl+F12 also fires the plain F12 dump: `ImageReplace.cpp:3279` doesn't exclude Ctrl. That means `imagecoverage.txt`, a GPU check and screenshots on every toggle.
-    - Ctrl+F11 also starts TextReplace's F11 surface trace (`TextReplace.cpp:204`), which floods the log for 4 frames.
-    - F10 is also the `BattleLoad` alternative key (`Config.cpp:131`). Check that Ctrl+F10 doesn't trigger it.
+    - *Fixed.* Ctrl+F12 also fired the plain F12 dump, and Ctrl+F11 started TextReplace's F11 surface trace, which flooded the log and rotated the start of the run away. Both now ignore the key while Ctrl is held.
+    - *Fixed.* F10 is the default `BattleLoad` bind, which remaps to the stock Ctrl+L quick load; with Ctrl held, Ctrl+F10 loaded `BattleSave.sg` on the map. `Config::IsTwinChord` makes `FindBind` skip Ctrl+F10/F11/F12, and the window procedure swallows their key-down, so neither binds nor the DLL's own F-key options see them.
 14. **Zero-height blits can loop near-forever** (outside Twin). `Hooks.cpp:2323` and `:2385` guard with `size->cy < 0` instead of `<= 0`, so a zero-height call runs `do … while (--height)` about 4 billion times.
 
 ---
 
 ## 7. Diagnostics
 
-All output goes to `DisciplesGL-debug.log` next to the game exe. It is rotated to `DisciplesGL-debug.log.old` at 2 MB (`StdAfx.cpp:45-55`).
+All output goes to `DisciplesGL-debug.log` next to the game exe. It is rotated to `DisciplesGL-debug.log.old` at 8 MB (`StdAfx.cpp`; it was 2 MB until the seed transfer round).
 
 ### Hotkeys (polled in `OnPresent`, `:3506-3532`, except F12)
 
@@ -629,10 +628,10 @@ Counters reset every interval unless noted.
 2. `build.bat`: MSBuild Release Win32 into `build\`. For each of the four game folders under `G:\games\` it renames the old log to `DisciplesGL-debug.prev.log`, deletes the old dump, and copies `C4dll-R.dll`. It finishes with the D2MT check.
 3. Wait while the user plays.
 4. Clear `logs\` of old per-game files, and copy the map file.
-5. For each game, copy into `logs\<d2|rote|dzieje|semga>-…`: the **last 20000 lines** of `DisciplesGL-debug.log` and `.prev.log`, the three PNGs, the crash dump, and `imagecoverage.txt`.
+5. For each game, copy into `logs\<d2|rote|dzieje|semga>-…`: the **last 60000 lines** of `DisciplesGL-debug.log`, `.prev.log` and the rotated `DisciplesGL-debug.log.old` (as `<game>-DisciplesGL-debug.old.log`), the three PNGs, the crash dump, and `imagecoverage.txt`.
 6. Commit `logs: test run <date>` and push.
 
-`test.bat send` skips the build. It does **not** ship `DisciplesGL-debug.log.old` (rotated) or `twin-index.bin`.
+`test.bat send` skips the build. It does not ship `twin-index.bin`. `build.bat` deletes a stale `DisciplesGL-debug.log.old` before the run, so the shipped one is always from this run.
 
 ---
 
