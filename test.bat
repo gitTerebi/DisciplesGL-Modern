@@ -29,7 +29,7 @@ pause >nul
 
 :send
 if not exist "%LOGS%" mkdir "%LOGS%"
-del /Q "%LOGS%\*-*.log" "%LOGS%\*.old" 2>nul
+del /Q "%LOGS%\*-*.log" "%LOGS%\*.old" "%LOGS%\*.png" 2>nul
 call :grab "Disciples 2" d2
 call :grab "Disciples 2 - Rise of the Elves" rote
 call :grab "Disciples 2 - Dzieje" dzieje
@@ -53,5 +53,6 @@ for %%F in (DisciplesGL-debug.log) do (
     powershell -NoProfile -Command "Get-Content -LiteralPath '%GAME%\%%F' -Tail 20000 | Set-Content -LiteralPath '%LOGS%\%~2-%%F'"
   )
 )
+for %%P in (twin-screen.png twin-sheet.png twin-1x.png) do if exist "%GAME%\%%P" copy /Y "%GAME%\%%P" "%LOGS%\%~2-%%P" >nul
 if exist "%GAME%\imagecoverage.txt" copy /Y "%GAME%\imagecoverage.txt" "%LOGS%\%~2-imagecoverage.txt" >nul
 exit /b 0
