@@ -11,6 +11,8 @@ namespace Twin
 	VOID OnCreate(StateBuffer* buffer, LONG width, LONG height);
 	VOID OnRelease(StateBuffer* buffer);
 	VOID OnCopy(StateBuffer* dst, LONG x, LONG y, StateBuffer* src, const RECT* srcRect, BOOL keyed, DWORD key);
+	// the game code behind the next OnCopy (Blt/BltFast return address and the caller above the game's wrapper)
+	VOID OnCopyCaller(DWORD caller, DWORD outer);
 	VOID OnFill(StateBuffer* dst, const RECT* rect, DWORD color);
 	VOID OnWrite(const VOID* first, LONG pitch, LONG width, LONG height);
 	VOID OnWriteAll(StateBuffer* buffer);

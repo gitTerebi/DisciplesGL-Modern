@@ -906,7 +906,11 @@ HRESULT __stdcall OpenDrawSurface::Blt(LPRECT lpDestRect, IDrawSurface7* lpDDSrc
 			DWORD* dst = (DWORD*)this->indexBuffer->data + lpDestRect->top * dWidth + lpDestRect->left;
 
 			if (sWidth == surface->mode.width && dWidth == this->mode.width)
+			{
+				DWORD ret = (DWORD)_ReturnAddress();
+				Twin::OnCopyCaller(ret, LockOuterCaller((const DWORD*)_AddressOfReturnAddress(), ret));
 				Twin::OnCopy(this->indexBuffer, lpDestRect->left, lpDestRect->top, surface->indexBuffer, lpSrcRect, FALSE, 0);
+			}
 			else
 				Twin::OnWrite(dst, dWidth, width, height);
 
@@ -973,6 +977,8 @@ HRESULT __stdcall OpenDrawSurface::BltFast(DWORD dwX, DWORD dwY, IDrawSurface7* 
 		if (config.bpp32Hooked)
 		{
 			TextReplace::OnBlit(this, dwX, dwY, surface, lpSrcRect, sWidth, surface->colorKey.enabled, surface->colorKey.high);
+			DWORD ret = (DWORD)_ReturnAddress();
+			Twin::OnCopyCaller(ret, LockOuterCaller((const DWORD*)_AddressOfReturnAddress(), ret));
 			Twin::OnCopy(this->indexBuffer, dwX, dwY, surface->indexBuffer, lpSrcRect, surface->colorKey.enabled, surface->colorKey.high);
 
 			DWORD* src = (DWORD*)surface->indexBuffer->data + lpSrcRect->top * sWidth + lpSrcRect->left;

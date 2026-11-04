@@ -1959,7 +1959,7 @@ namespace ImageReplace
 	}
 
 	struct {
-		DWORD draws, drawLinks, faceLinks, faceLoads, faceCopies, faceMisses, faceRejects, takes, takeLinks, takeFrames;
+		DWORD draws, drawLinks, faceLinks, faceLoads, faceCopies, faceMisses, faceRejects, takes, takeLinks, takeFrames, prefetchLoads, prefetchFrames;
 	} storeStats;
 
 	#define FACE_LINKS 1024
@@ -2780,6 +2780,13 @@ namespace ImageReplace
 	}
 
 	// render thread, inside the twin replay: a seed recorded once its art was decoded needs it on the GPU now
+	LONG ArtBytes(LONG frame)
+	{
+		if (!pack.ready || frame < 0 || (DWORD)frame >= pack.frameCount)
+			return 0;
+		return (LONG)pack.texs[frame].bytes;
+	}
+
 	BOOL ArtUpload(LONG frame)
 	{
 		if (!pack.ready || frame < 0 || (DWORD)frame >= pack.frameCount || !InitGL())
@@ -3446,11 +3453,70 @@ namespace ImageReplace
 		return TRUE;
 	}
 
+	// asked for when the store loads the file, so the 4K is usually decoded before the game decodes and transfers the 1x
+	DWORD PrefetchSheet(ArchiveFile* file)
+	{
+		Archive* a = file ? FileArchive(file) : NULL;
+		if (!a || !pack.ready)
+			return 0;
+		if (!a->sheetsLoaded)
+			LoadSheets(a);
+		if (!a->itemCount)
+			return 0;
+
+		DWORD offsets[SHEET_BLOCKS];
+		DWORD blocks = 0;
+		DWORD fileId = file->id;
+		for (DWORD value = a->itemHeads[(fileId * 2654435761u) & a->itemMask]; value; value = a->items[value - 1].next)
+		{
+			const SheetItem* item = &a->items[value - 1];
+			if (item->id != fileId)
+				continue;
+			BOOL seen = FALSE;
+			for (DWORD k = 0; k < blocks && !seen; ++k)
+				seen = offsets[k] == item->offset;
+			if (!seen && blocks < SHEET_BLOCKS)
+				offsets[blocks++] = item->offset;
+		}
+
+		DWORD asked = 0;
+		const BYTE* end = a->images + a->imagesSize;
+		for (DWORD b = 0; b < blocks; ++b)
+		{
+			if (offsets[b] > a->imagesSize || a->imagesSize - offsets[b] < 1 + 2 + 4 + 4 + 1024 + 4)
+				continue;
+			const BYTE* p = a->images + offsets[b] + 1 + 2 + 4 + 4 + 1024;
+			DWORD frames = *(const DWORD*)p;
+			p += 4;
+			for (DWORD f = 0; f < frames; ++f)
+			{
+				const BYTE* next;
+				const CHAR* name = TextAt(p, end, &next);
+				if (!name || next + 12 > end)
+					break;
+				DWORD parts = *(const DWORD*)next;
+				LONG cw = *(const LONG*)(next + 4), ch = *(const LONG*)(next + 8);
+				p = next + 12;
+				if (parts > (DWORD)(end - p) / 24)
+					break;
+				p += parts * 24;
+
+				const SheetLink* link = FindLink(a, name);
+				Origin origin = OriginCanvas;
+				const PackAnim* anim;
+				LONG frame = PackFrameFor(link ? link->anim : name, link ? link->index : 0, cw, ch, &origin, &anim);
+				if (frame >= 0 && !pack.frames[frame].additive && ArtState(frame) < 2)
+					++asked;
+			}
+		}
+		return asked;
+	}
+
 	VOID LogSeedSources()
 	{
-		DebugLog("image seed sources since start: store draws %d (new memory %d) | faces loaded %d, face copies %d | ranges %d, decodes with art store %d face %d | archives with sheet tables %u | ground chunks %d builds %d published %d",
+		DebugLog("image seed sources since start: store draws %d (new memory %d) | faces loaded %d, face copies %d | ranges %d, decodes with art store %d face %d | archives with sheet tables %u | ground chunks %d builds %d published %d | prefetch at store load: files %u, frames asked %u",
 			storeStats.draws, storeStats.drawLinks, storeStats.faceLoads, storeStats.faceCopies, memory.count, memory.learnStore, memory.learnFace, sheets.archives,
-			ground.chunkCount, ground.builds, ground.published);
+			ground.chunkCount, ground.builds, ground.published, storeStats.prefetchLoads, storeStats.prefetchFrames);
 	}
 
 	BOOL SeedStore(StoreImage* s, const BYTE* first, LONG pitch)
@@ -3480,6 +3546,55 @@ namespace ImageReplace
 		return TRUE;
 	}
 
+	#define RECENT_LOADS 16
+	#define RECENT_FRAMES 30
+
+	// store loads by name and pack frame: an image the game converts outside StoreDraw is only known by this
+	struct {
+		CHAR name[32];
+		LONG frame;
+		LONG w;
+		LONG h;
+		LONG frameNo;
+	} recentLoads[RECENT_LOADS];
+	DWORD recentHead;
+
+	VOID NoteLoad(ArchiveFile* file)
+	{
+		Archive* a = FileArchive(file);
+		if (a && a->itemCount)
+			return;
+		Origin origin = OriginCanvas;
+		const PackAnim* anim;
+		LONG frame = PackFrameFor(file->name, 0, 0, 0, &origin, &anim);
+		if (frame < 0 || pack.frames[frame].additive)
+			return;
+		ArtState(frame);
+		DWORD slot = recentHead++ % RECENT_LOADS;
+		DWORD length = min((DWORD)StrLength(file->name), (DWORD)sizeof(recentLoads[slot].name) - 1);
+		MemoryCopy(recentLoads[slot].name, file->name, length);
+		recentLoads[slot].name[length] = 0;
+		recentLoads[slot].frame = frame;
+		recentLoads[slot].w = pack.frames[frame].w;
+		recentLoads[slot].h = pack.frames[frame].h;
+		recentLoads[slot].frameNo = game.frameNo;
+	}
+
+	BOOL RecentLoad(LONG width, LONG height, LONG* frame, CHAR* name, DWORD* framesAgo)
+	{
+		for (DWORD k = 0; k < RECENT_LOADS && k < recentHead; ++k)
+		{
+			DWORD slot = (recentHead - 1 - k) % RECENT_LOADS;
+			if (recentLoads[slot].w != width || recentLoads[slot].h != height || game.frameNo - recentLoads[slot].frameNo > RECENT_FRAMES)
+				continue;
+			*frame = recentLoads[slot].frame;
+			StrCopy(name, recentLoads[slot].name);
+			*framesAgo = DWORD(game.frameNo - recentLoads[slot].frameNo);
+			return TRUE;
+		}
+		return FALSE;
+	}
+
 	VOID* __fastcall StoreLoad(VOID* thisObj, DWORD /*edx*/, DWORD id, DWORD flag, VOID* out)
 	{
 		VOID* image = ((VOID*(__thiscall*)(VOID*, DWORD, DWORD, VOID*))sub_StoreLoad)(thisObj, id, flag, out);
@@ -3489,7 +3604,15 @@ namespace ImageReplace
 		ArchiveFile* file = FindArchiveFile(thisObj, id);
 		StoreImage* s = FindStore(image, file != NULL);
 		if (s && s->file != file)
+		{
 			ResetStore(s, file);
+			if (file && Twin::SeedMode() && Twin::Active())
+			{
+				++storeStats.prefetchLoads;
+				storeStats.prefetchFrames += PrefetchSheet(file);
+				NoteLoad(file);
+			}
+		}
 
 		return image;
 	}

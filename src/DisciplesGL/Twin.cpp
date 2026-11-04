@@ -156,14 +156,33 @@
 #define TRAP_QUICK 64
 #define TRAP_REOPEN 64
 #define ARRIVAL_TOP 12
+#define TRAP_PRIORITY 8
+#define TRAP_PRIORITY_FAULTS 4096
+#define TRAP_PRIORITY_PAGES_SECOND 16384
+#define TRAP_PRIORITY_LOGS 96
+#define TRAP_PAIRS 256
+#define TRAP_HINTS 8
+#define COPYIN_LOGS 96
+#define COPYIN_BIG (400 * 400)
+#define WRITE_RING 8
+#define INDEXED_OTHER_LOGS 32
 #define SEED_PENDING_FRAMES 3600
-#define SEED_WAIT_DEFAULT 100
+#define SEED_WAIT_DEFAULT 0
 #define SEED_CONFLICT_CELL 16
 #define SEED_CONFLICT_BATCH 16
 #define SEED_CONFLICT_DIFF 12
 #define SEED_CONFLICT_LOGS 24
 #define COVER_TOP 20
 #define SEED_POLL_BYTES (24 * 1024 * 1024)
+#define CMD_TYPES 14
+#define REPLAY_SLOW_US 50000
+#define REPLAY_SLOW_LOGS 64
+#define SEED_INLINE_MS 4
+#define SEED_INLINE_MIN (1024 * 1024)
+#define SEED_INLINE_MAX (32 * 1024 * 1024)
+#define SEED_LOAD_GAP_MS 100
+#define SEED_LOAD_WAIT_DEFAULT 100
+#define SEED_LOAD_TOTAL_MS 1000
 #define TAG_GROUND -3
 #define TAG_SEED_SHEET -4
 #define TAG_MERGED_4K -5
@@ -173,6 +192,8 @@ typedef VOID(__stdcall* GLBLENDEQUATION)(GLenum mode);
 namespace Twin
 {
 	enum CmdType { CmdCreate, CmdDestroy, CmdCopy, CmdFill, CmdUpload, CmdPresent, CmdReset, CmdArt, CmdGround, CmdPixel, CmdTint, CmdMask, CmdLighter, CmdSeed };
+
+	const CHAR* const cmdNames[CMD_TYPES] = { "create", "destroy", "copy", "fill", "upload", "present", "reset", "art", "ground", "pixel", "tint", "mask", "lighter", "seed" };
 
 	enum PresentFlags { PresentMapZoom = 1, PresentBack = 2, PresentZoomed = 4, PresentCheck = 8, PresentShot = 16 };
 
@@ -304,6 +325,40 @@ namespace Twin
 		DWORD artGross;
 	};
 
+	enum NoteKind { NoteWrite, NoteIndexed, NoteUntwinned, NoteFill, NoteCopy, NotePixel, NoteTrap, NoteWhole, NoteKinds };
+
+	// one of the last writes into a twin: what kind, where, the game code above it and the source it read
+	struct WriteNote {
+		DWORD kind;
+		RECT rect;
+		DWORD caller;
+		DWORD src;
+		DWORD frameNo;
+	};
+
+	struct CopyIn {
+		DWORD frameNo;
+		DWORD srcId;
+		StateBuffer* srcOwner;
+		LONG srcW;
+		LONG srcH;
+		BOOL srcMemory;
+		RECT from;
+		LONG x;
+		LONG y;
+		BOOL keyed;
+		BOOL is4K;
+		DWORD srcArts;
+		DWORD caller;
+		DWORD outer;
+		DWORD srcUploads;
+		DWORD srcWrites;
+		DWORD srcIn1x;
+		DWORD srcInUntwinned;
+		DWORD srcTraps;
+		WriteNote note;
+	};
+
 	// how a twin's content arrived, since it was created; the coverage checklist names the path that fills each 1x-only surface
 	struct Arrival {
 		DWORD uploads;
@@ -329,6 +384,11 @@ namespace Twin
 		DWORD watchFailSeq;
 		DWORD trapWrites;
 		DWORD trapEip;
+		DWORD inCount;
+		CopyIn firstIn;
+		CopyIn lastIn;
+		WriteNote notes[WRITE_RING];
+		DWORD noteHead;
 	};
 
 	struct Record {
@@ -440,6 +500,11 @@ namespace Twin
 		LONGLONG verifyFrame;
 		LONGLONG verifySum;
 		LONGLONG verifyMax;
+		DWORD copyCaller;
+		DWORD copyOuter;
+		DWORD copySrcData;
+		DWORD copyInLogs;
+		DWORD indexedOtherLogs;
 		BYTE bad[TWIN_MAX_SIZE / TILE];
 	} game;
 
@@ -555,9 +620,10 @@ namespace Twin
 		BOOL deferred;
 		BOOL based;
 		DWORD frameNo;
+		DWORD tick;
 	};
 
-	enum SeedPieceState { PieceWaiting, PieceSent, PieceFailed, PieceReady };
+	enum SeedPieceState { PieceWaiting, PieceSent, PieceFailed, PieceReady, PieceWritten };
 
 	struct SeedCounters {
 		DWORD events;
@@ -611,6 +677,27 @@ namespace Twin
 		DWORD maskedCopies;
 		DWORD maskedSkipped;
 		DWORD repeats;
+		BOOL conflictCheck;
+		DWORD loadWaitMs;
+		DWORD lastPresentTick;
+		LONGLONG inlineBudget;
+		LONGLONG inlineUsed;
+		DWORD inlineDeferred;
+		DWORD piecesWritten;
+		DWORD late;
+		DWORD latePieces;
+		LONGLONG lateFrames;
+		LONGLONG lateMs;
+		DWORD lateMaxFrames;
+		DWORD lateMaxMs;
+		DWORD deferredInterval;
+		BOOL deriving;
+		BOOL deriveBased;
+		DWORD derived;
+		DWORD derivedPieces;
+		DWORD waitDecode;
+		DWORD loadWaits;
+		DWORD loadWaitTotalUs;
 	} seeds;
 
 	enum XferVia { ViaWrite, ViaCreated, ViaTrap, ViaUnlock };
@@ -720,6 +807,9 @@ namespace Twin
 		DWORD indexedOther;
 		DWORD indexedInsideDropped;
 		DWORD unlockLarge;
+		DWORD loadMatches;
+		DWORD loadSeeds;
+		DWORD loadLogs;
 		DWORD blank;
 		DWORD exact[5];
 		DWORD tolerant[5];
@@ -733,12 +823,16 @@ namespace Twin
 	enum TrapFlags { TrapDecode = 1, TrapRender = 2, TrapHooked = 4, TrapOtherThread = 8 };
 
 	// written by the exception handler on whatever thread faulted; drained on the game thread
+	enum TrapReg { RegEax, RegEcx, RegEdx, RegEbx, RegEsi, RegEdi, TrapRegs };
+
 	struct TrapEvent {
 		volatile LONG ready;
 		DWORD eip;
 		DWORD addr;
 		DWORD caller;
 		DWORD ret[4];
+		DWORD regs[TrapRegs];
+		BYTE code[4];
 		DWORD id;
 		const BYTE* start;
 		DWORD seq;
@@ -764,6 +858,8 @@ namespace Twin
 		BOOL queued;
 		DWORD reFirst;
 		DWORD reLast;
+		BOOL priority;
+		DWORD priorityFaults;
 	};
 
 	struct TrapWriter {
@@ -834,8 +930,51 @@ namespace Twin
 		DWORD quickArms;
 		BOOL spentLogged;
 		BOOL draining;
+		struct {
+			StateBuffer* owner;
+			DWORD id;
+		} priority[TRAP_PRIORITY];
+		DWORD priorityCount;
+		DWORD priorityArms;
+		DWORD priorityHot;
+		DWORD priorityWindow;
+		DWORD priorityWrites;
+		DWORD priorityLogs;
+		struct {
+			DWORD eip;
+			DWORD id;
+		} pairs[TRAP_PAIRS];
+		DWORD pairCount;
+		DWORD reopenSkips;
+		DWORD marked;
+		BOOL noOpen;
+		BOOL copyChosen;
+		BOOL copyOn;
+		struct {
+			StateBuffer* dst;
+			DWORD dstId;
+			StateBuffer* src;
+			DWORD srcId;
+			LONG ox;
+			LONG oy;
+			RECT rect;
+			DWORD faults;
+			DWORD frameNo;
+		} hints[TRAP_HINTS];
+		DWORD hintCount;
+		DWORD copyFaults;
+		DWORD copyReplayed;
+		DWORD copyGuardFails;
+		DWORD copyPx;
+		DWORD copyLogs;
 	} trap;
 
+	BOOL GpuCheckWanted();
+	const CHAR* TwinKind(const Record* twin);
+	DWORD GameCaller();
+	VOID RegText(DWORD value, CHAR* text);
+	VOID TrapName(DWORD address, CHAR* text);
+	VOID LogCopyIns(const DWORD* top, DWORD found);
 	VOID TrapDrain();
 	VOID TrapReopen();
 	VOID TrapOpen(Record* twin, const RECT* rect);
@@ -926,6 +1065,30 @@ namespace Twin
 		DWORD expectSeenNext;
 	} art;
 
+	struct SlowCmd {
+		DWORD us;
+		DWORD type;
+		DWORD dst;
+		DWORD src;
+		RECT rect;
+		LONG x;
+		LONG y;
+		DWORD flags;
+		DWORD extra;
+		DWORD cmds;
+		DWORD uploads;
+		DWORD uploadUs;
+		DWORD frameNo;
+	};
+
+	struct ReplayTimes {
+		LONGLONG us[CMD_TYPES];
+		DWORD max[CMD_TYPES];
+		DWORD count[CMD_TYPES];
+		SlowCmd slow;
+		DWORD slowReplays;
+	};
+
 	struct {
 		CRITICAL_SECTION cs;
 		volatile LONG state;
@@ -971,6 +1134,12 @@ namespace Twin
 		DWORD conflictsDiffer;
 		DWORD conflictsSkipped;
 		DWORD conflictBlocks;
+		ReplayTimes times;
+		LONGLONG inlineBytes;
+		LONGLONG inlineUs;
+		DWORD inlineUploads;
+		LONGLONG rateBytes;
+		LONGLONG rateUs;
 	} shared = { {}, 0, 0, TRUE, FALSE };
 
 	struct {
@@ -1070,6 +1239,12 @@ namespace Twin
 		LONG conflictW;
 		LONG conflictH;
 		DWORD* conflictData;
+		ReplayTimes times;
+		SlowCmd drawSlow;
+		DWORD inlineUploads;
+		LONGLONG inlineUs;
+		LONGLONG inlineBytes;
+		DWORD slowLogs;
 		struct {
 			BOOL valid;
 			DWORD id;
@@ -2111,7 +2286,7 @@ namespace Twin
 		game.lastArtSource = srcId;
 		if (!art.firstTick)
 			art.firstTick = GetTickCount() | 1;
-		if (!art.checked)
+		if (!art.checked && GpuCheckWanted())
 		{
 			art.checked = TRUE;
 			game.checkRequest = TRUE;
@@ -3366,10 +3541,21 @@ namespace Twin
 			seeds.seed = StrCompareInsensitive(value, "match") != 0;
 			INT wait = Config::Get("Twin", "SeedWait", SEED_WAIT_DEFAULT);
 			seeds.waitMs = (DWORD)max(0, min(wait, 2000));
+			wait = Config::Get("Twin", "SeedLoadWait", SEED_LOAD_WAIT_DEFAULT);
+			seeds.loadWaitMs = (DWORD)max(0, min(wait, 2000));
 			DebugLog("twin mode %s (%s=%s, seed wait %u ms): %s", seeds.seed ? "seed" : "match", origin, value, seeds.waitMs,
 				seeds.seed ? "4K art is written where named 1x art is decoded; no expectations, regions, hash lookups or twin-index.bin" : "expectations, regions and the hash index identify art");
 		}
 		return seeds.seed;
+	}
+
+	// the GPU check and the screenshots read back on the render thread; they run only on F12 unless asked for
+	BOOL GpuCheckWanted()
+	{
+		static INT wanted = -1;
+		if (wanted < 0)
+			wanted = Config::Get("Twin", "GpuCheck", 0) != 0;
+		return wanted;
 	}
 
 	VOID SeedFree(SeedRecord* r)
@@ -3415,7 +3601,25 @@ namespace Twin
 		for (DWORD i = 0; i < seeds.top; ++i)
 		{
 			SeedRecord* r = &seeds.list[i];
-			if (r->owner && r->owner == twin->owner && IntersectRect(&part, &r->rect, rect))
+			if (!r->owner || r->owner != twin->owner || !IntersectRect(&part, &r->rect, rect))
+				continue;
+			// only the pieces the write touched lose their 4K; the rest of the decode is still intact
+			DWORD left = 0;
+			for (DWORD k = 0; k < r->count; ++k)
+			{
+				if (r->done[k] == PieceWritten || r->done[k] == PieceFailed)
+					continue;
+				RECT to = r->pieces[k].to;
+				OffsetRect(&to, r->rect.left, r->rect.top);
+				if (IntersectRect(&part, &to, rect))
+				{
+					r->done[k] = PieceWritten;
+					++seeds.piecesWritten;
+				}
+				else
+					++left;
+			}
+			if (!left || Contains(rect, &r->rect))
 				SeedForget(r, TRUE);
 		}
 	}
@@ -3444,7 +3648,7 @@ namespace Twin
 			if (!r->owner)
 				continue;
 			for (DWORD k = 0; k < r->count; ++k)
-				if (r->done[k] != PieceFailed)
+				if (r->done[k] != PieceFailed && r->done[k] != PieceWritten)
 					r->done[k] = PieceWaiting;
 			r->based = FALSE;
 			r->pending = TRUE;
@@ -3472,12 +3676,26 @@ namespace Twin
 		LONG last = -2, state = 0;
 		for (DWORD i = 0; i < r->count; ++i)
 		{
-			if (r->done[i] == PieceSent || r->done[i] == PieceFailed)
+			if (r->done[i] == PieceSent || r->done[i] == PieceFailed || r->done[i] == PieceWritten)
 				continue;
 			if (r->pieces[i].frame != last)
 			{
 				last = r->pieces[i].frame;
 				state = ImageReplace::ArtState(last);
+				// a decoded frame is uploaded by the replay that draws it; past this present's budget it waits for the next one or for the upload pump
+				if (state == 1)
+				{
+					LONG bytes = ImageReplace::ArtBytes(last);
+					if (seeds.inlineUsed + bytes > seeds.inlineBudget && seeds.inlineUsed)
+					{
+						state = 0;
+						++seeds.inlineDeferred;
+					}
+					else
+						seeds.inlineUsed += bytes;
+				}
+				else if (!state)
+					++seeds.waitDecode;
 			}
 			if (state < 0)
 				r->done[i] = PieceFailed;
@@ -3509,7 +3727,7 @@ namespace Twin
 		}
 
 		DWORD conflictCount = 0;
-		if (!waiting && !r->conflictsSent)
+		if (!waiting && !r->conflictsSent && seeds.conflictCheck)
 		{
 			r->conflictsSent = TRUE;
 			for (DWORD i = 0; i < r->conflictCount; ++i)
@@ -3568,10 +3786,20 @@ namespace Twin
 
 		c->pieces += fresh;
 		++c->emits;
+		if (r->deferred)
+		{
+			DWORD frames = game.frameNo - r->frameNo, ms = GetTickCount() - r->tick;
+			++seeds.late;
+			seeds.latePieces += fresh;
+			seeds.lateFrames += frames;
+			seeds.lateMs += ms;
+			seeds.lateMaxFrames = max(seeds.lateMaxFrames, frames);
+			seeds.lateMaxMs = max(seeds.lateMaxMs, ms);
+		}
 		game.lastArtSource = r->id;
 		if (!art.firstTick)
 			art.firstTick = GetTickCount() | 1;
-		if (!art.checked)
+		if (!art.checked && GpuCheckWanted())
 		{
 			art.checked = TRUE;
 			game.checkRequest = TRUE;
@@ -3653,8 +3881,16 @@ namespace Twin
 				// no hook saw a write since the last seed of this image here, so the twin still holds it
 				if (other->owner == twin->owner && EqualRect(&other->rect, &rect) && other->kind == (DWORD)kind && !StrCompareNum(other->name, label, sizeof(other->name) - 1))
 				{
-					++seeds.repeats;
-					return 0;
+					BOOL written = FALSE;
+					for (DWORD k = 0; k < other->count && !written; ++k)
+						written = other->done[k] == PieceWritten;
+					if (!written)
+					{
+						++seeds.repeats;
+						return 0;
+					}
+					SeedForget(other, TRUE);
+					break;
 				}
 			}
 		SeedWrite(twin, &rect);
@@ -3719,6 +3955,8 @@ namespace Twin
 		MemoryCopy(r->name, label, length);
 		r->name[length] = 0;
 		r->frameNo = game.frameNo;
+		r->tick = GetTickCount();
+		r->based = seeds.deriveBased;
 		++seeds.active;
 		if ((DWORD)(r - seeds.list) >= seeds.top)
 			seeds.top = DWORD(r - seeds.list) + 1;
@@ -3730,7 +3968,9 @@ namespace Twin
 			SeedLog(transfer ? "transfer skipped: every piece fell outside the image" : "skipped: every piece fell outside the image", kind, label, twin, id, &rect, pitch, NULL, 0);
 			return 0;
 		}
-		if (transfer)
+		if (seeds.deriving)
+			;
+		else if (transfer)
 			++c->transfers;
 		else if (twin->memory)
 			++c->toMemory;
@@ -3739,7 +3979,14 @@ namespace Twin
 
 		// the decode worker usually finishes within a frame; waiting here lets memory the game copies out and reuses at once get its 4K
 		DWORD waitUs = 0;
-		if (seeds.waitMs)
+		DWORD waitMs = seeds.deriving ? 0 : seeds.waitMs;
+		// the game is not presenting, so it is loading and blocked anyway; only then does a decode wait for its 4K
+		if (!seeds.deriving && seeds.lastPresentTick && GetTickCount() - seeds.lastPresentTick > SEED_LOAD_GAP_MS && seeds.loadWaitMs > waitMs && seeds.loadWaitTotalUs < SEED_LOAD_TOTAL_MS * 1000)
+		{
+			waitMs = seeds.loadWaitMs;
+			++seeds.loadWaits;
+		}
+		if (waitMs)
 		{
 			LARGE_INTEGER start, now;
 			QueryPerformanceCounter(&start);
@@ -3758,17 +4005,19 @@ namespace Twin
 
 				QueryPerformanceCounter(&now);
 				waitUs = DWORD((now.QuadPart - start.QuadPart) * 1000000 / frequency);
-				if (all || waitUs >= seeds.waitMs * 1000)
+				if (all || waitUs >= waitMs * 1000)
 					break;
 				Sleep(1);
 			}
 			seeds.waitUs += waitUs;
+			seeds.loadWaitTotalUs += waitUs;
 			++seeds.waits;
 			if (waitUs > seeds.waitMaxUs)
 				seeds.waitMaxUs = waitUs;
 		}
 
-		DWORD waiting = SeedEmit(r);
+		// the copy that carries a pending seed is recorded before the CPU copies the 1x, so its base is uploaded at the next present
+		DWORD waiting = seeds.deriving ? r->count : SeedEmit(r);
 		if (!r->owner)
 			return 0;
 		if (waiting)
@@ -3776,11 +4025,76 @@ namespace Twin
 			r->pending = TRUE;
 			r->deferred = TRUE;
 			++c->deferred;
+			++seeds.deferredInterval;
 		}
 		else
 			++c->done;
-		SeedLog(transfer ? (waiting ? "transfer deferred" : "transfer done") : (waiting ? "deferred" : "done"), kind, label, twin, id, &rect, pitch, r, waitUs);
+		if (!seeds.deriving)
+			SeedLog(transfer ? (waiting ? "transfer deferred" : "transfer done") : (waiting ? "deferred" : "done"), kind, label, twin, id, &rect, pitch, r, waitUs);
 		return waiting ? 2 : 1;
+	}
+
+	// an unkeyed copy out of memory whose seed still waits for its art takes the waiting pieces along, so the 4K lands where the pixels went even after the source is reused
+	VOID SeedDerive(Record* target, DWORD dstId, const RECT* to, Record* source, const RECT* from)
+	{
+		if (!source->seedCount || target == source)
+			return;
+		if (target->width == *(LONG*)&config.mode->width && target->height == *(LONG*)&config.mode->height)
+			return;
+
+		LONG ox = to->left - from->left, oy = to->top - from->top;
+		for (DWORD i = 0; i < seeds.top; ++i)
+		{
+			SeedRecord* r = &seeds.list[i];
+			RECT part;
+			if (!r->owner || r->owner != source->owner || !r->pending || !IntersectRect(&part, &r->rect, from))
+				continue;
+
+			static SeedPiece pieces[SEED_PIECES / 4];
+			DWORD count = 0;
+			RECT bound = { 0, 0, 0, 0 };
+			for (DWORD k = 0; k < r->count && count < sizeof(pieces) / sizeof(*pieces); ++k)
+			{
+				if (r->done[k] != PieceWaiting)
+					continue;
+				RECT g = r->pieces[k].to;
+				OffsetRect(&g, r->rect.left, r->rect.top);
+				if (!Contains(from, &g))
+					continue;
+				SeedPiece* p = &pieces[count++];
+				p->frame = r->pieces[k].frame;
+				p->to = g;
+				p->place = r->pieces[k].place;
+				OffsetRect(&p->place, r->rect.left, r->rect.top);
+				if (count == 1)
+					bound = g;
+				else
+					UnionRect(&bound, &bound, &g);
+			}
+			if (!count)
+				continue;
+
+			RECT rect = bound;
+			for (DWORD k = 0; k < count; ++k)
+			{
+				OffsetRect(&pieces[k].to, -rect.left, -rect.top);
+				OffsetRect(&pieces[k].place, -rect.left, -rect.top);
+			}
+			RECT at = rect;
+			OffsetRect(&at, ox, oy);
+			DWORD kind = r->kind;
+			CHAR name[sizeof(r->name)];
+			MemoryCopy(name, r->name, sizeof(name));
+
+			// the copy carried the key-alpha base the source's first pieces were cut by, so it is not uploaded again over them
+			seeds.deriveBased = r->based;
+			seeds.deriving = TRUE;
+			SeedAt(target, dstId, &at, target->pitch, (SeedKind)kind, name, pieces, count, NULL, 0, TRUE);
+			seeds.deriving = FALSE;
+			seeds.deriveBased = FALSE;
+			++seeds.derived;
+			seeds.derivedPieces += count;
+		}
 	}
 
 	VOID SeedArt(const VOID* first, LONG pitch, LONG width, LONG height, SeedKind kind, const CHAR* name, const SeedPiece* pieces, DWORD count, const SeedConflict* conflicts, DWORD conflictCount, const SeedSheetStats* sheet)
@@ -4524,6 +4838,48 @@ namespace Twin
 	}
 
 	// the hooked indexed blit names its source: when that is the decode's 8-bit snapshot, the provenance is exact and the blit's palette converts the snapshot
+	BOOL LoadSeedWanted()
+	{
+		static INT wanted = -1;
+		if (wanted < 0)
+			wanted = Config::Get("Twin", "LoadSeed", 0) != 0;
+		return wanted;
+	}
+
+	// a whole image converted from indices no store decode named, of exactly the size of an image the store just loaded by name: that load is its provenance
+	VOID XferLoadSeed(const DWORD* dst, LONG dstPitch, LONG width, LONG height)
+	{
+		LONG frame;
+		CHAR name[32];
+		DWORD ago;
+		if (!ImageReplace::RecentLoad(width, height, &frame, name, &ago))
+			return;
+		++xfer.loadMatches;
+		DWORD id;
+		LONG x, y;
+		Record* twin = FindAddress(dst, &id);
+		BOOL fits = twin && PixelPos(twin, dst, dstPitch, width, height, &x, &y);
+		DWORD outcome = 0;
+		if (fits && LoadSeedWanted())
+		{
+			SeedPiece piece;
+			SetRect(&piece.to, 0, 0, width, height);
+			piece.place = piece.to;
+			piece.frame = frame;
+			RECT at = { x, y, x + width, y + height };
+			outcome = SeedAt(twin, id, &at, twin->pitch, SeedStore, name, &piece, 1, NULL, 0, TRUE);
+			if (outcome)
+				++xfer.loadSeeds;
+		}
+		if (xfer.loadLogs < 24)
+		{
+			++xfer.loadLogs;
+			DebugLog("twin seed load match #%u: indexed blit %dx%d from memory no decode named -> twin %d %s at %d,%d matches the store load %.32s (frame %d, %u frames ago) | %s",
+				xfer.loadLogs, width, height, twin ? (INT)id : -1, twin ? TwinKind(twin) : "none", fits ? x : -1, fits ? y : -1, name, frame, ago,
+				!fits ? "no twin fits" : !LoadSeedWanted() ? "not seeded (Twin.LoadSeed=0)" : outcome == 2 ? "seed deferred" : outcome ? "seeded" : "not seeded");
+		}
+	}
+
 	VOID XferIndexedTry(const BYTE* src, LONG srcPitch, const DWORD* palette, const DWORD* dst, LONG dstPitch, LONG width, LONG height)
 	{
 		if (xfer.valid && (xfer.layouts & Layout32) && (const BYTE*)dst >= xfer.rawData && (const BYTE*)dst < xfer.rawData + (xfer.rawTop + xfer.height) * xfer.rawPitch * 2)
@@ -4537,6 +4893,19 @@ namespace Twin
 		if (!xfer.valid || !(xfer.layouts & Layout8) || srcPitch != xfer.rawPitch || sx < 0 || sy < 0 || sx + width > xfer.width || sy + height > xfer.height)
 		{
 			++xfer.indexedOther;
+			// indices that are not the latest store decode: big images may come this way, decoded by a loader no hook names
+			if (game.indexedOtherLogs < INDEXED_OTHER_LOGS)
+			{
+				++game.indexedOtherLogs;
+				CHAR from[96], to[96], caller[48];
+				RegText((DWORD)src, from);
+				RegText((DWORD)dst, to);
+				TrapName(GameCaller(), caller);
+				DebugLog("twin indexed blit #%u from other memory: src %s pitch %d %dx%d -> %s pitch %d | latest decode #%u %.32s %dx%d raw %08X pitch %d (at %d,%d of it) %u frames ago | caller %s",
+					game.indexedOtherLogs, from, srcPitch, width, height, to, dstPitch, xfer.seq, xfer.valid ? xfer.name : "-", xfer.width, xfer.height, xfer.rawData, xfer.rawPitch, sx, sy,
+					game.frameNo - xfer.frameNo, caller);
+			}
+			XferLoadSeed(dst, dstPitch, width, height);
 			return;
 		}
 
@@ -4594,7 +4963,20 @@ namespace Twin
 	VOID OnIndexedBlit(const BYTE* src, LONG srcPitch, const DWORD* palette, const DWORD* dst, LONG dstPitch, LONG width, LONG height)
 	{
 		Timed timed("OnIndexedBlit");
-		if (!src || !dst || !palette || width <= 0 || height <= 0 || !Active() || !SeedMode())
+		if (!src || !dst || !palette || width <= 0 || height <= 0 || !Active())
+			return;
+		DWORD noteId;
+		Record* noted = FindAddress(dst, &noteId);
+		if (noted && noted->arrive.noteHead)
+		{
+			WriteNote* n = &noted->arrive.notes[(noted->arrive.noteHead - 1) % WRITE_RING];
+			if (n->kind == NoteWrite)
+			{
+				n->kind = NoteIndexed;
+				n->src = (DWORD)src;
+			}
+		}
+		if (!SeedMode())
 			return;
 
 		++xfer.indexed;
@@ -4729,6 +5111,7 @@ namespace Twin
 		DebugLog("twin seed transfer guard since start: exact rgb32 %u bgr32 %u 565 %u indices %u palette %u | tolerant 565 %u indices %u palette %u | indexed blits %u: from the decode %u (part of it %u, no surface twin %u), into the decode %u, other sources %u, dropped inside a decode %u",
 			xfer.exact[GuardRgb], xfer.exact[GuardBgr], xfer.exact[Guard565], xfer.exact[GuardIndexed], xfer.exact[GuardPalette], xfer.tolerant[Guard565], xfer.tolerant[GuardIndexed], xfer.tolerant[GuardPalette],
 			xfer.indexed, xfer.indexedFromDecode, xfer.indexedPartial, xfer.indexedNoTwin, xfer.indexedIntoDecode, xfer.indexedOther, xfer.indexedInsideDropped);
+		DebugLog("twin seed load matches since start: indexed blits from unnamed memory of a just-loaded image's size %u, seeded %u (Twin.LoadSeed=%u)", xfer.loadMatches, xfer.loadSeeds, LoadSeedWanted());
 	}
 #pragma endregion
 
@@ -4774,6 +5157,71 @@ namespace Twin
 			return FALSE;
 		const BYTE* code = (const BYTE*)address;
 		return code[-5] == 0xE8 || code[-6] == 0xFF || code[-3] == 0xFF || code[-2] == 0xFF;
+	}
+
+	VOID TrapModule(HMODULE module, DWORD* low, DWORD* high);
+
+	// the first return address into the game above the wrapper's frames: the game code that asked for this write
+	__declspec(noinline) DWORD GameCaller()
+	{
+		if (!trap.exeHi)
+		{
+			TrapModule(GetModuleHandle(NULL), &trap.exeLo, &trap.exeHi);
+			if (!trap.selfHi)
+				TrapModule(hDllModule, &trap.selfLo, &trap.selfHi);
+		}
+		const DWORD* slot = (const DWORD*)_AddressOfReturnAddress();
+		const NT_TIB* tib = (const NT_TIB*)__readfsdword(0x18);
+		for (DWORD i = 0; i < 96 && (DWORD)(slot + i + 1) <= (DWORD)tib->StackBase; ++i)
+		{
+			DWORD value = slot[i];
+			if (TrapExe(value) && TrapReturn(value))
+				return value;
+		}
+		return 0;
+	}
+
+	VOID TrapName(DWORD address, CHAR* text);
+	VOID RegText(DWORD value, CHAR* text);
+
+	const CHAR* const noteNames[NoteKinds] = { "hooked write", "indexed blit", "copy from untwinned", "fill", "copy", "pixel op", "trapped game write", "whole surface" };
+
+	VOID Note(Record* twin, DWORD kind, const RECT* rect, DWORD src)
+	{
+		Arrival* a = &twin->arrive;
+		WriteNote* n = &a->notes[a->noteHead++ % WRITE_RING];
+		n->kind = kind;
+		n->rect = *rect;
+		n->caller = kind == NoteTrap ? src : GameCaller();
+		n->src = src;
+		n->frameNo = game.frameNo;
+	}
+
+	// the latest write that reached the rect, newest first
+	const WriteNote* LastNote(const Record* twin, const RECT* rect)
+	{
+		const Arrival* a = &twin->arrive;
+		for (DWORD k = 0; k < WRITE_RING && k < a->noteHead; ++k)
+		{
+			const WriteNote* n = &a->notes[(a->noteHead - 1 - k) % WRITE_RING];
+			RECT part;
+			if (IntersectRect(&part, &n->rect, rect))
+				return n;
+		}
+		return NULL;
+	}
+
+	VOID NoteText(CHAR* text, const WriteNote* n)
+	{
+		if (!n || n->kind >= NoteKinds)
+		{
+			StrCopy(text, "no write recorded");
+			return;
+		}
+		CHAR caller[48];
+		TrapName(n->caller, caller);
+		StrPrint(text, "%s %d,%d %dx%d src %08X caller %s frame %u", noteNames[n->kind < NoteKinds ? n->kind : 0], n->rect.left, n->rect.top, n->rect.right - n->rect.left,
+			n->rect.bottom - n->rect.top, n->src, caller, n->frameNo);
 	}
 
 	// first in the vectored chain, so before any frame handler and the crash filter; only a write into a trapped surface page is handled, every other exception goes on to them.
@@ -4863,6 +5311,20 @@ namespace Twin
 		e->eip = eip;
 		e->addr = addr;
 		e->caller = caller;
+		e->regs[RegEax] = context->Eax;
+		e->regs[RegEcx] = context->Ecx;
+		e->regs[RegEdx] = context->Edx;
+		e->regs[RegEbx] = context->Ebx;
+		e->regs[RegEsi] = context->Esi;
+		e->regs[RegEdi] = context->Edi;
+		// the first bytes of the faulting instruction tell a string copy (rep movs) apart, whose source is then in ESI
+		MEMORY_BASIC_INFORMATION mbi;
+		BOOL readable = VirtualQuery((LPCVOID)eip, &mbi, sizeof(mbi)) && mbi.State == MEM_COMMIT && !(mbi.Protect & (PAGE_GUARD | PAGE_NOACCESS)) &&
+			(mbi.Protect & (PAGE_EXECUTE_READ | PAGE_EXECUTE_READWRITE | PAGE_EXECUTE_WRITECOPY | PAGE_READONLY | PAGE_READWRITE)) &&
+			eip + 4 <= (DWORD)mbi.BaseAddress + mbi.RegionSize;
+		const BYTE* code = (const BYTE*)eip;
+		for (DWORD k = 0; k < 4; ++k)
+			e->code[k] = readable ? code[k] : 0;
 		e->id = id;
 		e->start = start;
 		DWORD flags = 0;
@@ -4918,6 +5380,44 @@ namespace Twin
 		}
 	}
 
+	BOOL TrapExport(DWORD address, CHAR* text);
+
+	// the 16:07 run saw binkw32.dll+21A13 and +21B29 write the 1152x1152 surface at frame 0; this names the exports they are in and what the game imports from Bink
+	VOID TrapLogBink()
+	{
+		HMODULE bink = GetModuleHandle("binkw32.dll");
+		if (!bink)
+		{
+			DebugLog("twin trap bink: binkw32.dll is not loaded");
+			return;
+		}
+		CHAR first[64], second[64];
+		if (!TrapExport((DWORD)bink + 0x21A13, first))
+			StrCopy(first, "-");
+		if (!TrapExport((DWORD)bink + 0x21B29, second))
+			StrCopy(second, "-");
+
+		CHAR list[700];
+		CHAR* at = list;
+		*at = 0;
+		const BYTE* exe = (const BYTE*)GetModuleHandle(NULL);
+		const IMAGE_NT_HEADERS* nt = (const IMAGE_NT_HEADERS*)(exe + ((const IMAGE_DOS_HEADER*)exe)->e_lfanew);
+		const IMAGE_DATA_DIRECTORY* dir = &nt->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT];
+		for (const IMAGE_IMPORT_DESCRIPTOR* d = dir->VirtualAddress ? (const IMAGE_IMPORT_DESCRIPTOR*)(exe + dir->VirtualAddress) : NULL; d && d->Name; ++d)
+		{
+			if (StrCompareInsensitive((const CHAR*)(exe + d->Name), "binkw32.dll") || !d->OriginalFirstThunk)
+				continue;
+			for (const IMAGE_THUNK_DATA* t = (const IMAGE_THUNK_DATA*)(exe + d->OriginalFirstThunk); t->u1.AddressOfData && at < list + sizeof(list) - 48; ++t)
+			{
+				if (IMAGE_SNAP_BY_ORDINAL(t->u1.Ordinal))
+					at += StrPrint(at, " #%u", (DWORD)IMAGE_ORDINAL(t->u1.Ordinal));
+				else
+					at += StrPrint(at, " %.40s", (const CHAR*)((const IMAGE_IMPORT_BY_NAME*)(exe + t->u1.AddressOfData))->Name);
+			}
+		}
+		DebugLog("twin trap bink: binkw32.dll at %08X, +21A13 is in export %s, +21B29 in %s | the game imports:%s", bink, first, second, *list ? list : " none");
+	}
+
 	BOOL TrapInit()
 	{
 		if (trap.initialized)
@@ -4942,6 +5442,7 @@ namespace Twin
 		}
 		DebugLog("twin trap on (Twin.WriteTrap=1): surface pages stay read-only until the game's first write; wrapper %08X-%08X, game %08X-%08X | re-armed every %u to %u ms, at most %u pages a second, %u faults in all",
 			trap.selfLo, trap.selfHi, trap.exeLo, trap.exeHi, TRAP_REARM_MS, TRAP_REARM_MAX_MS, TRAP_PAGES_SECOND, TRAP_TOTAL);
+		TrapLogBink();
 		return TRUE;
 	}
 
@@ -5016,6 +5517,8 @@ namespace Twin
 		r->queued = FALSE;
 		r->reFirst = MAXDWORD;
 		r->reLast = 0;
+		r->priority = FALSE;
+		r->priorityFaults = 0;
 		r->start = twin->base;
 		++trap.attached;
 		if (TrapArm(r, GetTickCount()))
@@ -5039,7 +5542,7 @@ namespace Twin
 	VOID TrapOpen(Record* twin, const RECT* rect)
 	{
 		DWORD id = DWORD(twin - game.twins);
-		if (id >= TWIN_MAX)
+		if (id >= TWIN_MAX || trap.noOpen)
 			return;
 		TrapRange* r = &trap.ranges[id];
 		if (!r->armedBits || r->start != twin->base)
@@ -5098,8 +5601,13 @@ namespace Twin
 			DWORD first = r->reFirst, last = r->reLast;
 			r->reFirst = MAXDWORD;
 			r->reLast = 0;
-			if (!r->start || !r->fresh || first > last || last >= r->pages || trap.faults >= TRAP_TOTAL || trap.windowPages >= TRAP_PAGES_SECOND)
+			if (!r->start || !r->fresh || first > last || last >= r->pages || trap.faults >= TRAP_TOTAL)
 				continue;
+			if (trap.windowPages >= TRAP_PAGES_SECOND && !r->priority)
+			{
+				++trap.reopenSkips;
+				continue;
+			}
 			if (TrapProtect(r, first, last))
 			{
 				++r->quickArms;
@@ -5116,6 +5624,7 @@ namespace Twin
 		{
 			trap.windowTick = now;
 			trap.windowPages = 0;
+			trap.priorityWindow = 0;
 		}
 		if (trap.faults >= TRAP_TOTAL)
 		{
@@ -5127,12 +5636,33 @@ namespace Twin
 			return;
 		}
 
+		// the top 1x-only surfaces are re-armed at every present, outside the page budget, until they have shown their writers; one the game writes every frame then drops to once a second
+		for (DWORD k = 0; k < trap.priorityCount; ++k)
+		{
+			DWORD id = trap.priority[k].id;
+			TrapRange* r = &trap.ranges[id];
+			if (game.twins[id].owner != trap.priority[k].owner || !r->start || !r->priority || (r->armedBits >= r->pages && !r->faults))
+				continue;
+			BOOL hot = r->priorityFaults >= TRAP_PRIORITY_FAULTS;
+			if ((hot && now - r->lastArm < TRAP_REARM_MS) || trap.priorityWindow + r->pages > TRAP_PRIORITY_PAGES_SECOND)
+				continue;
+			DWORD before = trap.windowPages;
+			if (TrapArm(r, now))
+			{
+				++trap.priorityArms;
+				if (hot)
+					++trap.priorityHot;
+				trap.priorityWindow += r->pages;
+			}
+			trap.windowPages = before;
+		}
+
 		DWORD top = game.top;
 		for (DWORD n = 0; n < top; ++n)
 		{
 			DWORD id = (trap.cursor + n) % top;
 			TrapRange* r = &trap.ranges[id];
-			if (!r->start || (r->armedBits >= r->pages && !r->faults) || now - r->lastArm < r->interval)
+			if (!r->start || r->priority || (r->armedBits >= r->pages && !r->faults) || now - r->lastArm < r->interval)
 				continue;
 			if (r->pages > TRAP_PAGES_SECOND)
 			{
@@ -5163,6 +5693,182 @@ namespace Twin
 		CHAR name[24];
 		DWORD base = CrashModule(address, name, sizeof(name));
 		StrPrint(text, "%08X %s+%X", address, name, address - base);
+	}
+
+	// the nearest export at or below the address, for code in a module that is neither the game nor the wrapper
+	BOOL TrapExport(DWORD address, CHAR* text)
+	{
+		*text = 0;
+		CHAR module[24];
+		DWORD base = address ? CrashModule(address, module, sizeof(module)) : 0;
+		if (!base || TrapExe(address) || TrapSelf(address))
+			return FALSE;
+		const IMAGE_DOS_HEADER* dos = (const IMAGE_DOS_HEADER*)base;
+		if (dos->e_magic != IMAGE_DOS_SIGNATURE)
+			return FALSE;
+		const IMAGE_NT_HEADERS* nt = (const IMAGE_NT_HEADERS*)(base + dos->e_lfanew);
+		if (nt->Signature != IMAGE_NT_SIGNATURE)
+			return FALSE;
+		const IMAGE_DATA_DIRECTORY* dir = &nt->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT];
+		if (!dir->VirtualAddress || !dir->Size)
+			return FALSE;
+		const IMAGE_EXPORT_DIRECTORY* exports = (const IMAGE_EXPORT_DIRECTORY*)(base + dir->VirtualAddress);
+		const DWORD* functions = (const DWORD*)(base + exports->AddressOfFunctions);
+		const DWORD* names = (const DWORD*)(base + exports->AddressOfNames);
+		const WORD* ordinals = (const WORD*)(base + exports->AddressOfNameOrdinals);
+		DWORD offset = address - base, best = MAXDWORD, bestRva = 0;
+		for (DWORD i = 0; i < exports->NumberOfFunctions; ++i)
+		{
+			DWORD rva = functions[i];
+			// a forwarder points into the export directory, not at code
+			if (!rva || rva > offset || rva - dir->VirtualAddress < dir->Size || (best != MAXDWORD && rva <= bestRva))
+				continue;
+			best = i;
+			bestRva = rva;
+		}
+		if (best == MAXDWORD)
+			return FALSE;
+		const CHAR* name = NULL;
+		for (DWORD j = 0; j < exports->NumberOfNames && !name; ++j)
+			if (ordinals[j] == best)
+				name = (const CHAR*)(base + names[j]);
+		if (name)
+			StrPrint(text, "%.48s+%X", name, offset - bestRva);
+		else
+			StrPrint(text, "#%u+%X", best + exports->Base, offset - bestRva);
+		return TRUE;
+	}
+
+	// where a register points: a twin and its pixel, a store image, or nothing known
+	VOID RegText(DWORD value, CHAR* text)
+	{
+		DWORD id;
+		Record* twin = value ? FindAddress((const VOID*)value, &id) : NULL;
+		if (twin)
+		{
+			LONG start = LONG((value - (DWORD)twin->base) / sizeof(DWORD));
+			StrPrint(text, "%08X (twin %u %s %dx%d at %d,%d)", value, id, TwinKind(twin), twin->width, twin->height, start % twin->pitch, start / twin->pitch);
+			return;
+		}
+		const CHAR* store = value ? ImageReplace::MemoryName((const VOID*)value) : NULL;
+		if (store)
+			StrPrint(text, "%08X (store %.24s)", value, store);
+		else
+			StrPrint(text, "%08X", value);
+	}
+
+	BOOL TrapCopyWanted()
+	{
+		if (!trap.copyChosen)
+		{
+			trap.copyChosen = TRUE;
+			trap.copyOn = Config::Get("Twin", "TrapCopy", 1) != 0;
+		}
+		return trap.copyOn;
+	}
+
+	// a rep movs the trap caught is a CPU copy whose source is ESI; the rows it wrote become a hint, replayed twin to twin once the 1x rows are equal
+	VOID TrapHint(Record* twin, DWORD id, const TrapEvent* e, LONG x, LONG y)
+	{
+		BOOL dwords = e->code[0] == 0xF3 && e->code[1] == 0xA5;
+		BOOL bytes = e->code[0] == 0xF3 && e->code[1] == 0xA4;
+		if ((!dwords && !bytes) || twin->memory || !TrapCopyWanted() || e->addr != e->regs[RegEdi])
+			return;
+		DWORD srcId;
+		Record* source = FindAddress((const VOID*)e->regs[RegEsi], &srcId);
+		if (!source || source == twin || ((e->regs[RegEsi] - (DWORD)source->base) & 3) || (e->addr & 3))
+			return;
+		++trap.copyFaults;
+		LONG start = LONG((e->regs[RegEsi] - (DWORD)source->base) / sizeof(DWORD));
+		LONG sx = start % source->pitch, sy = start / source->pitch;
+		LONG ox = x - sx, oy = y - sy;
+		LONG n = LONG(bytes ? e->regs[RegEcx] / 4 : e->regs[RegEcx]);
+		if (n <= 0)
+			return;
+		RECT seg;
+		if (x + n <= twin->width)
+			SetRect(&seg, x, y, x + n, y + 1);
+		else if (!ox && source->pitch == twin->pitch)
+			SetRect(&seg, 0, y, twin->width, min(y + (x + n + twin->width - 1) / twin->width, twin->height));
+		else
+			SetRect(&seg, x, y, twin->width, y + 1);
+
+		DWORD k = 0;
+		while (k < trap.hintCount && !(trap.hints[k].dst == twin->owner && trap.hints[k].src == source->owner && trap.hints[k].ox == ox && trap.hints[k].oy == oy))
+			++k;
+		if (k == trap.hintCount)
+		{
+			if (k == TRAP_HINTS)
+				return;
+			++trap.hintCount;
+			trap.hints[k].dst = twin->owner;
+			trap.hints[k].dstId = id;
+			trap.hints[k].src = source->owner;
+			trap.hints[k].srcId = srcId;
+			trap.hints[k].ox = ox;
+			trap.hints[k].oy = oy;
+			trap.hints[k].rect = seg;
+			trap.hints[k].faults = 0;
+		}
+		else
+			UnionRect(&trap.hints[k].rect, &trap.hints[k].rect, &seg);
+		++trap.hints[k].faults;
+		trap.hints[k].frameNo = game.frameNo;
+	}
+
+	VOID CopyTwins(Record* target, DWORD dstId, LONG x, LONG y, Record* source, DWORD srcId, const RECT* srcRect, BOOL keyed, DWORD key);
+
+	VOID TrapCopyFlush()
+	{
+		if (!trap.hintCount || trap.draining)
+			return;
+		DWORD count = trap.hintCount;
+		trap.hintCount = 0;
+		for (DWORD k = 0; k < count; ++k)
+		{
+			const RECT* hr = &trap.hints[k].rect;
+			Record* target = &game.twins[trap.hints[k].dstId];
+			Record* source = &game.twins[trap.hints[k].srcId];
+			if (target->owner != trap.hints[k].dst || source->owner != trap.hints[k].src)
+				continue;
+			LONG ox = trap.hints[k].ox, oy = trap.hints[k].oy;
+			RECT to = *hr;
+			if (!Clip(target, &to))
+				continue;
+			RECT from = to;
+			OffsetRect(&from, -ox, -oy);
+			if (!Clip(source, &from))
+				continue;
+			to = from;
+			OffsetRect(&to, ox, oy);
+
+			// the guard: the CPU copy left exactly the source's 1x in every row; anything else stays the 1x the trapped write marked
+			LONG width = to.right - to.left, bad = -1;
+			for (LONG row = to.top; row < to.bottom && bad < 0; ++row)
+				if (MemoryCompare((const DWORD*)target->base + row * target->pitch + to.left, (const DWORD*)source->base + (row - oy) * source->pitch + from.left, width * sizeof(DWORD)))
+					bad = row;
+			BOOL carries = Carries4K(source, &from);
+			if (bad < 0)
+			{
+				CopyTwins(target, trap.hints[k].dstId, to.left, to.top, source, trap.hints[k].srcId, &from, FALSE, 0);
+				++trap.copyReplayed;
+				trap.copyPx += Area(&to);
+			}
+			else
+				++trap.copyGuardFails;
+			if (trap.copyLogs < 24)
+			{
+				++trap.copyLogs;
+				CHAR outcome[96];
+				if (bad < 0)
+					StrPrint(outcome, "replayed as a twin copy, source %s", carries ? "carries 4K" : "is 1x");
+				else
+					StrPrint(outcome, "not replayed: row %d differs from the source's 1x", bad);
+				DebugLog("twin trap copy #%u: rep movs from twin %u %dx%d at %d,%d -> twin %u %dx%d rect %d,%d %dx%d (%u faults, frame %u) | %s",
+					trap.copyLogs, trap.hints[k].srcId, source->width, source->height, from.left, from.top, trap.hints[k].dstId, target->width, target->height,
+					to.left, to.top, width, to.bottom - to.top, trap.hints[k].faults, trap.hints[k].frameNo, outcome);
+			}
+		}
 	}
 
 	// the first write into a fresh surface during or right after a decode is where that decode's pixels went
@@ -5281,17 +5987,19 @@ namespace Twin
 				++w->fresh;
 		}
 
+		const CHAR* where = (e->flags & TrapOtherThread) ? "another thread" : (e->flags & TrapDecode) ? "inside a decode (StoreDraw)" : (e->flags & TrapRender) ? "inside Render" :
+			(e->flags & TrapHooked) ? "under a hooked op" : "outside decode, Render and hooked ops";
 		if (added)
 		{
-			CHAR eip[48], caller[48], ret[4][48];
+			CHAR eip[48], caller[48], ret[4][48], exported[64];
 			TrapName(e->eip, eip);
 			TrapName(e->caller, caller);
 			for (DWORD k = 0; k < 4; ++k)
 				TrapName(e->ret[k], ret[k]);
-			const CHAR* where = (e->flags & TrapOtherThread) ? "another thread" : (e->flags & TrapDecode) ? "inside a decode (StoreDraw)" : (e->flags & TrapRender) ? "inside Render" :
-				(e->flags & TrapHooked) ? "under a hooked op" : "outside decode, Render and hooked ops";
-			DebugLog("twin trap writer #%u new: eip %s | caller %s | ret %s < %s < %s < %s | twin %u %dx%d at %d,%d (page %u)%s | %s | frame %u, latest decode #%u %.32s %dx%d %u frames before",
-				trap.writerCount, eip, caller, ret[0], ret[1], ret[2], ret[3], twin ? e->id : TWIN_NONE, twin ? twin->width : 0, twin ? twin->height : 0, x, y, page,
+			TrapExport(e->eip, exported);
+			DebugLog("twin trap writer #%u new: eip %s%s%s | caller %s | ret %s < %s < %s < %s | code %02X %02X %02X %02X esi %08X edi %08X ecx %u | twin %u %dx%d at %d,%d (page %u)%s | %s | frame %u, latest decode #%u %.32s %dx%d %u frames before",
+				trap.writerCount, eip, *exported ? " in export " : "", exported, caller, ret[0], ret[1], ret[2], ret[3], e->code[0], e->code[1], e->code[2], e->code[3],
+				e->regs[RegEsi], e->regs[RegEdi], e->regs[RegEcx], twin ? e->id : TWIN_NONE, twin ? twin->width : 0, twin ? twin->height : 0, x, y, page,
 				fresh ? ", first write into the fresh surface" : "", where, e->frameNo, e->seq, xfer.seq == e->seq ? xfer.name : "-", xfer.seq == e->seq ? xfer.width : 0,
 				xfer.seq == e->seq ? xfer.height : 0, e->frameNo - xfer.frameNo);
 		}
@@ -5305,6 +6013,48 @@ namespace Twin
 		{
 			r->fresh = FALSE;
 			TrapProvenance(twin, e->id, e, x, y);
+		}
+
+		// the game's own write changed the 1x on that page; its rows get the 1x as a hooked write's would, without opening the pages around it
+		{
+			DWORD rowBytes = (DWORD)twin->pitch * sizeof(DWORD);
+			DWORD pageStart = (e->addr - (DWORD)twin->base) & ~(TRAP_PAGE - 1);
+			RECT rows = { 0, LONG(pageStart / rowBytes), twin->width, LONG(min((pageStart + TRAP_PAGE + rowBytes - 1) / rowBytes, (DWORD)twin->height)) };
+			trap.noOpen = TRUE;
+			MarkDirty(twin, rows);
+			trap.noOpen = FALSE;
+			++trap.marked;
+			Note(twin, NoteTrap, &rows, e->eip);
+		}
+		TrapHint(twin, e->id, e, x, y);
+
+		if (r->priority)
+		{
+			++r->priorityFaults;
+			++trap.priorityWrites;
+			BOOL known = FALSE;
+			for (DWORD i = 0; i < trap.pairCount && !known; ++i)
+				known = trap.pairs[i].eip == e->eip && trap.pairs[i].id == e->id;
+			if (!known && trap.pairCount < TRAP_PAIRS)
+			{
+				trap.pairs[trap.pairCount].eip = e->eip;
+				trap.pairs[trap.pairCount++].id = e->id;
+			}
+			if (!known && trap.priorityLogs < TRAP_PRIORITY_LOGS)
+			{
+				++trap.priorityLogs;
+				CHAR eip[48], caller[48], ret[4][48], exported[64], esi[64], edi[64];
+				TrapName(e->eip, eip);
+				TrapName(e->caller, caller);
+				for (DWORD k = 0; k < 4; ++k)
+					TrapName(e->ret[k], ret[k]);
+				TrapExport(e->eip, exported);
+				RegText(e->regs[RegEsi], esi);
+				RegText(e->regs[RegEdi], edi);
+				DebugLog("twin trap priority write #%u: twin %u %dx%d at %d,%d | eip %s%s%s | caller %s | ret %s < %s < %s < %s | code %02X %02X %02X %02X | esi %s edi %s ecx %u eax %08X ebx %08X edx %08X | %s | frame %u",
+					trap.priorityLogs, e->id, twin->width, twin->height, x, y, eip, *exported ? " in export " : "", exported, caller, ret[0], ret[1], ret[2], ret[3],
+					e->code[0], e->code[1], e->code[2], e->code[3], esi, edi, e->regs[RegEcx], e->regs[RegEax], e->regs[RegEbx], e->regs[RegEdx], where, e->frameNo);
+			}
 		}
 	}
 
@@ -5334,6 +6084,17 @@ namespace Twin
 		DebugLog("twin trap since start: %s | twins attached %u (not page-aligned %u) | armed at create %u, re-armed at present %u, after our own write %u (skipped for the page budget %u, too big %u, failed %u) | opened by our announced writes %u (%u pages) | faults %u: wrapper's own %u, game %u (ring dropped %u, lost %u, stale %u, retried %u) | writers %u (table full %u) | pages armed this second %u of %u",
 			trap.on ? (trap.faults >= TRAP_TOTAL ? "budget spent" : "on") : "off", trap.attached, trap.notPaged, trap.createArms, trap.rearms, trap.quickArms, trap.budgetSkips, trap.tooBig, trap.armFails,
 			trap.opens, trap.openPages, trap.faults, trap.own, trap.foreign, trap.dropped, trap.lost, trap.stale, trap.retried, trap.writerCount, trap.writersFull, trap.windowPages, TRAP_PAGES_SECOND);
+		CHAR list[TRAP_PRIORITY * 40 + 1];
+		CHAR* at = list;
+		*at = 0;
+		for (DWORD k = 0; k < trap.priorityCount; ++k)
+		{
+			const TrapRange* r = &trap.ranges[trap.priority[k].id];
+			const Record* twin = &game.twins[trap.priority[k].id];
+			at += StrPrint(at, " %u %dx%d tr %u%s;", trap.priority[k].id, twin->width, twin->height, r->priorityFaults, r->priorityFaults >= TRAP_PRIORITY_FAULTS ? " hot" : "");
+		}
+		DebugLog("twin trap priority (the top 1x-only surfaces, re-armed every present outside the budget):%s | arms %u (at the base rate once hot %u), writes %u, writer+twin pairs %u | quick re-arms skipped for the budget %u | trapped writes marked dirty %u | rep movs copies %u: hints replayed %u (%u px), guard failed %u (TrapCopy=%u)",
+			list, trap.priorityArms, trap.priorityHot, trap.priorityWrites, trap.pairCount, trap.reopenSkips, trap.marked, trap.copyFaults, trap.copyReplayed, trap.copyPx, trap.copyGuardFails, TrapCopyWanted());
 
 		DWORD top[TRAP_TOP];
 		DWORD found = 0;
@@ -5364,6 +6125,40 @@ namespace Twin
 		}
 	}
 #pragma endregion
+
+	// the surfaces copied most as 1x are re-armed at every present until their writers show
+	VOID TrapPriority(const DWORD* top, DWORD found)
+	{
+		DWORD ids[TRAP_PRIORITY];
+		DWORD count = 0;
+		for (DWORD k = 0; k < found && count < TRAP_PRIORITY; ++k)
+		{
+			const Record* twin = &game.twins[top[k]];
+			if (!twin->memory && trap.ranges[top[k]].start == twin->base && twin->base)
+				ids[count++] = top[k];
+		}
+		for (DWORD k = 0; k < trap.priorityCount; ++k)
+		{
+			DWORD id = trap.priority[k].id;
+			BOOL kept = FALSE;
+			for (DWORD n = 0; n < count && !kept; ++n)
+				kept = ids[n] == id && game.twins[id].owner == trap.priority[k].owner;
+			if (!kept)
+				trap.ranges[id].priority = FALSE;
+		}
+		for (DWORD n = 0; n < count; ++n)
+		{
+			TrapRange* r = &trap.ranges[ids[n]];
+			if (!r->priority)
+			{
+				r->priority = TRUE;
+				r->priorityFaults = 0;
+			}
+			trap.priority[n].id = ids[n];
+			trap.priority[n].owner = game.twins[ids[n]].owner;
+		}
+		trap.priorityCount = count;
+	}
 
 	VOID CountCoverage(Record* source, const RECT* from)
 	{
@@ -5415,6 +6210,14 @@ namespace Twin
 		DebugLog("twin seed records %u (pending %u, evicted %u, redraws queued %u, repeat decodes still intact %u, invalid pieces %u) | wait avg %u us max %u us (%u waits) | replayed %u commands %u pieces, art missing at replay %u | keyed copies on another key from 4K masked by 1x %u (too big %u)",
 			seeds.active, pending, seeds.evicted, seeds.repends, seeds.repeats, seeds.skippedPieces, waitAvg, seeds.waitMaxUs, seeds.waits, replayed, replayedPieces, missing, seeds.maskedCopies, seeds.maskedSkipped);
 
+		DWORD lateAvgFrames = seeds.late ? DWORD(seeds.lateFrames / seeds.late) : 0, lateAvgMs = seeds.late ? DWORD(seeds.lateMs / seeds.late) : 0;
+		DebugLog("twin seed streaming 5s: deferred %u (now pending %u), carried by copies out of pending seeds %u (pieces %u) | landed late %u (pieces %u) after avg %u frames / %u ms, max %u frames / %u ms | frame checks still decoding %u, over the inline upload budget %u (budget %u KB per present) | pieces dropped by a write since the decode %u | waits while loading %u (SeedWait %u ms, SeedLoadWait %u ms)",
+			seeds.deferredInterval, pending, seeds.derived, seeds.derivedPieces, seeds.late, seeds.latePieces, lateAvgFrames, lateAvgMs, seeds.lateMaxFrames, seeds.lateMaxMs, seeds.waitDecode, seeds.inlineDeferred,
+			DWORD(seeds.inlineBudget / 1024), seeds.piecesWritten, seeds.loadWaits, seeds.waitMs, seeds.loadWaitMs);
+		seeds.deferredInterval = seeds.derived = seeds.derivedPieces = seeds.late = seeds.latePieces = seeds.waitDecode = seeds.inlineDeferred = seeds.piecesWritten = seeds.loadWaits = 0;
+		seeds.lateFrames = seeds.lateMs = 0;
+		seeds.lateMaxFrames = seeds.lateMaxMs = 0;
+
 		ImageReplace::LogSeedSources();
 		DebugLog("twin coverage 5s: copies from sources carrying 4K %u (px %u) | from 1x-only twins %u (px %u) | from untwinned memory %u (px %u)",
 			seeds.coverSeeded, (DWORD)seeds.coverSeededPx, seeds.coverUnseeded, (DWORD)seeds.coverUnseededPx, seeds.coverUntwinned, (DWORD)seeds.coverUntwinnedPx);
@@ -5454,8 +6257,10 @@ namespace Twin
 			DebugLog("twin coverage top 1x-only copy sources (rank twin kind buffer size px copies store):%s", text);
 		}
 
+		TrapPriority(top, found);
 		LogTransfers();
 		TrapLog();
+		LogCopyIns(top, found);
 		for (DWORD line = 0; line * 3 < found && line * 3 < ARRIVAL_TOP; ++line)
 		{
 			CHAR text[3 * 240 + 1];
@@ -5709,13 +6514,99 @@ namespace Twin
 
 	VOID CopyTwins(Record* target, DWORD dstId, LONG x, LONG y, Record* source, DWORD srcId, const RECT* srcRect, BOOL keyed, DWORD key);
 
+	VOID OnCopyCaller(DWORD caller, DWORD outer)
+	{
+		game.copyCaller = caller;
+		game.copyOuter = outer;
+	}
+
+	VOID CopyInText(CHAR* text, const CopyIn* c)
+	{
+		CHAR caller[48], outer[48], note[160];
+		TrapName(c->caller, caller);
+		TrapName(c->outer, outer);
+		NoteText(note, &c->note);
+		StrPrint(text, "from twin %u %s %dx%d (%08X) %d,%d %dx%d to %d,%d%s %s (src arts %u) caller %s < %s frame %u | src up %u wr %u in1x %u untw %u tr %u, its last write there: %s",
+			c->srcId, c->srcMemory ? "mem" : "surf", c->srcW, c->srcH, (DWORD)c->srcOwner, c->from.left, c->from.top, c->from.right - c->from.left, c->from.bottom - c->from.top,
+			c->x, c->y, c->keyed ? " keyed" : "", c->is4K ? "4K" : "1x", c->srcArts, caller, outer, c->frameNo, c->srcUploads, c->srcWrites, c->srcIn1x, c->srcInUntwinned, c->srcTraps, note);
+	}
+
+	BOOL TrapIsPriority(DWORD id)
+	{
+		return id < TWIN_MAX && trap.ranges[id].priority;
+	}
+
+	// which twin, rect and game code filled a surface, and how that source itself got those pixels
+	VOID CopyInRecord(Record* target, DWORD dstId, const RECT* to, Record* source, DWORD srcId, const RECT* from, BOOL keyed)
+	{
+		Arrival* a = &target->arrive;
+		CopyIn* c = a->inCount ? &a->lastIn : &a->firstIn;
+		++a->inCount;
+		c->frameNo = game.frameNo;
+		c->srcId = srcId;
+		c->srcOwner = source->owner;
+		c->srcW = source->width;
+		c->srcH = source->height;
+		c->srcMemory = source->memory;
+		c->from = *from;
+		c->x = to->left;
+		c->y = to->top;
+		c->keyed = keyed;
+		c->is4K = Carries4K(source, from);
+		c->srcArts = source->artCount;
+		c->caller = game.copyCaller ? game.copyCaller : GameCaller();
+		c->outer = game.copyOuter;
+		c->srcUploads = source->arrive.uploads;
+		c->srcWrites = source->arrive.writes;
+		c->srcIn1x = source->arrive.in1x;
+		c->srcInUntwinned = source->arrive.inUntwinned;
+		c->srcTraps = source->arrive.trapWrites;
+		const WriteNote* n = LastNote(source, from);
+		if (n)
+			c->note = *n;
+		else
+		{
+			MemoryZero(&c->note, sizeof(c->note));
+			c->note.kind = NoteKinds;
+		}
+
+		if ((Area(to) >= COPYIN_BIG || TrapIsPriority(dstId)) && game.copyInLogs < COPYIN_LOGS)
+		{
+			++game.copyInLogs;
+			CHAR text[700];
+			CopyInText(text, c);
+			DebugLog("twin copy in #%u: twin %u %dx%d (%08X) <- %s", game.copyInLogs, dstId, target->width, target->height, (DWORD)target->owner, text);
+		}
+	}
+
+	VOID LogCopyIns(const DWORD* top, DWORD found)
+	{
+		for (DWORD k = 0; k < found && k < 4; ++k)
+		{
+			const Record* twin = &game.twins[top[k]];
+			const Arrival* a = &twin->arrive;
+			if (!a->inCount)
+				continue;
+			CHAR first[700], last[700];
+			CopyInText(first, &a->firstIn);
+			if (a->inCount > 1)
+				CopyInText(last, &a->lastIn);
+			DebugLog("twin arrival copies in [%u] twin %u %dx%d: %u, first %s", k + 1, top[k], twin->width, twin->height, a->inCount, first);
+			if (a->inCount > 1)
+				DebugLog("twin arrival copies in [%u] twin %u: last %s", k + 1, top[k], last);
+		}
+	}
+
 	VOID OnCopy(StateBuffer* dst, LONG x, LONG y, StateBuffer* src, const RECT* srcRect, BOOL keyed, DWORD key)
 	{
 		Timed timed("OnCopy");
+		DWORD caller = game.copyCaller, outer = game.copyOuter;
+		game.copyCaller = game.copyOuter = 0;
 		if (!Active() || !srcRect)
 			return;
 
 		Sync();
+		TrapCopyFlush();
 
 		DWORD dstId;
 		LONG dox = 0, doy = 0;
@@ -5733,6 +6624,9 @@ namespace Twin
 
 		RECT rect = *srcRect;
 		OffsetRect(&rect, sox, soy);
+		game.copySrcData = src ? (DWORD)src->data : 0;
+		game.copyCaller = caller;
+		game.copyOuter = outer;
 		TraceBegin("blt", keyed, FALSE);
 		trace.source = source;
 		trace.srcId = srcId;
@@ -5743,6 +6637,7 @@ namespace Twin
 		trace.outcome = source ? "recorded" : "src untwinned, dst marked dirty";
 		CopyTwins(target, dstId, x + dox, y + doy, source, srcId, &rect, keyed, key);
 		TraceEnd();
+		game.copyCaller = game.copyOuter = game.copySrcData = 0;
 	}
 
 	VOID CopyTwins(Record* target, DWORD dstId, LONG x, LONG y, Record* source, DWORD srcId, const RECT* srcRect, BOOL keyed, DWORD key)
@@ -5755,6 +6650,17 @@ namespace Twin
 				++game.list->counters.unknown;
 			CountCoverage(NULL, &whole);
 			++target->arrive.inUntwinned;
+			Note(target, NoteUntwinned, &whole, game.copySrcData);
+			if (Area(&whole) >= COPYIN_BIG && game.copyInLogs < COPYIN_LOGS)
+			{
+				++game.copyInLogs;
+				CHAR src[96], caller[48], outer[48];
+				RegText(game.copySrcData, src);
+				TrapName(game.copyCaller, caller);
+				TrapName(game.copyOuter, outer);
+				DebugLog("twin copy in #%u: twin %u %dx%d (%08X) at %d,%d %dx%d <- untwinned surface data %s | caller %s < %s | frame %u", game.copyInLogs, dstId, target->width, target->height,
+					(DWORD)target->owner, whole.left, whole.top, whole.right - whole.left, whole.bottom - whole.top, src, caller, outer, game.frameNo);
+			}
 			XferWatchWrite(target, dstId, &whole);
 			MarkDirty(target, whole);
 			return;
@@ -5798,6 +6704,8 @@ namespace Twin
 				++target->arrive.in4K;
 			else
 				++target->arrive.in1x;
+			CopyInRecord(target, dstId, &to, source, srcId, &from, keyed);
+			Note(target, NoteCopy, &to, srcId);
 		}
 
 		FlushRegion(target, dstId, &to, TRUE);
@@ -5885,6 +6793,8 @@ namespace Twin
 		++game.list->counters.copies;
 		if (keyed)
 			++game.list->counters.keyed;
+		else if (SeedMode() && source->seedCount)
+			SeedDerive(target, dstId, &to, source, &from);
 
 		// an unkeyed copy replaces the whole rect, so the 1x copy goes first and the art lands on top; transparent art then shows the source, not stale destination
 		if (hasArt && RecordArt(target, dstId, &to, srcId, &from, plan.frame, plan.flipped, &plan.place, keyed, key, plan.cached, FALSE))
@@ -5934,6 +6844,7 @@ namespace Twin
 
 		SeedWrite(twin, &area);
 		++twin->arrive.fills;
+		Note(twin, NoteFill, &area, color);
 		Cover(twin, &area);
 		FlushRegion(twin, id, &area, TRUE);
 		CoverArt(twin, &area);
@@ -6009,6 +6920,7 @@ namespace Twin
 			return;
 
 		++twin->arrive.writes;
+		Note(twin, NoteWrite, &rect, 0);
 		XferWatchWrite(twin, id, &rect);
 		MarkDirty(twin, rect);
 	}
@@ -6027,6 +6939,7 @@ namespace Twin
 		{
 			RECT whole = { 0, 0, twin->width, twin->height };
 			++twin->arrive.writes;
+			Note(twin, NoteWhole, &whole, 0);
 			SeedWrite(twin, &whole);
 			MarkAll(twin);
 		}
@@ -6129,6 +7042,7 @@ namespace Twin
 		Verify(source, srcId, &from, NULL, 0, FALSE);
 		CountCoverage(source, &from);
 		++target->arrive.pixelIn;
+		Note(target, NotePixel, &to, srcId);
 		FlushRegion(target, dstId, &to, TRUE);
 		DropRegions(target, &to);
 
@@ -6304,6 +7218,7 @@ namespace Twin
 		Verify(source, srcId, &from, NULL, 0, FALSE);
 		CountCoverage(source, &from);
 		++target->arrive.pixelIn;
+		Note(target, NotePixel, &to, srcId);
 		FlushRegion(target, dstId, &to, TRUE);
 		DropRegions(target, &to);
 
@@ -6439,6 +7354,38 @@ namespace Twin
 		game.verifySum = game.verifyMax = 0;
 	}
 
+	VOID SlowText(CHAR* text, const SlowCmd* w);
+
+	VOID LogReplayTimes()
+	{
+		Lock();
+		ReplayTimes t = shared.times;
+		MemoryZero(&shared.times, sizeof(shared.times));
+		LONGLONG inlineBytes = shared.inlineBytes, inlineUs = shared.inlineUs;
+		DWORD inlineUploads = shared.inlineUploads;
+		shared.inlineBytes = shared.inlineUs = 0;
+		shared.inlineUploads = 0;
+		Unlock();
+
+		CHAR text[1000];
+		CHAR* ptr = text;
+		*ptr = 0;
+		for (DWORD k = 0; k < CMD_TYPES; ++k)
+			if (t.count[k])
+			{
+				DWORD total = DWORD(t.us[k] / 1000);
+				ptr += StrPrint(ptr, " %s %u %u ms max %u.%03u;", cmdNames[k], t.count[k], total, t.max[k] / 1000, t.max[k] % 1000);
+			}
+		DWORD inlineMs = DWORD(inlineUs / 1000);
+		DebugLog("twin replay per command 5s (type, dispatches, total, max):%s | replays over %u ms %u | inline 4K uploads %u (%u KB, %u ms)", text, REPLAY_SLOW_US / 1000, t.slowReplays,
+			inlineUploads, DWORD(inlineBytes / 1024), inlineMs);
+		if (t.slow.us)
+		{
+			SlowText(text, &t.slow);
+			DebugLog("twin replay slowest command 5s: %s", text);
+		}
+	}
+
 	VOID LogInterval(DWORD now)
 	{
 		DWORD elapsed = now - game.logTick;
@@ -6461,6 +7408,7 @@ namespace Twin
 			elapsed, game.frames, c->copies, c->keyed, c->fills, c->uploads, c->pixels, c->writes, c->unknown,
 			replays, draws, drawCalls, game.queuedMax, avgUs / 1000, avgUs % 1000, replayMaxUs / 1000, replayMaxUs % 1000,
 			game.alive, mb10 / 10, mb10 % 10, game.scale, game.resets);
+		LogReplayTimes();
 
 		LogTiles();
 
@@ -6611,7 +7559,7 @@ namespace Twin
 		game.tintKeyDown = down;
 
 		BOOL shot = game.shotRequest;
-		if (art.firstTick && !art.shotTaken && now - art.firstTick >= SHOT_DELAY)
+		if (GpuCheckWanted() && art.firstTick && !art.shotTaken && now - art.firstTick >= SHOT_DELAY)
 		{
 			art.shotTaken = TRUE;
 			shot = TRUE;
@@ -6622,6 +7570,7 @@ namespace Twin
 			game.checkRequest = TRUE;
 		}
 
+		TrapCopyFlush();
 		XferResolve(TRUE);
 		TrapRearm(now);
 		if (seeds.active)
@@ -6652,7 +7601,7 @@ namespace Twin
 
 		BOOL check = FALSE;
 		DWORD checkOffset = 0;
-		if (twin && (game.checkRequest || now - game.checkTick >= CHECK_PERIOD))
+		if (twin && (game.checkRequest || (GpuCheckWanted() && now - game.checkTick >= CHECK_PERIOD)))
 		{
 			DWORD* copy = (DWORD*)Reserve(twin->width * twin->height * sizeof(DWORD), &checkOffset);
 			if (copy)
@@ -6754,6 +7703,21 @@ namespace Twin
 			}
 		}
 
+		// the next list's inline 4K uploads are bounded by the time the render thread measured for them
+		Lock();
+		LONGLONG rateBytes = shared.rateBytes, rateUs = shared.rateUs;
+		if (rateUs > 2000000)
+		{
+			shared.rateBytes /= 2;
+			shared.rateUs /= 2;
+		}
+		Unlock();
+		LONGLONG budget = rateUs > 1000 ? rateBytes * SEED_INLINE_MS * 1000 / rateUs : SEED_INLINE_MS * 1024 * 1024;
+		seeds.inlineBudget = max(min(budget, (LONGLONG)SEED_INLINE_MAX), (LONGLONG)SEED_INLINE_MIN);
+		seeds.inlineUsed = 0;
+		seeds.loadWaitTotalUs = 0;
+		seeds.lastPresentTick = GetTickCount() | 1;
+
 		if (now - game.logTick >= LOG_PERIOD)
 			LogInterval(now);
 
@@ -6793,6 +7757,12 @@ namespace Twin
 
 		game.checkRequest = TRUE;
 		game.shotRequest = TRUE;
+		// the shared-block check reads back from the GPU, so it runs only once asked for
+		if (SeedMode() && !seeds.conflictCheck)
+		{
+			seeds.conflictCheck = TRUE;
+			SeedRepend("F12 conflict check");
+		}
 	}
 #pragma endregion
 
@@ -8207,12 +9177,21 @@ namespace Twin
 		}
 	}
 
+	DWORD GlUs(LONGLONG ticks);
+
 	BOOL SeedTexture(LONG frame, GLuint* texture, LONG* width, LONG* height)
 	{
 		if (ImageReplace::ArtTexture(frame, texture, width, height) && *texture)
 			return TRUE;
+		LONG bytes = ImageReplace::ArtBytes(frame);
+		LARGE_INTEGER start, end;
+		QueryPerformanceCounter(&start);
 		if (!ImageReplace::ArtUpload(frame))
 			return FALSE;
+		QueryPerformanceCounter(&end);
+		++gl.inlineUploads;
+		gl.inlineUs += GlUs(end.QuadPart - start.QuadPart);
+		gl.inlineBytes += bytes;
 
 		// the upload ran ImageReplace's GL; restore what the twin draws cache
 		gl.program = 0;
@@ -8516,6 +9495,46 @@ namespace Twin
 			DebugLog("twin shot failed %s", name);
 	}
 
+	struct ShotJob {
+		const CHAR* name;
+		BYTE* pixels;
+		LONG width;
+		LONG height;
+		LONG stride;
+	};
+
+	DWORD __stdcall ShotWorker(LPVOID param)
+	{
+		ShotJob* job = (ShotJob*)param;
+		WritePng(job->name, job->pixels, job->width, job->height, job->stride);
+		MemoryFree(job->pixels);
+		MemoryFree(job);
+		return 0;
+	}
+
+	// PNG compression took over a second on the render thread; it runs on its own thread and owns the pixels
+	VOID WritePngAsync(const CHAR* name, BYTE* pixels, LONG width, LONG height, LONG stride)
+	{
+		ShotJob* job = (ShotJob*)MemoryAlloc(sizeof(ShotJob));
+		if (job)
+		{
+			job->name = name;
+			job->pixels = pixels;
+			job->width = width;
+			job->height = height;
+			job->stride = stride;
+			HANDLE thread = CreateThread(NULL, 0, ShotWorker, job, 0, NULL);
+			if (thread)
+			{
+				CloseHandle(thread);
+				return;
+			}
+			MemoryFree(job);
+		}
+		WritePng(name, pixels, width, height, stride);
+		MemoryFree(pixels);
+	}
+
 	VOID ShotTwin(const CHAR* name, DWORD id, LONG maxW, LONG maxH, BOOL centre)
 	{
 		if (!Valid(id))
@@ -8540,8 +9559,7 @@ namespace Twin
 		GLBindFramebuffer(GL_READ_FRAMEBUFFER, gl.readFbo);
 
 		// twin textures keep 1x row 0 in texel row 0, so the read rows are already top-down
-		WritePng(name, pixels, width, height, width * 4);
-		MemoryFree(pixels);
+		WritePngAsync(name, pixels, width, height, width * 4);
 	}
 
 	VOID Shots(const Cmd* cmd, const List* list)
@@ -8553,91 +9571,142 @@ namespace Twin
 		}
 
 		if (cmd->flags & PresentCheck)
-			WritePng("twin-1x.png", list->arena + cmd->value, cmd->x, cmd->y, cmd->x * 4);
+		{
+			BYTE* copy = (BYTE*)MemoryAlloc(cmd->x * cmd->y * 4);
+			if (copy)
+			{
+				MemoryCopy(copy, list->arena + cmd->value, cmd->x * cmd->y * 4);
+				WritePngAsync("twin-1x.png", copy, cmd->x, cmd->y, cmd->x * 4);
+			}
+		}
 		ShotTwin("twin-screen.png", cmd->dst, SHOT_SCREEN_W, SHOT_SCREEN_H, TRUE);
 		ShotTwin("twin-sheet.png", (DWORD)cmd->clip.left, SHOT_SHEET, SHOT_SHEET, FALSE);
 	}
 
+	DWORD GlUs(LONGLONG ticks)
+	{
+		return gl.frequency.QuadPart ? DWORD(ticks * 1000000 / gl.frequency.QuadPart) : 0;
+	}
+
+	DWORD ReplayOne(const List* list, DWORD i)
+	{
+		const Cmd* cmd = &list->cmds[i];
+		switch (cmd->type)
+		{
+		case CmdCreate:
+			CreateGpu(cmd->dst, cmd->rect.right, cmd->rect.bottom, (LONG)cmd->value);
+			break;
+
+		case CmdDestroy:
+			if (cmd->dst < TWIN_MAX)
+				DestroyGpu(cmd->dst);
+			break;
+
+		case CmdReset:
+			for (DWORD k = 0; k < TWIN_MAX; ++k)
+				if (gl.twins[k].texture || gl.twins[k].fbo)
+					DestroyGpu(k);
+			break;
+
+		case CmdFill:
+			return ReplayFills(list, i, FALSE);
+
+		case CmdTint:
+			return ReplayFills(list, i, TRUE);
+
+		case CmdMask:
+			ReplayMask(cmd, list);
+			break;
+
+		case CmdLighter:
+			ReplayLighter(cmd);
+			break;
+
+		case CmdUpload:
+			return ReplayUploads(list, i);
+
+		case CmdArt:
+			return ReplayArt(list, i);
+
+		case CmdGround:
+			ReplayGround(cmd, list);
+			break;
+
+		case CmdSeed:
+			ReplaySeed(cmd, list);
+			break;
+
+		case CmdPixel:
+			return ReplayPixels(list, i);
+
+		case CmdCopy:
+			return ReplayCopies(list->cmds, list->count, i);
+
+		case CmdPresent:
+			gl.shown.valid = TRUE;
+			gl.shown.id = cmd->dst;
+			gl.shown.hole = cmd->rect;
+			gl.shown.flags = cmd->flags;
+			if (cmd->flags & PresentCheck)
+				Check(cmd, list);
+			if (cmd->flags & PresentShot)
+				Shots(cmd, list);
+			break;
+
+		default:
+			break;
+		}
+		return i + 1;
+	}
+
+	// every dispatch is timed, so a stall names the command that caused it
 	VOID Replay(const List* list)
 	{
 		DWORD i = 0;
+		LARGE_INTEGER start, end;
+		QueryPerformanceCounter(&start);
 		while (i < list->count)
 		{
 			const Cmd* cmd = &list->cmds[i];
-			switch (cmd->type)
+			DWORD uploads = gl.inlineUploads;
+			LONGLONG uploadUs = gl.inlineUs;
+			DWORD next = ReplayOne(list, i);
+			if (next <= i)
+				next = i + 1;
+			QueryPerformanceCounter(&end);
+			DWORD us = GlUs(end.QuadPart - start.QuadPart);
+			start = end;
+
+			DWORD type = cmd->type < CMD_TYPES ? cmd->type : 0;
+			gl.times.us[type] += us;
+			++gl.times.count[type];
+			if (us > gl.times.max[type])
+				gl.times.max[type] = us;
+			if (us > gl.drawSlow.us)
 			{
-			case CmdCreate:
-				CreateGpu(cmd->dst, cmd->rect.right, cmd->rect.bottom, (LONG)cmd->value);
-				break;
-
-			case CmdDestroy:
-				if (cmd->dst < TWIN_MAX)
-					DestroyGpu(cmd->dst);
-				break;
-
-			case CmdReset:
-				for (DWORD k = 0; k < TWIN_MAX; ++k)
-					if (gl.twins[k].texture || gl.twins[k].fbo)
-						DestroyGpu(k);
-				break;
-
-			case CmdFill:
-				i = ReplayFills(list, i, FALSE);
-				continue;
-
-			case CmdTint:
-				i = ReplayFills(list, i, TRUE);
-				continue;
-
-			case CmdMask:
-				ReplayMask(cmd, list);
-				break;
-
-			case CmdLighter:
-				ReplayLighter(cmd);
-				break;
-
-			case CmdUpload:
-				i = ReplayUploads(list, i);
-				continue;
-
-			case CmdArt:
-				i = ReplayArt(list, i);
-				continue;
-
-			case CmdGround:
-				ReplayGround(cmd, list);
-				break;
-
-			case CmdSeed:
-				ReplaySeed(cmd, list);
-				break;
-
-			case CmdPixel:
-				i = ReplayPixels(list, i);
-				continue;
-
-			case CmdCopy:
-				i = ReplayCopies(list->cmds, list->count, i);
-				continue;
-
-			case CmdPresent:
-				gl.shown.valid = TRUE;
-				gl.shown.id = cmd->dst;
-				gl.shown.hole = cmd->rect;
-				gl.shown.flags = cmd->flags;
-				if (cmd->flags & PresentCheck)
-					Check(cmd, list);
-				if (cmd->flags & PresentShot)
-					Shots(cmd, list);
-				break;
-
-			default:
-				break;
+				SlowCmd* w = &gl.drawSlow;
+				w->us = us;
+				w->type = type;
+				w->dst = cmd->dst;
+				w->src = cmd->src;
+				w->rect = cmd->rect;
+				w->x = cmd->x;
+				w->y = cmd->y;
+				w->flags = cmd->flags;
+				w->extra = cmd->extra;
+				w->cmds = next - i;
+				w->uploads = gl.inlineUploads - uploads;
+				w->uploadUs = DWORD(gl.inlineUs - uploadUs);
 			}
-
-			++i;
+			i = next;
 		}
+	}
+
+	VOID SlowText(CHAR* text, const SlowCmd* w)
+	{
+		StrPrint(text, "%s dst %u src %u rect %d,%d %dx%d x %d y %d flags %X extra %u (%u commands in the run, inline 4K uploads %u in %u.%03u ms) %u.%03u ms",
+			cmdNames[w->type], w->dst, w->src, w->rect.left, w->rect.top, w->rect.right - w->rect.left, w->rect.bottom - w->rect.top, w->x, w->y, w->flags, w->extra,
+			w->cmds, w->uploads, w->uploadUs / 1000, w->uploadUs % 1000, w->us / 1000, w->us % 1000);
 	}
 
 	VOID AddShowQuad(const RECT* part, const Gpu* gpu, LONG baseX, LONG baseY, DWORD frameWidth, DWORD frameHeight)
@@ -8818,15 +9887,32 @@ namespace Twin
 			GLDisable(GL_SCISSOR_TEST);
 
 			LARGE_INTEGER start, end;
+			MemoryZero(&gl.drawSlow, sizeof(gl.drawSlow));
+			DWORD commands = 0;
 			QueryPerformanceCounter(&start);
 			for (List* list = lists; list; list = list->next)
 			{
 				Replay(list);
+				commands += list->count;
 				++replayed;
 			}
 			QueryPerformanceCounter(&end);
 			if (gl.frequency.QuadPart)
 				us = DWORD((end.QuadPart - start.QuadPart) * 1000000 / gl.frequency.QuadPart);
+
+			if (gl.drawSlow.us > gl.times.slow.us)
+				gl.times.slow = gl.drawSlow;
+			if (us > REPLAY_SLOW_US)
+			{
+				++gl.times.slowReplays;
+				if (gl.slowLogs < REPLAY_SLOW_LOGS)
+				{
+					++gl.slowLogs;
+					CHAR text[400];
+					SlowText(text, &gl.drawSlow);
+					DebugLog("twin slow replay %u.%03u ms (%u lists, %u commands): slowest %s", us / 1000, us % 1000, replayed, commands, text);
+				}
+			}
 
 			if (shared.show)
 				shown = Show(rect, offset, frameWidth, frameHeight, drawFbo);
@@ -8890,6 +9976,24 @@ namespace Twin
 		shared.conflictsSkipped += gl.conflictsSkipped;
 		shared.conflictBlocks += gl.conflictBlocks;
 		gl.seedReplayed = gl.seedPieces = gl.seedMissing = gl.conflictsChecked = gl.conflictsDiffer = gl.conflictsSkipped = gl.conflictBlocks = 0;
+		for (DWORD t = 0; t < CMD_TYPES; ++t)
+		{
+			shared.times.us[t] += gl.times.us[t];
+			shared.times.count[t] += gl.times.count[t];
+			if (gl.times.max[t] > shared.times.max[t])
+				shared.times.max[t] = gl.times.max[t];
+		}
+		if (gl.times.slow.us > shared.times.slow.us)
+			shared.times.slow = gl.times.slow;
+		shared.times.slowReplays += gl.times.slowReplays;
+		MemoryZero(&gl.times, sizeof(gl.times));
+		shared.inlineBytes += gl.inlineBytes;
+		shared.inlineUs += gl.inlineUs;
+		shared.inlineUploads += gl.inlineUploads;
+		shared.rateBytes += gl.inlineBytes;
+		shared.rateUs += gl.inlineUs;
+		gl.inlineBytes = gl.inlineUs = 0;
+		gl.inlineUploads = 0;
 		gl.showOpaque = gl.showBack = gl.showInvalid = gl.showGone = gl.showOther = 0;
 		gl.groundReplayed = gl.groundFallbacks = 0;
 		gl.pixelReplayed = gl.pixelCalls = 0;

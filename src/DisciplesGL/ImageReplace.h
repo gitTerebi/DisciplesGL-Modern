@@ -27,6 +27,9 @@ namespace ImageReplace
 	BOOL ArtReady(LONG frame);
 	LONG ArtState(LONG frame);
 	BOOL ArtUpload(LONG frame);
+	LONG ArtBytes(LONG frame);
+	// the latest store load of a whole image of this 1x size, within the last frames
+	BOOL RecentLoad(LONG width, LONG height, LONG* frame, CHAR* name, DWORD* framesAgo);
 	const CHAR* MemoryName(const VOID* ptr);
 	VOID LogSeedSources();
 	BOOL FindMemory(const VOID* ptr, const VOID** base, LONG* pitch, LONG* width, LONG* height, LONG* frame, BOOL* flipped);

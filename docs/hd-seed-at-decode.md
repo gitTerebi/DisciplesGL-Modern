@@ -11,10 +11,14 @@ This page describes the `seed` mode of the twin renderer. It replaces the old wa
 | Key | Values | Default |
 |---|---|---|
 | `Mode` | `seed`, `match` | `seed` |
-| `SeedWait` | ms the game thread may wait at one decode for the pack worker to decode its art (0 to 2000) | 100 |
+| `SeedWait` | ms the game thread may wait at one decode for the pack worker to decode its art (0 to 2000). 0: it never waits, the seed is deferred and lands when the art arrives (see Streaming) | 0 |
+| `SeedLoadWait` | ms a decode may wait while the game is loading, that is when no present came for more than 100 ms (0 to 2000) | 100 |
 | `WriteTrap` | `1` keeps the pages of every offscreen surface read-only until the game's first write, to name the code that writes it (see First-write trap); `0` off | 1 |
+| `TrapCopy` | `1` replays a trapped `rep movs` from one twin into another as a twin copy when the 1x rows are equal (see Map view) | 1 |
+| `LoadSeed` | `1` seeds an image the game converts from indices outside `StoreDraw` when its size equals an image the store just loaded by name (see Map view); `0` only logs the match | 0 |
+| `GpuCheck` | `1` runs the GPU check every 5 s and takes the screenshots 15 s after the first seed, as before; `0` only on F12 | 0 |
 
-The environment variable `DGL_TWIN_MODE=match` overrides the ini. The first log line names the mode and where it came from: `twin mode seed (Twin.Mode=seed, seed wait 100 ms)`.
+The environment variable `DGL_TWIN_MODE=match` overrides the ini. The first log line names the mode and where it came from: `twin mode seed (Twin.Mode=seed, seed wait 0 ms)`.
 
 `match` is the old path and is unchanged, so the two modes can be compared. It is due for removal in the next round.
 
@@ -44,7 +48,7 @@ All seeds go through `ImageReplace.cpp:AddRange`. That is the one place where na
 
 The render thread (`ReplaySeed`) uploads a decoded but not yet uploaded frame on the spot (`ImageReplace::ArtUpload`).
 
-**Deferred seeds.** Pieces whose art isn't decoded in time stay pending. `SeedPoll` runs at every present and emits them once they are ready. It does so only while the record is intact. A record is dropped by any write the twins see in its rect: `MarkDirty`, fills, copies or pixel ops into it, `Repair` from the tile check, `GroundArt`, `OnWriteAll`, or the release or eviction of the twin. The record itself is the seeded flag. Its generation is "no write seen since the decode".
+**Deferred seeds.** Pieces whose art isn't decoded in time stay pending. `SeedPoll` runs at every present and emits them once they are ready. It does so only for the pieces still intact. A piece is dropped by any write the twins see in its rect, and the record when no piece is left or the write covers it: `MarkDirty`, fills, copies or pixel ops into it, `Repair` from the tile check, `GroundArt`, `OnWriteAll`, or the release or eviction of the twin. The record itself is the seeded flag. Its generation is "no write seen since the decode".
 
 After a rebuild (GL release, queue overflow), Ctrl+F11 or Ctrl+F10, every intact record is queued again, because its 1x provably hasn't changed. `SeedPoll` spreads these redraws over frames (at most 24 MB of list arena per frame), so a rebuild can't cascade into queue overflows. A record pending for more than 3600 frames expires.
 
@@ -126,6 +130,10 @@ Offscreen surfaces get their own pages: `StateBuffer(size, TRUE)` allocates with
 
 The arrival line now ends with `tr <n> <eip>`: the trapped game writes into that twin and the last writer.
 
+- **Priority.** The top 1x-only copy sources of the last coverage list (up to 8 surfaces) are re-armed at every present, outside the 2048-page budget (their own budget is 16384 pages a second), and their quick re-arm after our own write is never skipped for the budget. A priority surface that has faulted 4096 times is "hot" and drops to once a second, so a surface the game writes every frame cannot fault-storm. Each new writer and twin pair on a priority surface is logged (`twin trap priority write #n`) with EIP, the export it is in for code outside the game, caller, return addresses, the instruction bytes, ESI and EDI resolved to a twin and pixel or a store image, ECX, EAX, EBX, EDX and the context.
+- **Trapped writes mark the 1x.** A trapped game write marks the rows of its page dirty, as a hooked write would, so a surface written by an unhooked CPU loop now gets its 1x instead of keeping a stale twin.
+- **Quick re-arms skipped for the budget** are counted (`twin trap priority` line).
+
 ### Transfer seeds
 
 The 4K follows the pixels by provenance: the latest named decode, and the lock, write, first trapped write, indexed blit or surface creation that followed it, pick the image and its place. The pixels are never searched or hashed. The guard above only confirms the one place the provenance gives.
@@ -140,6 +148,51 @@ The 4K follows the pixels by provenance: the latest named decode, and the lock, 
    - **Hooked write** into a surface twin after the decode (`OnWrite`, or a copy or pixel op from untwinned memory). The place is the write's top-left. It is checked at the next twin call, which is after the hook's CPU write, and resolved at the next decode or present.
 3. If the guard accepts, the decode's pieces are seeded into the surface twin itself (`XferSeed` → `SeedAt`, the second half of `SeedArt`). That record lives on the surface twin, so it survives the decode buffer's reuse, defers like any seed, and is redrawn after a rebuild like any intact seed.
 4. Each surface takes a whole decode once (`Arrival.xferSeq`); parts of one decode from indexed blits can land in the same surface several times. A surface that doesn't hold it is counted once per decode (`rejected`). A decode older than 600 frames is no candidate.
+
+## Streaming
+
+The game thread no longer waits for 4K (`SeedWait=0`). A seed whose art is not decoded yet is deferred: the 1x stays, and `SeedPoll` emits the pieces at a later present once the art is there. The only waits left are while the game is loading (`SeedLoadWait`, when no present came for more than 100 ms), at most 1 s in all between two presents.
+
+- **Prefetch at the store load.** `ImageReplace.cpp:StoreLoad` asks for the 4K of every frame of the loaded file's sheet blocks (`PrefetchSheet`), and of a plain image's own frame (`NoteLoad`), before the game decodes it. The decode itself asks again through `ArtState`.
+- **Inline uploads.** A decoded frame is uploaded on the render thread by the replay that first draws it (`SeedTexture`). `SeedEmit` lets only a budget of such frames into each present's list: about 4 ms of uploads at the rate the render thread measured (1 to 32 MB). The rest waits for the next present, or for `ImageReplace`'s own upload pump (4 ms per frame), after which they are plain GPU textures.
+- **Writes since the decode.** A write into a seed record's rect now drops only the pieces it touches (`PieceWritten`). The record keeps the rest and still lands them. A write covering the whole record, or touching every piece, drops it as before. A repeat decode over a record with written pieces seeds it again.
+- **Seeds carried by copies.** The store converts most art into the 1152x1152 scratch surface (twin 4) and copies it from there into the surface the game keeps. A deferred seed in the scratch would land after the scratch was already reused. So an unkeyed copy out of a rect that holds a pending seed record creates a pending record on the destination with the waiting pieces moved along (`SeedDerive`). When the source record had already uploaded its key-alpha base, the copy carried it, and the new record does not upload it again. Screen-sized targets are left out. The new record is emitted at the next present, after the CPU copy happened.
+
+`twin seed streaming 5s` counts the deferred seeds, the copies that carried pending pieces, the late landings with their latency in frames and ms, frames still decoding, frames held back by the upload budget, and pieces dropped by writes.
+
+## Render-thread stalls
+
+The 16:05–16:08 run had replays of 1179 ms, 450 ms, 176 ms and several of 40–55 ms. From the code:
+
+| Cause | Where | Change |
+|---|---|---|
+| The automatic screenshots 15 s after the first seed: three PNGs compressed on the render thread (16:05:52.8 to 16:05:54.0, inside the 1179 ms replay) | `Shots`, `WritePng` | PNG compression runs on its own thread (`WritePngAsync`); the automatic shot only with `GpuCheck=1`, otherwise on F12 |
+| The GPU check every 5 s: a synchronous `glReadPixels` of the whole screen twin at N (3200x2400, 30 MB) | `Check` | only on F12, or every 5 s with `GpuCheck=1` |
+| The shared-block conflict check: uploads both frames' 4K of every conflicting pair (frames nothing else draws) and reads back per batch of 16 | `CheckConflicts` | only after F12 (`seeds.conflictCheck`; F12 also queues the intact seeds again so their pairs are checked) |
+| Inline 4K uploads of a whole sheet's frames in one replay | `ReplaySeed` → `SeedTexture` → `ArtUpload` | budget per present, see Streaming |
+
+Every replay dispatch is now timed by command type. `twin replay per command 5s` gives the dispatches, total and max per type and the replays over 50 ms; `twin replay slowest command 5s` and `twin slow replay` (each replay over 50 ms, first 64) name the slowest command with its twin, rect, run length and the inline uploads inside it.
+
+## Map view
+
+### Where its pixels come from
+
+The 1x-only map buffers (twin 82 640x600, twin 83 640x576) and the screen-sized buffers of other screens (twin 101 800x600, twin 120 676x674) each get exactly one copy in from a 1x-only twin, and nothing else (`in 0/1/0`, no writes, no locks, no trapped writes). The coverage lines say which twin: in each interval where they were filled, the 1152x1152 scratch (twin 4) was copied out twice as 1x, and the pixel counts add up exactly: 752640 = 640x600 + 640x576 (16:07:56), 935624 = 800x600 + 676x674 (16:07:51). So these big images are converted into the scratch and copied out of it in one piece, like the sprites, but nothing seeds them there.
+
+No decode of their size passes `StoreDraw` (the largest named decode is 482x512), and the decode buffer is the 8-bit 1152-pitch surface next to the scratch (`data 0F480000, pitch field 1152`). The likely path is an indexed blit into the scratch from indices that are not the latest store decode: the guard line counts 44 such blits (`other sources`). Which images and which loader is settled by the next log (Logs: `twin indexed blit #n from other memory`, `twin copy in #n`, `twin seed load match #n`).
+
+Ruled out in the code: `GetDC` and `SetSurfaceDesc` are stubs, so there is no GDI path; `GetSurfaceDesc` hands out the surface pointer without a lock (a kept pointer), but any CPU write through it is trapped.
+
+### What changed
+
+- **Copies in are logged** (`twin copy in #n`, first 96, for copies of at least 400x400 or into a priority surface): source twin, rect, 4K or 1x, the game code behind the `Blt`/`BltFast` (return address and the caller above the game's wrapper), the source's arrival counters, and the last write that reached that rect of the source: hooked write, indexed blit (with its source pointer), copy from an untwinned surface, fill, pixel op or trapped game write, with the game caller found on the stack. Each twin keeps its last 8 writes for this. The arrival line for the top 4 gets the first and last copy in (`twin arrival copies in`).
+- **Indexed blits from other memory are logged** (`twin indexed blit #n from other memory`, first 32): source pointer (twin or store image if known), size, destination twin and pixel, the latest decode, and the game caller.
+- **Load seed, behind `LoadSeed`.** The store's file loads are kept with their pack frame (plain images only; sheets go through `StoreDraw`). An indexed blit from unnamed indices of exactly a just-loaded image's size (within 30 frames) is a candidate, seeded at the blit's destination when `LoadSeed=1`. The copy out of the scratch then carries the 4K, or the pending seed, into the map buffer. With `LoadSeed=0` the match is only logged, so the next log shows whether name and size agree.
+- **Trapped CPU copies, behind `TrapCopy`.** If the map buffer turns out to be written by a CPU loop, the trap now records the registers and the first bytes of the faulting instruction. A `rep movs` whose ESI lies in another twin becomes a copy hint (source twin, offset, rows written). At the next copy or present, if every 1x row of the hinted rect equals the source's 1x rows at that offset, it is replayed as a twin copy (`twin trap copy #n`). Otherwise it stays the 1x the trapped write marked.
+
+## Bink
+
+The two writers the trap saw (`binkw32.dll+21A13`, `+21B29`) wrote twin 4 at frame 0 only, 675 pages, while the blank `SF.bik` intro played. The game imports `_BinkCopyToBuffer@28`, which the wrapper already hooks (`Hooks.cpp:BinkCopyToBufferHook`) to force 32 bpp; the faults were inside the original call, so they counted as the game's (the stack scan found no return address of ours within 32 DWORDs). Its source is Bink's own frame buffer, never a twin or a decode, so there is nothing to replay as a twin copy: a video frame is a 1x write. The hook now announces the write before calling Bink, so the pages open first and the write is no longer counted as a trapped game write. It is at frame 0, before any ground, so `GroundArt` is not affected. `twin trap bink` names the exports the two offsets fall in and lists what the game imports from Bink, so this is checked in the next log.
 
 ## Sheet construction
 
@@ -211,9 +264,20 @@ Ground in seed mode therefore keeps `GroundArt`/`DrawGround` (`CmdGround`), exac
 | `twin seed store/sheet/face since start: ...` | every 5 s | events, done, deferred (completed later, expired), dropped (memory written, freed), overwritten after seeding, no twin, no art, pieces, px and MB at N×, and the targets: into memory twins, surface twins, by transfer. Transfers are events too |
 | `twin seed sheets since start ...` | every 5 s | sheets, frames, shared blocks, blocks with differing 4K, pairs checked |
 | `twin seed records ...` | every 5 s | pending, evicted, redraws, repeats, wait avg/max, replayed commands/pieces, art missing at replay, masked keyed copies |
-| `image seed sources since start: ...` | every 5 s | store draws, faces, ranges, sheet archives, ground |
+| `image seed sources since start: ...` | every 5 s | store draws, faces, ranges, sheet archives, ground, files and frames prefetched at the store load |
 | `twin coverage 5s: ...` | every 5 s | copies from sources carrying 4K, from 1x-only twins, from untwinned memory (count, px) |
 | `twin coverage top 1x-only copy sources ...` | every 5 s, up to 4 lines | rank, twin, kind, buffer, size, px, copies, store name. This is the coverage checklist |
+| `twin arrival copies in [rank] twin ...` | every 5 s, top 4 | count, the first and the last copy in: source twin and rect, 4K or 1x, game caller, the source's counters and its last write there |
+| `twin copy in #n` | first 96 | each copy of at least 400x400 or into a priority surface, as above; also from untwinned surfaces |
+| `twin indexed blit #n from other memory` | first 32 | an indexed blit whose indices are not the latest store decode |
+| `twin seed load match #n` / `twin seed load matches since start` | first 24 / 5 s | such a blit matching a just-loaded image by size, and whether it was seeded |
+| `twin trap priority ...` | every 5 s | the priority surfaces with their trapped writes, arms, pairs, skipped quick re-arms, trapped writes marked dirty, `rep movs` hints replayed or failing the guard |
+| `twin trap priority write #n` | first 96 | a new writer on a priority surface, with registers |
+| `twin trap copy #n` | first 24 | a `rep movs` hint replayed as a twin copy, or why not |
+| `twin trap bink` | once | the exports `binkw32.dll+21A13` and `+21B29` are in, and the game's Bink imports |
+| `twin seed streaming 5s` | every 5 s | deferred seeds, carried by copies, late landings with latency in frames and ms, frames still decoding or over the upload budget, pieces dropped by writes, waits while loading |
+| `twin replay per command 5s` / `twin replay slowest command 5s` | every 5 s | dispatches, total and max per command type; the slowest command |
+| `twin slow replay` | each replay over 50 ms, first 64 | the replay's time and its slowest command |
 
 The log rotates to `DisciplesGL-debug.log.old` at 8 MB, and `test.bat` ships it as `<game>-DisciplesGL-debug.old.log`. In the 14:58 run, Ctrl+F11 also started TextReplace's F11 trace, which flooded the log with `trace bltfast/lock/surface` lines, so the 2 MB rotation lost the first `twin seed #n` lines. Ctrl+F10/F11/F12 now reach only the twin toggles: no F11 trace, no F12 dump, and no BattleLoad bind (F10 remapped to Ctrl+L quick load).
 
@@ -223,6 +287,7 @@ The tile check (`twin tiles check`, `twin repair`), the GPU check (`twin check t
 
 ## Open gaps
 
+1. **The loader of the big images (map buffers, full-screen backgrounds) is not named yet.** See Map view; the next log's `twin indexed blit #n from other memory` and `twin seed load match #n` lines settle it, and `LoadSeed=1` turns the match into seeds.
 1. **The routine that writes the decode into the surface is still unknown.** The 15:32 run showed it uses no lock. The trap names it in the next run (`twin trap writer`), and its first write into a fresh surface is itself a transfer candidate. If the writer is plainly a copy from the decode scratch (or from another seeded record) into the surface, that EIP is the transfer point to hook directly. The 8-bit reading of the snapshot is still a suspicion until the `twin seed decode` lines show format byte 0.
 2. **Flipped records** (`Build` with flipped = 1) use a mirrored sheet. Only the decoded, unflipped sheet is seeded. If the game mirrors with a hooked op, the 4K follows. If it uses an unhooked CPU loop, the tile check repairs it to 1x.
 3. **The store's decode buffer is reused at once.** Its own seed only matters for hooked copies out of it (none were seen). A transfer copies the pieces to the surface, which defers on its own, so the `SeedWait` wait only decides how soon the surface shows 4K.
@@ -231,4 +296,5 @@ The tile check (`twin tiles check`, `twin repair`), the GPU check (`twin check t
 6. **Shared blocks** show the first frame's 4K in every frame that uses them. The conflict lines measure how much that matters.
 7. **Additive frames**, the turn strip (`TurnOrder.cpp`) and ground tile textures are not seeded.
 8. **The seed draw assumes `StoreDraw` overwrites its rect.** If the game ever composites a store image onto existing content through `StoreDraw`, then 4K-transparent texels over opaque background 1x pixels come out transparent.
-9. **Trap risks.** A write into a trapped page from kernel mode (`ReadFile` into a surface, a GDI call writing it) fails with an error instead of faulting, so the trap would break it. No such path is known. The VEH also sees every exception in the process, but it returns at once for anything that is not a write AV inside a trapped page. Each fault costs a few microseconds; the page budget bounds it at about 2048 a second plus first writes. `WriteTrap=0` turns it off and goes back to heap-allocated surfaces.
+9. **Streaming risks.** Pieces of a sheet now land over several presents, so a frame can briefly show a mix of 1x and 4K. A derived seed assumes the unkeyed copy replaced its rect; a later keyed copy or write over it drops the pieces it touches.
+10. **Trap risks.** A write into a trapped page from kernel mode (`ReadFile` into a surface, a GDI call writing it) fails with an error instead of faulting, so the trap would break it. No such path is known. The VEH also sees every exception in the process, but it returns at once for anything that is not a write AV inside a trapped page. Each fault costs a few microseconds; the page budget bounds it at about 2048 a second plus first writes. `WriteTrap=0` turns it off and goes back to heap-allocated surfaces.

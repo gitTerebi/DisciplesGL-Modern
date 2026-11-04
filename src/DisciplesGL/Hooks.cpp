@@ -1750,12 +1750,13 @@ namespace Hooks
 
 #pragma region 32 BPP
 	DWORD pBinkCopyToBuffer;
+	// Bink writes the video frame from its own buffers, never from a twin, so it is a 1x write; announcing it first opens the trapped pages instead of faulting inside binkw32
 	LONG __stdcall BinkCopyToBufferHook(VOID* hBnk, DWORD* dst, DWORD pitch, DWORD height, DWORD x, DWORD y, DWORD flags)
 	{
+		Twin::OnWrite(dst, pitch >> 1, pitch >> 1, height);
 		LONG res = ((LONG(__stdcall*)(VOID*, DWORD*, DWORD, DWORD, DWORD, DWORD, DWORD))pBinkCopyToBuffer)(hBnk, dst, pitch << 1, height, x, y, BINKCOPYALL | (config.renderer == RendererGDI ? BINKSURFACE32 : BINKSURFACE32R));
 		if (!res)
 		{
-			Twin::OnWrite(dst, pitch >> 1, pitch >> 1, height);
 			DWORD c = height * (pitch >> 1);
 			do
 				*dst++ |= ALPHA_COMPONENT;
@@ -1767,11 +1768,11 @@ namespace Hooks
 
 	LONG __stdcall BinkCopyToBufferHook_SSE(VOID* hBnk, DWORD* dst, DWORD pitch, DWORD height, DWORD x, DWORD y, DWORD flags)
 	{
+		Twin::OnWrite(dst, pitch >> 1, pitch >> 1, height);
 		LONG res = ((LONG(__stdcall*)(VOID*, DWORD*, DWORD, DWORD, DWORD, DWORD, DWORD))pBinkCopyToBuffer)(hBnk, dst, pitch << 1, height, x, y, BINKCOPYALL | (config.renderer == RendererGDI ? BINKSURFACE32 : BINKSURFACE32R));
 		if (!res)
 		{
 			pitch >>= 1;
-			Twin::OnWrite(dst, pitch, pitch, height);
 
 			if (!(pitch & 0xF))
 			{
