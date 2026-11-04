@@ -89,7 +89,7 @@
 #define ART_LOGS 32
 #define REGION_MAX 256
 #define INDEX_MAGIC 0x58495754
-#define INDEX_VERSION 3
+#define INDEX_VERSION 4
 #define IDENTITIES 4
 #define SOURCE_WEIGHT 100
 #define TRACE_LOGS 24
@@ -116,6 +116,15 @@
 #define SHOT_SCREEN_W 1600
 #define SHOT_SCREEN_H 1200
 #define SHOT_SHEET 2048
+#define KNOWN_SLOTS 65536
+#define REGION_HASHED -2
+#define EXPECT_LOGS 32
+#define EXPECT_ATTEMPTS 4
+#define REHASH_AREA (128 * 128)
+#define REHASH_FRAMES 30
+#define ART_CHECK_LOGS 32
+#define ART_CHECK_MAD 48
+#define ART_CHECK_MEAN 32
 
 typedef VOID(__stdcall* GLBLENDEQUATION)(GLenum mode);
 
@@ -171,6 +180,27 @@ namespace Twin
 		LONG cx;
 		LONG cy;
 		DWORD lastUse;
+		BOOL content;
+		DWORD checked;
+	};
+
+	struct ArtGross {
+		LONG x;
+		LONG y;
+		DWORD mad;
+		DWORD mean;
+		DWORD cover;
+		DWORD px;
+		LONG art;
+	};
+
+	struct ArtTag {
+		LONG frame;
+		LONG cx;
+		LONG cy;
+		LONG canvasW;
+		LONG canvasH;
+		DWORD src;
 	};
 
 	struct ArtPlan {
@@ -188,6 +218,7 @@ namespace Twin
 		LONG canvasH;
 		LONG flipped;
 		DWORD count;
+		DWORD source;
 	};
 
 	// the packer dedupes identical 1x blocks across animation frames, so one block can legitimately be several pieces; each is kept with its evidence
@@ -228,6 +259,7 @@ namespace Twin
 		DWORD px;
 		DWORD art;
 		DWORD artDiffer;
+		DWORD artGross;
 	};
 
 	struct Record {
@@ -243,6 +275,7 @@ namespace Twin
 		DWORD key;
 		DWORD artCount;
 		RECT art[ART_MAX];
+		ArtTag artTag[ART_MAX];
 		Region* regions;
 		BOOL memory;
 		BOOL anonymous;
@@ -380,6 +413,16 @@ namespace Twin
 			LONG h;
 		} pieces[PIECE_SLOTS];
 		DWORD pieceCount;
+		struct {
+			LONG frame;
+			LONG cx;
+			LONG cy;
+			LONG canvasW;
+			LONG canvasH;
+			LONG w;
+			LONG h;
+		} known[KNOWN_SLOTS];
+		DWORD knownCount;
 		DWORD skipped;
 		DWORD slowHashes;
 		DWORD hashLogs;
@@ -487,6 +530,22 @@ namespace Twin
 		BOOL checked;
 		DWORD firstTick;
 		BOOL shotTaken;
+		ArtTag lastTag;
+		DWORD expectVerified;
+		DWORD expectUnverified;
+		DWORD expectProvenance;
+		DWORD expectRejectSize;
+		DWORD expectRejectSource;
+		DWORD expectRejectContent;
+		DWORD expectStale;
+		DWORD expectLogs;
+		DWORD expectOkLogs;
+		struct {
+			LONG frame;
+			DWORD src;
+			const CHAR* reason;
+		} expectSeen[16];
+		DWORD expectSeenNext;
 	} art;
 
 	struct {
@@ -512,6 +571,7 @@ namespace Twin
 		DWORD artDraws;
 		DWORD artFallbacks;
 		DWORD artCalls;
+		DWORD artMasked;
 		DWORD groundReplayed;
 		DWORD groundFallbacks;
 		DWORD pixelReplayed;
@@ -545,6 +605,16 @@ namespace Twin
 		GLint tintedLoc;
 		GLint lighterLoc;
 		GLint solidLoc;
+		GLint srcMaskLoc;
+		GLint srcMapLoc;
+		GLint srcKeyLoc;
+		GLint boxLoc;
+		DWORD* checkBox;
+		DWORD artMasked;
+		DWORD artCheckLogs;
+		DWORD artCheckOk;
+		LONG artBadFrames[32];
+		DWORD artBadNext;
 		GLuint maskProgram;
 		GLint maskKeyedLoc;
 		GLint maskKeyLoc;
@@ -868,17 +938,36 @@ namespace Twin
 		}
 	}
 
-	VOID AddArt(Record* twin, const RECT* rect)
+	BOOL SameTag(const ArtTag* a, const ArtTag* b)
+	{
+		return a->frame == b->frame && a->cx == b->cx && a->cy == b->cy && a->canvasW == b->canvasW && a->canvasH == b->canvasH;
+	}
+
+	// the tag says which identity put 4K art there, so the art check can name the culprit
+	VOID AddArt(Record* twin, const RECT* rect, const ArtTag* tag = NULL)
 	{
 		if (rect->left >= rect->right || rect->top >= rect->bottom)
 			return;
 
+		ArtTag none = { -1, 0, 0, 0, 0, TWIN_NONE };
+		if (!tag)
+			tag = &none;
+
 		for (DWORD i = 0; i < twin->artCount; ++i)
-			if (Contains(&twin->art[i], rect))
+		{
+			if (EqualRect(&twin->art[i], rect))
+			{
+				twin->artTag[i] = *tag;
 				return;
+			}
+			// a different identity inside a bigger art rect is kept separately while there is room, so the check can name it
+			if (Contains(&twin->art[i], rect) && (tag->frame < 0 || SameTag(&twin->artTag[i], tag) || twin->artCount >= ART_MAX / 2))
+				return;
+		}
 
 		if (twin->artCount < ART_MAX)
 		{
+			twin->artTag[twin->artCount] = *tag;
 			twin->art[twin->artCount++] = *rect;
 			return;
 		}
@@ -888,13 +977,18 @@ namespace Twin
 			UnionRect(&bound, &bound, &twin->art[i]);
 		twin->artCount = 1;
 		twin->art[0] = bound;
+		twin->artTag[0] = none;
 	}
 
 	VOID CoverArt(Record* twin, const RECT* rect)
 	{
 		for (DWORD i = twin->artCount; i; --i)
 			if (Contains(rect, &twin->art[i - 1]))
-				twin->art[i - 1] = twin->art[--twin->artCount];
+			{
+				--twin->artCount;
+				twin->art[i - 1] = twin->art[twin->artCount];
+				twin->artTag[i - 1] = twin->artTag[twin->artCount];
+			}
 	}
 
 	VOID DropRegions(Record* twin, const RECT* rect)
@@ -1561,6 +1655,12 @@ namespace Twin
 
 		++art.draws;
 		art.drew = TRUE;
+		art.lastTag.frame = frame;
+		art.lastTag.cx = to->left - place->left;
+		art.lastTag.cy = to->top - place->top;
+		art.lastTag.canvasW = place->right - place->left;
+		art.lastTag.canvasH = place->bottom - place->top;
+		art.lastTag.src = srcId;
 		if (cached)
 			++art.cachedDraws;
 		art.px += (to->right - to->left) * (to->bottom - to->top);
@@ -1641,6 +1741,54 @@ namespace Twin
 		DWORD* count = FrameLearned(frame, TRUE);
 		if (count)
 			++*count;
+	}
+
+	// pieces whose 1x pixels were seen at the decode; an expectation naming one of them must show those pixels
+	DWORD KnownSlot(LONG frame, LONG cx, LONG cy, LONG canvasW, LONG canvasH, LONG w, LONG h, BOOL* found)
+	{
+		DWORD mask = KNOWN_SLOTS - 1;
+		DWORD slot = ((DWORD)frame * 2654435761u ^ (DWORD)cx * 73856093u ^ (DWORD)cy * 19349663u ^ (DWORD)canvasW * 83492791u ^ (DWORD)canvasH * 2246822519u ^
+			(DWORD)w * 3266489917u ^ (DWORD)h) & mask;
+		for (;; slot = (slot + 1) & mask)
+		{
+			if (!learn.known[slot].w)
+			{
+				*found = FALSE;
+				return slot;
+			}
+			if (learn.known[slot].frame == frame && learn.known[slot].cx == cx && learn.known[slot].cy == cy && learn.known[slot].canvasW == canvasW &&
+				learn.known[slot].canvasH == canvasH && learn.known[slot].w == w && learn.known[slot].h == h)
+			{
+				*found = TRUE;
+				return slot;
+			}
+		}
+	}
+
+	VOID KnownAdd(LONG frame, LONG cx, LONG cy, LONG canvasW, LONG canvasH, LONG w, LONG h)
+	{
+		if (learn.knownCount * 10 >= KNOWN_SLOTS * 7 || w <= 0)
+			return;
+
+		BOOL found;
+		DWORD slot = KnownSlot(frame, cx, cy, canvasW, canvasH, w, h, &found);
+		if (found)
+			return;
+		learn.known[slot].frame = frame;
+		learn.known[slot].cx = cx;
+		learn.known[slot].cy = cy;
+		learn.known[slot].canvasW = canvasW;
+		learn.known[slot].canvasH = canvasH;
+		learn.known[slot].w = w;
+		learn.known[slot].h = h;
+		++learn.knownCount;
+	}
+
+	BOOL KnownPiece(LONG frame, LONG cx, LONG cy, LONG canvasW, LONG canvasH, LONG w, LONG h)
+	{
+		BOOL found;
+		KnownSlot(frame, cx, cy, canvasW, canvasH, w, h, &found);
+		return found;
 	}
 
 	ULONGLONG HashBlock(const DWORD* pixels, LONG pitch, LONG width, LONG height, DWORD key, BOOL* solid)
@@ -1813,10 +1961,17 @@ namespace Twin
 			}
 			*slot = *seen;
 			slot->count = weight;
+			slot->source = 0;
 			added = TRUE;
 		}
+		BOOL source = weight >= SOURCE_WEIGHT && !slot->source;
+		if (source)
+			slot->source = 1;
 		index.dirty = TRUE;
 		Unlock();
+
+		if (source)
+			KnownAdd(slot->frame, slot->cx, slot->cy, slot->canvasW, slot->canvasH, entry->width, entry->height);
 
 		++index.evidence;
 		if (added && entry->idCount == 2)
@@ -1880,6 +2035,9 @@ namespace Twin
 				++index.multi;
 				MarkMulti(slot);
 			}
+			for (DWORD i = 0; i < slot->idCount; ++i)
+				if (slot->ids[i].source)
+					KnownAdd(slot->ids[i].frame, slot->ids[i].cx, slot->ids[i].cy, slot->ids[i].canvasW, slot->ids[i].canvasH, slot->width, slot->height);
 			const Identity* dominant = Dominant(slot);
 			if (dominant)
 				CountLearned(dominant->frame, dominant->cx, dominant->cy, slot->width, slot->height);
@@ -1887,7 +2045,7 @@ namespace Twin
 		CloseHandle(file);
 
 		index.dirty = FALSE;
-		DebugLog("twin index loaded %u of %u entries", index.count, count);
+		DebugLog("twin index loaded %u of %u entries, %u pieces known at the decode", index.count, count, learn.knownCount);
 	}
 
 	VOID SaveIndex()
@@ -1947,17 +2105,26 @@ namespace Twin
 		return 0;
 	}
 
-	VOID AddRegion(Record* source, const RECT* rect, ULONGLONG hash, LONG frame, BOOL flipped, LONG placeW, LONG placeH, LONG cx, LONG cy)
+	BOOL EnsureRegions(Record* source)
 	{
 		if (!source->regions)
 		{
 			source->regions = (Region*)MemoryAlloc(REGION_MAX * sizeof(Region));
 			source->regionCount = 0;
-			if (!source->regions)
-				return;
 		}
+		return source->regions != NULL;
+	}
 
-		DropRegions(source, rect);
+	Region* AddRegion(Record* source, const RECT* rect, ULONGLONG hash, LONG frame, BOOL flipped, LONG placeW, LONG placeH, LONG cx, LONG cy)
+	{
+		if (!EnsureRegions(source))
+			return NULL;
+
+		// no pixels changed, so a hash cached over a bigger rect is still true
+		RECT part;
+		for (DWORD i = source->regionCount; i; --i)
+			if (source->regions[i - 1].frame != REGION_HASHED && IntersectRect(&part, rect, &source->regions[i - 1].rect))
+				source->regions[i - 1] = source->regions[--source->regionCount];
 
 		Region* region;
 		if (source->regionCount < REGION_MAX)
@@ -1980,6 +2147,210 @@ namespace Twin
 		region->cx = cx;
 		region->cy = cy;
 		region->lastUse = ++art.useClock;
+		region->content = FALSE;
+		region->checked = game.frameNo;
+		return region;
+	}
+
+	// remembers the hash of an expectation's whole part without naming it, so a rejected claim repeated every frame is not rehashed
+	VOID CacheHash(Record* source, const RECT* rect, ULONGLONG hash)
+	{
+		if (!EnsureRegions(source))
+			return;
+
+		for (DWORD i = 0; i < source->regionCount; ++i)
+			if (EqualRect(&source->regions[i].rect, rect))
+			{
+				if (source->regions[i].frame == REGION_HASHED || !source->regions[i].hash)
+					source->regions[i].hash = hash;
+				return;
+			}
+		if (source->regionCount >= REGION_MAX)
+			return;
+
+		Region* region = &source->regions[source->regionCount++];
+		MemoryZero(region, sizeof(Region));
+		region->rect = *rect;
+		region->hash = hash;
+		region->frame = REGION_HASHED;
+		region->lastUse = ++art.useClock;
+		region->checked = game.frameNo;
+	}
+
+	BOOL CachedHash(const Record* source, const RECT* rect, ULONGLONG* hash)
+	{
+		for (DWORD i = 0; i < source->regionCount; ++i)
+			if (source->regions[i].hash && EqualRect(&source->regions[i].rect, rect))
+			{
+				*hash = source->regions[i].hash;
+				return TRUE;
+			}
+		return FALSE;
+	}
+
+	Region* FindRegion(Record* source, const RECT* from)
+	{
+		for (DWORD i = 0; i < source->regionCount; ++i)
+			if (source->regions[i].frame != REGION_HASHED && Contains(&source->regions[i].rect, from))
+				return &source->regions[i];
+		return NULL;
+	}
+
+	BOOL RegionAgrees(const Region* region, const Image* image, const RECT* from, const RECT* to)
+	{
+		return region->frame == image->frame && !region->flipped == !image->flipped && region->placeW == image->place.right - image->place.left &&
+			region->placeH == image->place.bottom - image->place.top && region->cx + from->left - region->rect.left == to->left - image->place.left &&
+			region->cy + from->top - region->rect.top == to->top - image->place.top;
+	}
+
+	BOOL HasIdentity(const IndexEntry* entry, LONG frame, LONG cx, LONG cy, LONG canvasW, LONG canvasH)
+	{
+		for (DWORD i = 0; i < entry->idCount; ++i)
+			if (entry->ids[i].frame == frame && entry->ids[i].cx == cx && entry->ids[i].cy == cy && entry->ids[i].canvasW == canvasW && entry->ids[i].canvasH == canvasH)
+				return TRUE;
+		return FALSE;
+	}
+
+	// the source already carries 4K art of this frame over the whole part and nothing else: the copy repeats a render that was itself accepted
+	BOOL Provenance(const Record* source, const RECT* part, LONG frame)
+	{
+		BOOL covered = FALSE;
+		RECT overlap;
+		for (DWORD i = 0; i < source->artCount; ++i)
+			if (IntersectRect(&overlap, &source->art[i], part))
+			{
+				if (source->artTag[i].frame != frame)
+					return FALSE;
+				if (Contains(&source->art[i], part))
+					covered = TRUE;
+			}
+		return covered;
+	}
+
+	VOID ExpectLog(const CHAR* reason, const Expect* e, DWORD srcId, const Record* source, const RECT* from, const RECT* to, const CHAR* detail, BOOL normal = FALSE)
+	{
+		const Image* image = &art.images[e->image];
+		for (DWORD i = 0; i < sizeof(art.expectSeen) / sizeof(*art.expectSeen); ++i)
+			if (art.expectSeen[i].reason == reason && art.expectSeen[i].frame == image->frame && art.expectSeen[i].src == srcId)
+				return;
+		DWORD slot = art.expectSeenNext++ % (sizeof(art.expectSeen) / sizeof(*art.expectSeen));
+		art.expectSeen[slot].reason = reason;
+		art.expectSeen[slot].frame = image->frame;
+		art.expectSeen[slot].src = srcId;
+
+		// the normal outcomes get a small budget of their own so they never starve the rejections
+		DWORD* budget = normal ? &art.expectOkLogs : &art.expectLogs;
+		if (*budget >= (normal ? EXPECT_LOGS / 4 : EXPECT_LOGS))
+			return;
+		++*budget;
+		DebugLog("twin expect %s frame=%d part sheet=%d,%d %dx%d canvas=%d,%d of %dx%d | copy src %u %s %dx%d %d,%d %dx%d -> %d,%d | %s at frame %u", reason, image->frame,
+			e->sx, e->sy, e->w, e->h, e->dx - image->place.left, e->dy - image->place.top, image->place.right - image->place.left, image->place.bottom - image->place.top,
+			srcId, TwinKind(source), source->width, source->height, from->left, from->top, from->right - from->left, from->bottom - from->top, to->left, to->top, detail, game.frameNo);
+	}
+
+	// an expectation names an image by where the game drew it, not by what the source holds, so it may claim a copy only when the source can be that render
+	BOOL ExpectAllowed(const Expect* e, Record* source, DWORD srcId, const RECT* from, const RECT* to, Region** found, BOOL* verified)
+	{
+		*verified = FALSE;
+		const Image* image = &art.images[e->image];
+		LONG placeW = image->place.right - image->place.left, placeH = image->place.bottom - image->place.top;
+		LONG cx = e->dx - image->place.left, cy = e->dy - image->place.top;
+		RECT part = { e->sx, e->sy, e->sx + e->w, e->sy + e->h };
+		CHAR detail[160];
+
+		// the part lives whole in the sheet the game copies from; a smaller source is some other buffer at the same coordinates
+		if (part.left < 0 || part.top < 0 || part.right > source->width || part.bottom > source->height)
+		{
+			++art.expectRejectSize;
+			ExpectLog("rejected size", e, srcId, source, from, to, "the part does not fit in the source");
+			return FALSE;
+		}
+
+		Region* region = *found;
+		if (region && RegionAgrees(region, image, from, to))
+			return TRUE;
+
+		BOOL trusted = FALSE;
+		if (region && region->content && region->frame >= 0)
+		{
+			trusted = TRUE;
+			// an untracked rewrite (hover state drawn over the old one) leaves a region behind; a fresh hash tells it apart from a wrong render call
+			if (Area(&region->rect) <= REHASH_AREA || game.frameNo - region->checked >= REHASH_FRAMES)
+			{
+				BOOL solid;
+				ULONGLONG hash = HashBlock((const DWORD*)source->base + region->rect.top * source->pitch + region->rect.left, source->pitch,
+					region->rect.right - region->rect.left, region->rect.bottom - region->rect.top, HashKey(source), &solid);
+				++index.lookups;
+				if (solid || hash != region->hash)
+				{
+					++art.expectStale;
+					StrPrint(detail, "source region frame=%d %d,%d %dx%d changed since it was identified, dropped", region->frame, region->rect.left, region->rect.top,
+						region->rect.right - region->rect.left, region->rect.bottom - region->rect.top);
+					ExpectLog("stale region", e, srcId, source, from, to, detail);
+					RECT stale = region->rect;
+					DropRegions(source, &stale);
+					region = *found = FindRegion(source, from);
+					if (region && RegionAgrees(region, image, from, to))
+						return TRUE;
+					trusted = region && region->content && region->frame >= 0;
+				}
+				else
+					region->checked = game.frameNo;
+			}
+		}
+
+		if (!KnownPiece(image->frame, cx, cy, placeW, placeH, e->w, e->h))
+		{
+			if (trusted)
+			{
+				++art.expectRejectSource;
+				StrPrint(detail, "source already identified as frame=%d canvas=%d,%d of %dx%d%s, content unchanged, part never seen at a decode", region->frame,
+					region->cx, region->cy, region->placeW, region->placeH, region->learned ? " (learned at the decode)" : "");
+				ExpectLog("rejected source", e, srcId, source, from, to, detail);
+				return FALSE;
+			}
+			++art.expectUnverified;
+			ExpectLog("allowed unverified", e, srcId, source, from, to, "part never seen at a decode, nothing to compare", TRUE);
+			return TRUE;
+		}
+
+		ULONGLONG hash = 0;
+		BOOL have = CachedHash(source, &part, &hash);
+		if (!have)
+		{
+			BOOL solid;
+			hash = HashBlock((const DWORD*)source->base + part.top * source->pitch + part.left, source->pitch, e->w, e->h, HashKey(source), &solid);
+			++index.lookups;
+			have = !solid;
+			if (have)
+				CacheHash(source, &part, hash);
+			region = *found = FindRegion(source, from);
+		}
+
+		const IndexEntry* entry = have ? IndexFind(hash, e->w, e->h) : NULL;
+		if (entry && HasIdentity(entry, image->frame, cx, cy, placeW, placeH))
+		{
+			++art.expectVerified;
+			*verified = TRUE;
+			ExpectLog("verified content", e, srcId, source, from, to, "source pixels match the part seen at the decode", TRUE);
+			return TRUE;
+		}
+
+		if (!trusted && Provenance(source, &part, image->frame))
+		{
+			++art.expectProvenance;
+			ExpectLog("allowed by provenance", e, srcId, source, from, to, "pixels differ from the decode but the source holds only this frame's 4K art there");
+			return TRUE;
+		}
+
+		++art.expectRejectContent;
+		const Identity* other = entry ? Dominant(entry) : NULL;
+		if (other)
+			StrPrint(detail, "source pixels are frame=%d canvas=%d,%d of %dx%d, not this part", other->frame, other->cx, other->cy, other->canvasW, other->canvasH);
+		else
+			StrPrint(detail, "source pixels %s the part seen at the decode", have ? "are unknown, not" : "are solid, not");
+		ExpectLog("rejected content", e, srcId, source, from, to, detail);
+		return FALSE;
 	}
 
 	BOOL PlaceSane(const Expect* e, LONG x, LONG y)
@@ -2002,7 +2373,7 @@ namespace Twin
 		return FALSE;
 	}
 
-	// context first: an expectation is the game's own statement of what this copy draws; the pixels decide only when there is none
+	// context first: an expectation is the game's own statement of what this copy draws, once ExpectAllowed finds the source can be that render; the pixels decide otherwise
 	BOOL IdentifyArt(Record* target, DWORD dstId, const RECT* to, Record* source, DWORD srcId, const RECT* from, LONG x, LONG y, const RECT* srcRect, BOOL keyed, DWORD key, BOOL half, BOOL mirror, ArtPlan* plan = NULL)
 	{
 		LONG width = from->right - from->left;
@@ -2013,10 +2384,7 @@ namespace Twin
 			return FALSE;
 		}
 
-		Region* region = NULL;
-		for (DWORD i = 0; i < source->regionCount && !region; ++i)
-			if (Contains(&source->regions[i].rect, from))
-				region = &source->regions[i];
+		Region* region = FindRegion(source, from);
 
 		if (index.learnedLogs < LEARN_LOGS)
 		{
@@ -2034,9 +2402,22 @@ namespace Twin
 			}
 		}
 
-		Expect* e = art.count && !mirror ? Match(x, y, srcRect->right - srcRect->left, srcRect->bottom - srcRect->top, srcRect->left, srcRect->top) : NULL;
-		if (e && !PlaceSane(e, x, y))
+		Expect* e = NULL;
+		Expect* refused[EXPECT_ATTEMPTS];
+		DWORD refusedCount = 0;
+		BOOL verified = FALSE;
+		while (art.count && !mirror && refusedCount < EXPECT_ATTEMPTS)
+		{
+			e = Match(x, y, srcRect->right - srcRect->left, srcRect->bottom - srcRect->top, srcRect->left, srcRect->top);
+			if (!e || (PlaceSane(e, x, y) && ExpectAllowed(e, source, srcId, from, to, &region, &verified)))
+				break;
+			// hidden for the next Match only; another render at the same spot may be the real one
+			e->used = TRUE;
+			refused[refusedCount++] = e;
 			e = NULL;
+		}
+		for (DWORD i = 0; i < refusedCount; ++i)
+			refused[i]->used = FALSE;
 
 		if (e)
 		{
@@ -2057,6 +2438,8 @@ namespace Twin
 					hash = region->hash;
 					have = TRUE;
 				}
+				else if (CachedHash(source, from, &hash))
+					have = TRUE;
 				else
 				{
 					BOOL solid;
@@ -2078,16 +2461,21 @@ namespace Twin
 					seen.canvasH = image->place.bottom - image->place.top;
 					seen.flipped = image->flipped ? 1 : 0;
 					seen.count = 0;
+					seen.source = 0;
 					AddEvidence(entry, &seen, 1);
 				}
 			}
 
 			// the game says what this is right now; cached copies that follow without a render call must keep showing it
-			if (!region || region->frame != image->frame || !region->flipped != !image->flipped || region->placeW != image->place.right - image->place.left ||
-				region->placeH != image->place.bottom - image->place.top || region->cx + from->left - region->rect.left != to->left - image->place.left ||
-				region->cy + from->top - region->rect.top != to->top - image->place.top)
-				AddRegion(source, from, blockHash, image->frame, image->flipped,
+			if (!region || !RegionAgrees(region, image, from, to))
+			{
+				Region* added = AddRegion(source, from, blockHash, image->frame, image->flipped,
 					image->place.right - image->place.left, image->place.bottom - image->place.top, to->left - image->place.left, to->top - image->place.top);
+				if (added)
+					added->content = verified;
+			}
+			else if (verified)
+				region->content = TRUE;
 
 			++index.contextDraws;
 			art.reason = "context";
@@ -2146,7 +2534,9 @@ namespace Twin
 			found.placeH = dominant->canvasH;
 			found.cx = dominant->cx;
 			found.cy = dominant->cy;
-			AddRegion(source, from, hash, found.frame, found.flipped, found.placeW, found.placeH, found.cx, found.cy);
+			Region* added = AddRegion(source, from, hash, found.frame, found.flipped, found.placeW, found.placeH, found.cx, found.cy);
+			if (added)
+				added->content = TRUE;
 			region = NULL;
 		}
 
@@ -2267,6 +2657,7 @@ namespace Twin
 		seen.canvasH = canvasHeight;
 		seen.flipped = flipped ? 1 : 0;
 		seen.count = 0;
+		seen.source = 0;
 		AddEvidence(kept, &seen, SOURCE_WEIGHT);
 		++index.learnedSource;
 
@@ -2274,11 +2665,13 @@ namespace Twin
 		BOOL region = FALSE;
 		if (dominant && placed)
 		{
-			AddRegion(twin, &block, hash, dominant->frame, dominant->flipped, dominant->canvasW, dominant->canvasH, dominant->cx, dominant->cy);
-			for (DWORD i = 0; i < twin->regionCount; ++i)
-				if (EqualRect(&twin->regions[i].rect, &block))
-					twin->regions[i].learned = TRUE;
-			region = TRUE;
+			Region* added = AddRegion(twin, &block, hash, dominant->frame, dominant->flipped, dominant->canvasW, dominant->canvasH, dominant->cx, dominant->cy);
+			if (added)
+			{
+				added->learned = TRUE;
+				added->content = TRUE;
+			}
+			region = added != NULL;
 		}
 
 		if (index.learnLogs < LEARN_LOGS)
@@ -2673,7 +3066,8 @@ namespace Twin
 
 		DropRegions(twin, &area);
 		CoverArt(twin, &area);
-		AddArt(twin, &area);
+		ArtTag ground = { -3, 0, 0, 0, 0, id };
+		AddArt(twin, &area, &ground);
 		++art.groundArts;
 	}
 
@@ -2806,7 +3200,7 @@ namespace Twin
 				MirrorCopy(target, &to, source, &from, keyed, key);
 				if (target != source)
 					DropRegions(target, &to);
-				AddArt(target, &to);
+				AddArt(target, &to, &art.lastTag);
 				return;
 			}
 			hasArt = FALSE;
@@ -2817,15 +3211,21 @@ namespace Twin
 		FlushRegion(target, dstId, &to, TRUE);
 
 		RECT arts[ART_MAX];
+		ArtTag tags[ART_MAX];
 		DWORD artCount = 0;
 		for (DWORD i = 0; i < source->artCount; ++i)
 			if (IntersectRect(&arts[artCount], &source->art[i], &from))
+			{
+				tags[artCount] = source->artTag[i];
+				tags[artCount].cx += arts[artCount].left - source->art[i].left;
+				tags[artCount].cy += arts[artCount].top - source->art[i].top;
 				OffsetRect(&arts[artCount++], ox, oy);
+			}
 		if (!keyed)
 			CoverArt(target, &to);
 		DropRegions(target, &to);
 		for (DWORD i = 0; i < artCount; ++i)
-			AddArt(target, &arts[i]);
+			AddArt(target, &arts[i], &tags[i]);
 
 		Cmd* cmd = Emit(CmdCopy);
 		if (!cmd)
@@ -2848,7 +3248,7 @@ namespace Twin
 
 		// an unkeyed copy replaces the whole rect, so the 1x copy goes first and the art lands on top; transparent art then shows the source, not stale destination
 		if (hasArt && RecordArt(target, dstId, &to, srcId, &from, plan.frame, plan.flipped, &plan.place, keyed, key, plan.cached, FALSE))
-			AddArt(target, &to);
+			AddArt(target, &to, &art.lastTag);
 
 		if (!EqualRect(&from, srcRect))
 		{
@@ -3084,7 +3484,7 @@ namespace Twin
 			if (IdentifyArt(target, dstId, &to, source, srcId, &from, dx, dy, &from, TRUE, key, TRUE, FALSE))
 			{
 				++game.pixelArt;
-				AddArt(target, &to);
+				AddArt(target, &to, &art.lastTag);
 				DeferSync(target, dstId, &to);
 				return;
 			}
@@ -3114,8 +3514,11 @@ namespace Twin
 			for (DWORD i = 0; i < source->artCount; ++i)
 				if (IntersectRect(&part, &source->art[i], &from))
 				{
+					ArtTag tag = source->artTag[i];
+					tag.cx += part.left - source->art[i].left;
+					tag.cy += part.top - source->art[i].top;
 					OffsetRect(&part, dx - sx, dy - sy);
-					AddArt(target, &part);
+					AddArt(target, &part, &tag);
 				}
 
 		}
@@ -3127,7 +3530,7 @@ namespace Twin
 		if (hasArt && RecordArt(target, dstId, &to, srcId, &from, plan.frame, plan.flipped, &plan.place, FALSE, 0, plan.cached, FALSE))
 		{
 			++game.pixelArt;
-			AddArt(target, &to);
+			AddArt(target, &to, &art.lastTag);
 		}
 
 		DeferSync(target, dstId, &to);
@@ -3403,6 +3806,8 @@ namespace Twin
 		DWORD artReplayed = shared.artDraws;
 		DWORD artFallbacks = shared.artFallbacks;
 		DWORD artCalls = shared.artCalls;
+		DWORD artMasked = shared.artMasked;
+		shared.artMasked = 0;
 		DWORD groundReplayed = shared.groundReplayed;
 		DWORD groundFallbacks = shared.groundFallbacks;
 		DWORD pixelReplayed = shared.pixelReplayed;
@@ -3416,9 +3821,14 @@ namespace Twin
 		shared.showUs = shared.showSamples = shared.showMaxUs = 0;
 		Unlock();
 
-		DebugLog("twin art draws %u px %u notready %u | region hits %u hash lookups %u hits %u misses %u learned expect %u source %u conflicts %u rejected %u | index %u entries | expectations %u (dup %u, used %u, overflow %u) | replayed %u calls %u fallbacks %u",
+		DebugLog("twin art draws %u px %u notready %u | region hits %u hash lookups %u hits %u misses %u learned expect %u source %u conflicts %u rejected %u | index %u entries | expectations %u (dup %u, used %u, overflow %u) | replayed %u calls %u fallbacks %u keyed masked %u | expect rejected %u",
 			art.draws, art.px, art.notReady, index.regionHits, index.lookups, index.hits, index.misses, index.learnedExpect, index.learnedSource, index.conflicts, index.rejected, index.count,
-			art.expected, art.duplicates, art.matched, art.overflow, artReplayed, artCalls, artFallbacks);
+			art.expected, art.duplicates, art.matched, art.overflow, artReplayed, artCalls, artFallbacks, artMasked,
+			art.expectRejectSize + art.expectRejectSource + art.expectRejectContent);
+		// kept on its own line: DebugLog formats into 512 bytes
+		DebugLog("twin art expect checks: expect rejected size %u source %u content %u | stale regions dropped %u | expect verified %u unverified %u provenance %u | pieces known at decode %u",
+			art.expectRejectSize, art.expectRejectSource, art.expectRejectContent, art.expectStale, art.expectVerified, art.expectUnverified, art.expectProvenance, learn.knownCount);
+		art.expectVerified = art.expectUnverified = art.expectProvenance = art.expectRejectSize = art.expectRejectSource = art.expectRejectContent = art.expectStale = 0;
 		art.expected = art.duplicates = art.matched = art.draws = art.px = art.notReady = art.overflow = 0;
 		index.regionHits = index.lookups = index.hits = index.misses = index.learnedExpect = index.learnedSource = index.conflicts = index.rejected = 0;
 
@@ -3475,7 +3885,7 @@ namespace Twin
 		game.presentNoTwin = 0;
 
 		if (check.valid)
-			DebugLog("twin gpu check %ums ago twin %u bad %u of %u non-art tiles, px %u | art tiles %u (differ from 1x %u)", now - check.tick, check.twin, check.bad, check.tiles, check.px, check.art, check.artDiffer);
+			DebugLog("twin gpu check %ums ago twin %u bad %u of %u non-art tiles, px %u | art tiles %u (differ from 1x %u, grossly %u)", now - check.tick, check.twin, check.bad, check.tiles, check.px, check.art, check.artDiffer, check.artGross);
 		else
 			DebugLog("twin gpu check none yet");
 
@@ -3584,10 +3994,11 @@ namespace Twin
 		DWORD artCount = 0;
 		if (check && twin->artCount)
 		{
-			RECT* arts = (RECT*)Reserve(twin->artCount * sizeof(RECT), &artOffset);
+			RECT* arts = (RECT*)Reserve(twin->artCount * (sizeof(RECT) + sizeof(ArtTag)), &artOffset);
 			if (arts)
 			{
 				MemoryCopy(arts, twin->art, twin->artCount * sizeof(RECT));
+				MemoryCopy(arts + twin->artCount, twin->artTag, twin->artCount * sizeof(ArtTag));
 				artCount = twin->artCount;
 			}
 		}
@@ -3793,11 +4204,21 @@ namespace Twin
 			"uniform vec2 weight;\n"
 			"uniform vec4 key;\n"
 			"uniform vec4 solid;\n"
+			"uniform sampler2D tex02;\n"
+			"uniform int srcMask;\n"
+			"uniform vec4 srcMap;\n"
+			"uniform vec4 srcKey;\n"
 			"in vec2 fTex;\n"
 			"out vec4 FRAG_COLOR;\n"
 			"bool isKey(vec4 c)\n"
 			"{\n"
 			"	return c.a < 0.5 / 255.0 || (c.a > 254.5 / 255.0 && all(lessThan(abs(c.rgb - key.rgb), vec3(0.5 / 255.0))));\n"
+			"}\n"
+			"bool srcOpaque(ivec2 p, int s)\n"
+			"{\n"
+			"	ivec2 size = textureSize(tex02, 0) / s;\n"
+			"	vec4 c = texelFetch(tex02, clamp(p, ivec2(0), size - ivec2(1)) * s + ivec2(s / 2), 0);\n"
+			"	return !(c.a < 0.5 / 255.0 || (c.a > 254.5 / 255.0 && all(lessThan(abs(c.rgb - srcKey.rgb), vec3(0.5 / 255.0)))));\n"
 			"}\n"
 			"void main()\n"
 			"{\n"
@@ -3808,6 +4229,13 @@ namespace Twin
 			"	}\n"
 			"	if (art != 0 && (fTex.x < 0.0 || fTex.y < 0.0 || fTex.x > 1.0 || fTex.y > 1.0))\n"
 			"		discard;\n"
+			"	if (srcMask != 0)\n"
+			"	{\n"
+			"		int s = int(srcMap.w);\n"
+			"		ivec2 i = ivec2(floor(gl_FragCoord.xy / srcMap.z + srcMap.xy - vec2(0.5)));\n"
+			"		if (!srcOpaque(i, s) && !srcOpaque(i + ivec2(1, 0), s) && !srcOpaque(i + ivec2(0, 1), s) && !srcOpaque(i + ivec2(1, 1), s))\n"
+			"			discard;\n"
+			"	}\n"
 			"	vec4 c = texture(tex01, fTex);\n"
 			"	if (art != 0 && tint != 0)\n"
 			"		c.rgb *= vec3(1.0, 0.15, 1.0);\n"
@@ -3867,11 +4295,22 @@ namespace Twin
 		const CHAR* checkFragment =
 			"uniform sampler2D tex01;\n"
 			"uniform int scale;\n"
+			"uniform int box;\n"
 			"in vec2 fTex;\n"
 			"out vec4 FRAG_COLOR;\n"
 			"void main()\n"
 			"{\n"
-			"	FRAG_COLOR = texelFetch(tex01, ivec2(gl_FragCoord.xy) * scale + ivec2(scale / 2), 0);\n"
+			"	ivec2 base = ivec2(gl_FragCoord.xy) * scale;\n"
+			"	if (box == 0)\n"
+			"	{\n"
+			"		FRAG_COLOR = texelFetch(tex01, base + ivec2(scale / 2), 0);\n"
+			"		return;\n"
+			"	}\n"
+			"	vec4 sum = vec4(0.0);\n"
+			"	for (int y = 0; y < scale; ++y)\n"
+			"		for (int x = 0; x < scale; ++x)\n"
+			"			sum += texelFetch(tex01, base + ivec2(x, y), 0);\n"
+			"	FRAG_COLOR = sum / float(scale * scale);\n"
 			"}\n";
 
 		QueryPerformanceFrequency(&gl.frequency);
@@ -3892,6 +4331,11 @@ namespace Twin
 			gl.tintedLoc = GLGetUniformLocation(gl.copyProgram, "tinted");
 			gl.lighterLoc = GLGetUniformLocation(gl.copyProgram, "lighter");
 			gl.solidLoc = GLGetUniformLocation(gl.copyProgram, "solid");
+			GLUniform1i(GLGetUniformLocation(gl.copyProgram, "tex02"), 1);
+			gl.srcMaskLoc = GLGetUniformLocation(gl.copyProgram, "srcMask");
+			gl.srcMapLoc = GLGetUniformLocation(gl.copyProgram, "srcMap");
+			gl.srcKeyLoc = GLGetUniformLocation(gl.copyProgram, "srcKey");
+			GLUniform1i(gl.srcMaskLoc, 0);
 			GLUniform1i(gl.fillLoc, 0);
 			GLUniform1i(gl.tintedLoc, 0);
 			GLUniform1i(gl.lighterLoc, 0);
@@ -3969,6 +4413,8 @@ namespace Twin
 			GLUseProgram(gl.checkProgram);
 			GLUniform1i(GLGetUniformLocation(gl.checkProgram, "tex01"), 0);
 			gl.scaleLoc = GLGetUniformLocation(gl.checkProgram, "scale");
+			gl.boxLoc = GLGetUniformLocation(gl.checkProgram, "box");
+			GLUniform1i(gl.boxLoc, 0);
 		}
 
 		GLGenVertexArrays(1, &gl.vao);
@@ -4396,6 +4842,8 @@ namespace Twin
 			ReplayCopies(&copy, 1, 0);
 	}
 
+	VOID KeyUniform(GLint location, DWORD key);
+
 	DWORD ReplayArt(const List* list, DWORD index)
 	{
 		const Cmd* first = &list->cmds[index];
@@ -4417,8 +4865,18 @@ namespace Twin
 		LONG scale = gpu->scale;
 		FLOAT tw = (FLOAT)(gpu->width * scale), th = (FLOAT)(gpu->height * scale);
 
+		TargetTwin(first->dst);
+		UseCopy(FALSE, 0);
+		GLUniform1i(gl.artLoc, 1);
+		GLUniform1i(gl.tintLoc, shared.tint ? 1 : 0);
+		if (first->flags & 4)
+			GLUniform2f(gl.weightLoc, 0.5f, 0.0f);
+		GLBindTexture(GL_TEXTURE_2D, texture);
+		Blend(TRUE);
+
 		gl.vertCount = 0;
 		DWORD drawn = 0;
+		BOOL masking = FALSE, masked = FALSE;
 		for (DWORD i = index; i < end; ++i)
 		{
 			const Cmd* cmd = &list->cmds[i];
@@ -4432,32 +4890,170 @@ namespace Twin
 				u1 = 1.0f - u1;
 			}
 
+			// the 1x keyed copy leaves key pixels untouched, so the 4K piece may only cover the source's opaque pixels plus a 1x pixel of smooth edge
+			BOOL mask = (cmd->flags & 2) && cmd->src != cmd->dst && Valid(cmd->src);
+			if (mask || masking)
+				DrawVerts();
+			if (mask)
+			{
+				Gpu* src = &gl.twins[cmd->src];
+				GLActiveTexture(GL_TEXTURE1);
+				GLBindTexture(GL_TEXTURE_2D, src->texture);
+				GLActiveTexture(GL_TEXTURE0);
+				GLUniform1i(gl.srcMaskLoc, 1);
+				GLUniform4f(gl.srcMapLoc, (FLOAT)(cmd->clip.left - cmd->rect.left), (FLOAT)(cmd->clip.top - cmd->rect.top), (FLOAT)scale, (FLOAT)src->scale);
+				KeyUniform(gl.srcKeyLoc, cmd->extra);
+				++gl.artMasked;
+				masked = TRUE;
+			}
+			else if (masking)
+				GLUniform1i(gl.srcMaskLoc, 0);
+			masking = mask;
+
 			AddQuad(tw, th, (FLOAT)(cmd->rect.left * scale), (FLOAT)(cmd->rect.top * scale), (FLOAT)(cmd->rect.right * scale), (FLOAT)(cmd->rect.bottom * scale), u0, v0, u1, v1);
 			++drawn;
 		}
+		DrawVerts();
 
-		if (drawn)
+		if (masked)
 		{
-			TargetTwin(first->dst);
-			UseCopy(FALSE, 0);
-			GLUniform1i(gl.artLoc, 1);
-			GLUniform1i(gl.tintLoc, shared.tint ? 1 : 0);
-			if (first->flags & 4)
-				GLUniform2f(gl.weightLoc, 0.5f, 0.0f);
-			GLBindTexture(GL_TEXTURE_2D, texture);
-			Blend(TRUE);
-			DrawVerts();
-			Blend(FALSE);
-			GLUniform1i(gl.artLoc, 0);
-			GLUniform1i(gl.tintLoc, 0);
-			if (first->flags & 4)
-				GLUniform2f(gl.weightLoc, 1.0f, 0.0f);
-			gl.artDraws += drawn;
-			++gl.artCalls;
+			GLUniform1i(gl.srcMaskLoc, 0);
+			GLActiveTexture(GL_TEXTURE1);
+			GLBindTexture(GL_TEXTURE_2D, 0);
+			GLActiveTexture(GL_TEXTURE0);
 		}
+		Blend(FALSE);
+		GLUniform1i(gl.artLoc, 0);
+		GLUniform1i(gl.tintLoc, 0);
+		if (first->flags & 4)
+			GLUniform2f(gl.weightLoc, 1.0f, 0.0f);
+		gl.artDraws += drawn;
+		++gl.artCalls;
 		gl.vertCount = 0;
 
 		return end;
+	}
+
+	// mean abs diff and tile mean colour of the box-downscaled 4K against 1x, over the tile's art pixels; a right 4K piece stays close, a wrong one or a hole does not
+	BOOL ArtTileGross(const DWORD* ref, LONG width, LONG x0, LONG y0, LONG x1, LONG y1, DWORD* mad, DWORD* mean, DWORD* cover)
+	{
+		LONG sum1[3] = { 0, 0, 0 }, sum4[3] = { 0, 0, 0 };
+		DWORD diff = 0, px = 0, holes = 0;
+		for (LONG y = y0; y < y1; ++y)
+		{
+			const DWORD* a = ref + y * width;
+			const DWORD* b = gl.checkBox + y * width;
+			const BYTE* m = gl.checkMask + y * width;
+			for (LONG x = x0; x < x1; ++x)
+			{
+				if (!m[x])
+					continue;
+				++px;
+				for (DWORD c = 0; c < 3; ++c)
+				{
+					LONG ca = (a[x] >> (c * 8)) & 0xFF, cb = (b[x] >> (c * 8)) & 0xFF;
+					sum1[c] += ca;
+					sum4[c] += cb;
+					diff += ca > cb ? ca - cb : cb - ca;
+				}
+				if ((b[x] >> 24) < 128)
+					++holes;
+			}
+		}
+		if (!px)
+			return FALSE;
+
+		*mad = diff / (3 * px);
+		DWORD worst = 0;
+		for (DWORD c = 0; c < 3; ++c)
+		{
+			DWORD d = DWORD(sum1[c] > sum4[c] ? sum1[c] - sum4[c] : sum4[c] - sum1[c]) / px;
+			if (d > worst)
+				worst = d;
+		}
+		*mean = worst;
+		*cover = holes * 100 / px;
+		return *mad >= ART_CHECK_MAD || *mean >= ART_CHECK_MEAN || *cover >= 25;
+	}
+
+	LONG ArtAt(const RECT* arts, DWORD count, LONG x, LONG y)
+	{
+		LONG best = -1;
+		LONG bestArea = 0;
+		for (DWORD k = 0; k < count; ++k)
+		{
+			const RECT* r = &arts[k];
+			if (x < r->left || x >= r->right || y < r->top || y >= r->bottom)
+				continue;
+			LONG area = Area(r);
+			if (best < 0 || area < bestArea)
+			{
+				best = (LONG)k;
+				bestArea = area;
+			}
+		}
+		return best;
+	}
+
+	VOID TagText(CHAR* text, const ArtTag* tag)
+	{
+		if (!tag)
+			StrPrint(text, "%s", "no art rect");
+		else if (tag->frame == -3)
+			StrPrint(text, "ground twin %u", tag->src);
+		else if (tag->frame < 0)
+			StrPrint(text, "%s", "effect or merged art");
+		else
+			StrPrint(text, "frame=%d canvas %d,%d of %dx%d src twin %u", tag->frame, tag->cx, tag->cy, tag->canvasW, tag->canvasH, tag->src);
+	}
+
+	VOID LogArtCheck(DWORD dst, const RECT* arts, const ArtTag* tags, DWORD checked, DWORD grossCount, const ArtGross* gross)
+	{
+		if (!grossCount)
+		{
+			if (checked && gl.artCheckOk < ART_CHECK_LOGS / 8)
+			{
+				++gl.artCheckOk;
+				DebugLog("twin art check twin %u: %u art tiles compared with 4K box-downscaled, none grossly off", dst, checked);
+			}
+			return;
+		}
+
+		// three at most: DebugLog formats into 512 bytes
+		CHAR text[3 * 160 + 1];
+		CHAR* ptr = text;
+		*ptr = 0;
+		for (DWORD k = 0; k < 3 && gross[k].px; ++k)
+		{
+			CHAR tag[96];
+			TagText(tag, gross[k].art >= 0 ? &tags[gross[k].art] : NULL);
+			ptr += StrPrint(ptr, " (%d,%d mad %u mean %u holes %u%% %s)", gross[k].x, gross[k].y, gross[k].mad, gross[k].mean, gross[k].cover, tag);
+		}
+		if (gl.artCheckLogs < ART_CHECK_LOGS)
+		{
+			++gl.artCheckLogs;
+			DebugLog("twin art check twin %u: %u of %u art tiles grossly off 1x (mad>=%u mean>=%u holes>=25%%) worst%s", dst, grossCount, checked, ART_CHECK_MAD, ART_CHECK_MEAN, text);
+		}
+
+		// one line per identity, so a wrong piece is named once however many tiles or checks it spoils
+		for (DWORD k = 0; k < WORST && gross[k].px; ++k)
+		{
+			if (gross[k].art < 0)
+				continue;
+			const ArtTag* tag = &tags[gross[k].art];
+			BOOL seen = FALSE;
+			for (DWORD i = 0; i < sizeof(gl.artBadFrames) / sizeof(*gl.artBadFrames) && !seen; ++i)
+				seen = gl.artBadFrames[i] == tag->frame + 1;
+			if (seen)
+				continue;
+			gl.artBadFrames[gl.artBadNext++ % (sizeof(gl.artBadFrames) / sizeof(*gl.artBadFrames))] = tag->frame + 1;
+
+			const RECT* r = &arts[gross[k].art];
+			CHAR name[96];
+			TagText(name, tag);
+			DebugLog("twin art check bad identity %s | art rect %d,%d %dx%d on twin %u | tile %d,%d mad %u mean %u holes %u%%", name, r->left, r->top, r->right - r->left, r->bottom - r->top,
+				dst, gross[k].x, gross[k].y, gross[k].mad, gross[k].mean, gross[k].cover);
+		}
 	}
 
 	VOID Check(const Cmd* cmd, const List* list)
@@ -4474,9 +5070,12 @@ namespace Twin
 		{
 			if (gl.checkData)
 				MemoryFree(gl.checkData);
+			if (gl.checkBox)
+				MemoryFree(gl.checkBox);
 			if (gl.checkMask)
 				MemoryFree(gl.checkMask);
 			gl.checkData = (DWORD*)MemoryAlloc(width * height * sizeof(DWORD));
+			gl.checkBox = (DWORD*)MemoryAlloc(width * height * sizeof(DWORD));
 			gl.checkMask = (BYTE*)MemoryAlloc(width * height);
 			if (gl.check)
 				GLDeleteTextures(1, &gl.check);
@@ -4500,6 +5099,21 @@ namespace Twin
 		GLBindFramebuffer(GL_READ_FRAMEBUFFER, gl.checkFbo);
 		GLPixelStorei(GL_PACK_ALIGNMENT, 4);
 		GLReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, gl.checkData);
+
+		const RECT* arts = (const RECT*)(list->arena + cmd->src);
+		const ArtTag* tags = (const ArtTag*)(arts + cmd->extra);
+		DWORD artCount = cmd->extra;
+
+		// the centre texel is exact for 1x content; art needs the whole footprint averaged to be comparable with 1x at all
+		BOOL boxed = artCount && gl.checkBox;
+		if (boxed)
+		{
+			GLUniform1i(gl.boxLoc, 1);
+			AddQuad(1.0f, 1.0f, 0.0f, 0.0f, 1.0f, 1.0f, 0.0f, 0.0f, 1.0f, 1.0f);
+			DrawVerts();
+			GLUniform1i(gl.boxLoc, 0);
+			GLReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, gl.checkBox);
+		}
 		GLBindFramebuffer(GL_READ_FRAMEBUFFER, gl.readFbo);
 
 		const DWORD* ref = (const DWORD*)(list->arena + cmd->value);
@@ -4507,9 +5121,9 @@ namespace Twin
 		LONG tilesY = (height + TILE - 1) / TILE;
 
 		struct { LONG x, y; DWORD count; } worst[WORST] = {};
-		DWORD badTiles = 0, badPixels = 0, artTiles = 0, artBad = 0;
-		const RECT* arts = (const RECT*)(list->arena + cmd->src);
-		DWORD artCount = cmd->extra;
+		ArtGross gross[WORST];
+		MemoryZero(gross, sizeof(gross));
+		DWORD badTiles = 0, badPixels = 0, artTiles = 0, artBad = 0, artGross = 0, artChecked = 0;
 
 		// art regions often meet inside a tile, so classify per pixel against their union instead of per tile against single rects
 		MemoryZero(gl.checkMask, width * height);
@@ -4551,6 +5165,32 @@ namespace Twin
 					}
 				}
 
+				if (boxed && artDiffer && artCountPx * 2 >= DWORD((x1 - x0) * (y1 - y0)))
+				{
+					++artChecked;
+					DWORD mad, mean, cover;
+					if (ArtTileGross(ref, width, x0, y0, x1, y1, &mad, &mean, &cover))
+					{
+						++artGross;
+						DWORD score = mad + mean + cover;
+						DWORD slot = WORST;
+						while (slot && gross[slot - 1].mad + gross[slot - 1].mean + gross[slot - 1].cover < score)
+							--slot;
+						if (slot < WORST)
+						{
+							for (DWORD k = WORST - 1; k > slot; --k)
+								gross[k] = gross[k - 1];
+							gross[slot].x = x0;
+							gross[slot].y = y0;
+							gross[slot].mad = mad;
+							gross[slot].mean = mean;
+							gross[slot].cover = cover;
+							gross[slot].px = artCountPx;
+							gross[slot].art = ArtAt(arts, artCount, x0 + (x1 - x0) / 2, y0 + (y1 - y0) / 2);
+						}
+					}
+				}
+
 				if (artCountPx == DWORD((x1 - x0) * (y1 - y0)))
 				{
 					++artTiles;
@@ -4586,6 +5226,8 @@ namespace Twin
 			ptr += StrPrint(ptr, " (%d,%d,%u)", worst[k].x, worst[k].y, worst[k].count);
 
 		DebugLog("twin check twin %u %dx%d N %d bad %u of %u non-art tiles, px %u | art tiles %u (differ from 1x %u) worst%s", cmd->dst, width, height, gpu->scale, badTiles, tilesX * tilesY - artTiles, badPixels, artTiles, artBad, badTiles ? text : " none");
+		if (boxed)
+			LogArtCheck(cmd->dst, arts, tags, artChecked, artGross, gross);
 
 		Lock();
 		shared.check.valid = TRUE;
@@ -4596,6 +5238,7 @@ namespace Twin
 		shared.check.px = badPixels;
 		shared.check.art = artTiles;
 		shared.check.artDiffer = artBad;
+		shared.check.artGross = artGross;
 		Unlock();
 	}
 
@@ -5288,6 +5931,7 @@ namespace Twin
 			gl.artDraws = 0;
 			gl.artFallbacks = 0;
 			gl.artCalls = 0;
+			gl.artMasked = 0;
 			gl.showOpaque = gl.showBack = gl.showInvalid = gl.showGone = gl.showOther = 0;
 			gl.groundReplayed = gl.groundFallbacks = 0;
 			gl.readFbo = readFbo;
@@ -5372,6 +6016,7 @@ namespace Twin
 			shared.artDraws += gl.artDraws;
 			shared.artFallbacks += gl.artFallbacks;
 			shared.artCalls += gl.artCalls;
+			shared.artMasked += gl.artMasked;
 			shared.drawCalls += gl.drawCalls;
 			shared.lastDrawCalls = gl.drawCalls;
 			++shared.draws;
@@ -5419,6 +6064,8 @@ namespace Twin
 
 		if (gl.checkData)
 			MemoryFree(gl.checkData);
+		if (gl.checkBox)
+			MemoryFree(gl.checkBox);
 		if (gl.checkMask)
 			MemoryFree(gl.checkMask);
 		if (gl.verts)
