@@ -124,6 +124,9 @@
     <ClCompile Include="ImageReplace.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="Twin.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="TurnArt.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -253,6 +256,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="ImageReplace.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Twin.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="TurnArt.h">

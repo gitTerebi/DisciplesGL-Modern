@@ -277,6 +277,7 @@
     <ClCompile Include="BattleSpeed.cpp" />
     <ClCompile Include="FastAI.cpp" />
     <ClCompile Include="ImageReplace.cpp" />
+    <ClCompile Include="Twin.cpp" />
     <ClCompile Include="NewRenderer.cpp" />
     <ClCompile Include="OGLRenderer.cpp" />
     <ClCompile Include="OldRenderer.cpp" />
@@ -324,6 +325,7 @@
     <ClInclude Include="BattleSpeed.h" />
     <ClInclude Include="FastAI.h" />
     <ClInclude Include="ImageReplace.h" />
+    <ClInclude Include="Twin.h" />
     <ClInclude Include="NewRenderer.h" />
     <ClInclude Include="OGLRenderer.h" />
     <ClInclude Include="OldRenderer.h" />

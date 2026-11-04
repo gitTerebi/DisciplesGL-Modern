@@ -4,6 +4,7 @@
 #include "Hooks.h"
 #include "ImageReplace.h"
 #include "MapOrder.h"
+#include "Twin.h"
 #include "../libwebp/src/webp/decode.h"
 
 #define f(a) (a + baseOffset)
@@ -19,12 +20,6 @@
 #endif
 #ifndef GL_ACTIVE_TEXTURE
 #define GL_ACTIVE_TEXTURE 0x84E0
-#endif
-#ifndef GL_RED
-#define GL_RED 0x1903
-#endif
-#ifndef GL_R32F
-#define GL_R32F 0x822E
 #endif
 #ifndef GL_RGBA8
 #define GL_RGBA8 0x8058
@@ -44,12 +39,6 @@
 #ifndef GL_TEXTURE_FREE_MEMORY_ATI
 #define GL_TEXTURE_FREE_MEMORY_ATI 0x87FC
 #endif
-#ifndef GL_DRAW_FRAMEBUFFER_BINDING
-#define GL_DRAW_FRAMEBUFFER_BINDING 0x8CA6
-#endif
-#ifndef GL_TEXTURE2
-#define GL_TEXTURE2 0x84C2
-#endif
 
 namespace TextReplace
 {
@@ -65,11 +54,6 @@ namespace ImageReplace
 
 	#define ANIM_BITS 15
 	#define ANIM_SIZE (1 << ANIM_BITS)
-	#define MAX_ITEMS 4096
-	#define MAX_EXPECT 8192
-	#define EXPECT_SCAN 256
-	#define EXPECT_BUCKETS 4096
-	#define SLOTS 6
 	#define REQUEST_SIZE 4096
 	#define ENTRY_LIMIT (TABLE_SIZE * 3 / 4)
 	#define DECODE_LIMIT (128 * 1024 * 1024)
@@ -148,7 +132,7 @@ namespace ImageReplace
 		BOOL resolved;
 		Origin origin;
 		const PackAnim* anim;
-		DWORD draws, queued, claimed;
+		DWORD draws;
 		DWORD refs;
 		DWORD nextFree;
 		CHAR name[NAME_LENGTH];
@@ -188,43 +172,6 @@ namespace ImageReplace
 
 	struct TexChain {
 		DWORD head, tail, count;
-	};
-
-	struct Item {
-		Entry* entry;
-		LONG frame;
-		LONG x, y, w, h;
-		RECT clip;
-		BOOL flipped;
-		BOOL replaced;
-		DWORD layer;
-		StripLook look;
-	};
-
-	struct Expect {
-		LONG x, y, w, h;
-		LONG sx, sy;
-		DWORD item;
-		DWORD next;
-		BOOL used;
-	};
-
-	struct DrawItem {
-		LONG frame;
-		LONG x, y, w, h;
-		RECT clip;
-		BOOL flipped;
-		DWORD layer;
-		StripLook look;
-	};
-
-	struct Slot {
-		StateBuffer* frame;
-		DrawItem* items;
-		DWORD count;
-		DWORD* plane;
-		LONG planeW, planeH;
-		DWORD age;
 	};
 
 	struct Vertex {
@@ -345,34 +292,8 @@ namespace ImageReplace
 	struct {
 		BOOL initialized;
 		CRITICAL_SECTION cs;
-		OpenDrawSurface* target;
-		OpenDrawSurface* presented;
 		volatile LONG frameNo;
-		DWORD* plane;
-		LONG planeW, planeH;
-		DWORD seq;
-		BOOL dirty;
-		Item items[MAX_ITEMS];
-		DWORD itemCount;
-		DWORD replacedCount;
-		Expect expect[MAX_EXPECT];
-		DWORD expectHead, expectCount;
-		DWORD split;
-		const VOID* splitSource;
-		DWORD expectBucket[EXPECT_BUCKETS];
-		Slot slots[SLOTS];
-		DWORD slotAge;
-		LONG replaced, skipped, notReady, matchMiss;
 	} game;
-
-	struct {
-		DrawItem* items;
-		DWORD count;
-		DWORD capacity;
-		DWORD* plane;
-		LONG planeW, planeH;
-		BOOL changed;
-	} drawList;
 
 	typedef VOID(__stdcall* GLGENERATEMIPMAP)(GLenum target);
 	typedef VOID(__stdcall* GLCOMPRESSEDTEXIMAGE2D)(GLenum target, GLint level, GLenum format, GLsizei width, GLsizei height, GLint border, GLsizei size, const GLvoid* data);
@@ -380,15 +301,8 @@ namespace ImageReplace
 	struct {
 		BOOL ready;
 		BOOL failed;
-		GLuint program;
 		GLuint vao;
 		GLuint vbo;
-		GLuint planeTexture;
-		GLint shape, tint, rim;
-		LONG planeW, planeH;
-		FLOAT* planeData;
-		Vertex* vertices;
-		DWORD vertexCapacity;
 		GLGENERATEMIPMAP generateMipmap;
 		GLCOMPRESSEDTEXIMAGE2D compressedTexImage2D;
 		LARGE_INTEGER frequency;
@@ -435,7 +349,7 @@ namespace ImageReplace
 		GroundChunk chunks[GROUND_CHUNKS];
 		DWORD chunkCount;
 		GroundMask masks[2];
-		DWORD builds, ops, unnamed, unmasked, rejected, written, follows, partial, direct, stale, claims;
+		DWORD builds, ops, unnamed, unmasked, rejected;
 	} ground;
 
 	DWORD sub_TileFactory, sub_BorderFactory, sub_MaskData, sub_RaceCode, sub_GroundUpdate;
@@ -1570,117 +1484,6 @@ namespace ImageReplace
 		return game.initialized && pack.ready && config.bpp32Hooked && !config.type.editor;
 	}
 
-	BOOL InTarget(const VOID* data, LONG* ox, LONG* oy)
-	{
-		OpenDrawSurface* surface = game.target;
-		if (!surface || !surface->indexBuffer || !surface->indexBuffer->data)
-			return FALSE;
-
-		const BYTE* base = (const BYTE*)surface->indexBuffer->data;
-		DWORD pitch = surface->mode.width * sizeof(DWORD);
-		if ((const BYTE*)data < base || (const BYTE*)data >= base + pitch * surface->mode.height)
-			return FALSE;
-
-		DWORD offset = (const BYTE*)data - base;
-		*oy = offset / pitch;
-		*ox = (offset % pitch) / sizeof(DWORD);
-		return TRUE;
-	}
-
-	BOOL PlaneEnsure()
-	{
-		OpenDrawSurface* surface = game.target;
-		LONG width = surface->mode.width, height = surface->mode.height;
-		if (game.plane && game.planeW == width && game.planeH == height)
-			return TRUE;
-
-		if (game.plane)
-			MemoryFree(game.plane);
-		game.plane = (DWORD*)MemoryAlloc(width * height * sizeof(DWORD));
-		game.planeW = game.plane ? width : 0;
-		game.planeH = game.plane ? height : 0;
-		if (game.plane)
-			MemoryZero(game.plane, width * height * sizeof(DWORD));
-		return game.plane != NULL;
-	}
-
-	VOID Cover(LONG x, LONG y, LONG width, LONG height, const DWORD* src, LONG stride, BOOL keyed, DWORD key, const BYTE* mask)
-	{
-		if (!game.replacedCount || !PlaneEnsure())
-			return;
-
-		DWORD seq = ++game.seq;
-		for (DWORD i = 0; i < game.itemCount; ++i)
-		{
-			const Item* item = &game.items[i];
-			if (!item->replaced)
-				continue;
-
-			LONG l = max(max(item->x, x), 0), t = max(max(item->y, y), 0);
-			LONG r = min(min(item->x + item->w, x + width), game.planeW), b = min(min(item->y + item->h, y + height), game.planeH);
-			for (LONG py = t; py < b; ++py)
-				for (LONG px = l; px < r; ++px)
-				{
-					if (src && keyed)
-					{
-						LONG sx = px - x, sy = py - y;
-						const DWORD* p = src + sy * stride + sx;
-						if (*p == key && (item->frame >= 0
-							|| !((sx > 0 && p[-1] != key) || (sx + 1 < width && p[1] != key) || (sy > 0 && p[-stride] != key) || (sy + 1 < height && p[stride] != key))))
-							continue;
-					}
-					if (mask && mask[px - x] < 128)
-						continue;
-					game.plane[py * game.planeW + px] = seq;
-				}
-		}
-	}
-
-	DWORD ExpectBucket(LONG x, LONG y)
-	{
-		return ((DWORD)x * 73856093u ^ (DWORD)y * 19349663u) & (EXPECT_BUCKETS - 1);
-	}
-
-	VOID ResetExpect()
-	{
-		if (game.expectCount)
-			MemoryZero(game.expectBucket, sizeof(game.expectBucket));
-		game.expectHead = game.expectCount = 0;
-		game.split = 0;
-	}
-
-	VOID QueueParts(DWORD itemIndex, DWORD rec, const POINT* start, const POINT* offset, const POINT* size)
-	{
-		const DWORD* dims = (const DWORD*)rec;
-		const BYTE* parts = *(const BYTE**)(rec + 8);
-		DWORD count = *(const DWORD*)(rec + 0xC);
-		LONG offX = offset ? offset->x : 0, offY = offset ? offset->y : 0;
-		LONG sizeX = size ? size->x : dims[0], sizeY = size ? size->y : dims[1];
-
-		for (DWORD i = 0; i < count; ++i)
-		{
-			const LONG* part = (const LONG*)(parts + i * 24);
-			if (part[0] < offX || part[0] + part[4] > sizeX || part[1] < offY || part[1] + part[5] > sizeY)
-				continue;
-			if (game.expectCount >= MAX_EXPECT)
-				return;
-
-			DWORD index = game.expectCount++;
-			Expect* e = &game.expect[index];
-			e->x = start->x + part[0];
-			e->y = start->y + part[1];
-			e->w = part[4];
-			e->h = part[5];
-			e->sx = part[2];
-			e->sy = part[3];
-			e->item = itemIndex;
-			e->used = FALSE;
-			DWORD* bucket = &game.expectBucket[ExpectBucket(e->x, e->y)];
-			e->next = *bucket;
-			*bucket = index + 1;
-		}
-	}
-
 	BOOL Touch(Tex* tex, DWORD index)
 	{
 		tex->lastUse = game.frameNo;
@@ -1691,173 +1494,17 @@ namespace ImageReplace
 		return missing;
 	}
 
-	VOID Queue(Entry* entry, DWORD rec, const POINT* start, const POINT* offset, const POINT* size, const RECT* area)
+	VOID Queue(Entry* entry, DWORD rec)
 	{
-		if (!Enabled() || !start)
+		if (!Enabled())
 			return;
 
 		LONG index = Resolve(entry, rec);
 		if (index < 0)
 			return;
 
-		Tex* tex = &pack.texs[index];
-		BOOL missing = Touch(tex, index);
+		BOOL missing = Touch(&pack.texs[index], index);
 		Prefetch(entry->anim, index, missing);
-
-		if (game.itemCount >= MAX_ITEMS)
-			return;
-
-		if (tex->state != TexUploaded)
-		{
-			++game.notReady;
-			return;
-		}
-
-		const PackFrame* frame = &pack.frames[index];
-		const DWORD* dims = (const DWORD*)rec;
-		LONG canvasW = (LONG)dims[0], canvasH = (LONG)dims[1];
-		LONG ox = frame->ox, oy = frame->oy;
-		if (entry->origin == OriginCentre)
-		{
-			ox += canvasW / 2;
-			oy += canvasH / 2;
-		}
-		else if (entry->origin == OriginSprite)
-			ox = oy = 0;
-
-		Item* item = &game.items[game.itemCount];
-		item->entry = entry;
-		item->frame = index;
-		item->flipped = entry->flipped;
-		item->x = start->x + (entry->flipped ? canvasW - ox - frame->w : ox);
-		item->y = start->y + oy;
-		item->w = frame->w;
-		item->h = frame->h;
-
-		LONG offX = offset ? offset->x : 0, offY = offset ? offset->y : 0;
-		LONG sizeX = size ? size->x : canvasW, sizeY = size ? size->y : canvasH;
-		SetRect(&item->clip, start->x + offX, start->y + offY, start->x + sizeX, start->y + sizeY);
-		if (area)
-		{
-			item->clip.left = max(item->clip.left, area->left);
-			item->clip.top = max(item->clip.top, area->top);
-			item->clip.right = min(item->clip.right, area->right);
-			item->clip.bottom = min(item->clip.bottom, area->bottom);
-		}
-		item->replaced = FALSE;
-		item->layer = 0;
-		item->look = StripLook();
-
-		if (Config::IsMapZoomed())
-		{
-			RECT zoom;
-			Config::GetMapZoomRect(&zoom);
-			if (item->x < zoom.right && item->y < zoom.bottom && item->x + item->w > zoom.left && item->y + item->h > zoom.top)
-				return;
-		}
-
-		QueueParts(game.itemCount, rec, start, offset, size);
-		++game.itemCount;
-		++entry->queued;
-	}
-
-	BOOL Take(DWORD index, DWORD* itemIndex, BOOL whole, const VOID* source)
-	{
-		Expect* e = &game.expect[index];
-		e->used = TRUE;
-		*itemIndex = e->item;
-		game.split = whole || !source ? 0 : index + 1;
-		game.splitSource = source;
-		while (game.expectHead < game.expectCount && game.expect[game.expectHead].used)
-			++game.expectHead;
-		return TRUE;
-	}
-
-	BOOL Inside(const Expect* e, LONG x, LONG y, LONG w, LONG h, LONG sx, LONG sy)
-	{
-		return x >= e->x && y >= e->y && x + w <= e->x + e->w && y + h <= e->y + e->h && sx - e->sx == x - e->x && sy - e->sy == y - e->y;
-	}
-
-	BOOL Match(LONG x, LONG y, LONG w, LONG h, LONG sx, LONG sy, const VOID* source, DWORD* itemIndex)
-	{
-		if (game.split && source == game.splitSource && Inside(&game.expect[game.split - 1], x, y, w, h, sx, sy))
-		{
-			*itemIndex = game.expect[game.split - 1].item;
-			return TRUE;
-		}
-		game.split = 0;
-
-		DWORD best = 0;
-		BOOL bestExact = FALSE;
-		for (DWORD next = game.expectBucket[ExpectBucket(x, y)]; next; next = game.expect[next - 1].next)
-		{
-			const Expect* e = &game.expect[next - 1];
-			if (e->used || e->x != x || e->y != y || e->sx != sx || e->sy != sy || w > e->w || h > e->h)
-				continue;
-			BOOL exact = w == e->w && h == e->h;
-			if (!best || exact)
-			{
-				best = next;
-				bestExact = exact;
-			}
-			if (exact)
-				break;
-		}
-		if (best)
-			return Take(best - 1, itemIndex, bestExact, source);
-
-		DWORD end = min(game.expectCount, game.expectHead + EXPECT_SCAN);
-		for (DWORD i = game.expectHead; i < end; ++i)
-		{
-			const Expect* e = &game.expect[i];
-			if (!e->used && Inside(e, x, y, w, h, sx, sy))
-				return Take(i, itemIndex, FALSE, source);
-		}
-		return FALSE;
-	}
-
-	BOOL Claim(OpenDrawSurface* dst, LONG x, LONG y, LONG w, LONG h, LONG sx, LONG sy, const VOID* source)
-	{
-		DWORD itemIndex;
-		if (!game.expectCount || dst != game.presented || !Match(x, y, w, h, sx, sy, source, &itemIndex))
-			return FALSE;
-
-		Item* item = &game.items[itemIndex];
-		if (!item->replaced)
-		{
-			if (game.target != dst)
-			{
-				game.target = dst;
-				game.replacedCount = 0;
-			}
-			item->replaced = TRUE;
-			item->layer = ++game.seq;
-			++game.replacedCount;
-			++game.replaced;
-			++item->entry->claimed;
-		}
-		game.dirty = TRUE;
-		++game.skipped;
-		return TRUE;
-	}
-
-	BOOL OnPixelBlit(const POINT* srcPos, const DWORD* dstData, LONG dstPitch, const POINT* dstPos, const SIZE* size)
-	{
-		if (!game.initialized || !game.expectCount || !dstData || size->cx <= 0 || size->cy <= 0)
-			return FALSE;
-
-		OpenDrawSurface* surface = game.presented;
-		if (!surface || !surface->indexBuffer || !surface->indexBuffer->data)
-			return FALSE;
-
-		const DWORD* base = (const DWORD*)surface->indexBuffer->data;
-		const DWORD* dst = dstData + dstPitch / 2 * dstPos->y + dstPos->x;
-		DWORD width = surface->mode.width;
-		if (dst < base || dst >= base + width * surface->mode.height)
-			return FALSE;
-
-		DWORD offset = dst - base;
-		return Claim(surface, offset % width, offset / width, size->cx, size->cy, srcPos->x, srcPos->y, NULL);
 	}
 
 	DWORD StoreImageKey(DWORD value)
@@ -1962,8 +1609,7 @@ namespace ImageReplace
 	}
 
 	struct {
-		DWORD tries, blocked, missed, waited, claimed, shadowed, drawLinks, blitLinks, pixelLinks, rawLinks, faceLinks, finds, faceLoads;
-		DWORD faceCopies, faceMisses, faceRejects, takes, takeLinks, takeFrames, stripHits, stripAway, stripFollows, stripClaims, stripItems, stripStale;
+		DWORD drawLinks, faceLinks, faceLoads, faceCopies, faceMisses, faceRejects, takes, takeLinks, takeFrames;
 	} storeStats;
 
 	#define FACE_LINKS 1024
@@ -2082,25 +1728,6 @@ namespace ImageReplace
 		return FALSE;
 	}
 
-	#define STRIP_FACES 160
-	#define STRIP_LINKS 8
-	#define STRIP_GRID 4
-
-	struct StripLink {
-		const DWORD* origin;
-		LONG pitch;
-	};
-
-	struct {
-		StripLink links[STRIP_LINKS];
-		DWORD linkCount, linkNext;
-		LONG width, height;
-		DWORD count;
-		StripFace faces[STRIP_FACES];
-		DWORD samples[STRIP_FACES][STRIP_GRID * STRIP_GRID];
-		DWORD sampled[STRIP_FACES];
-	} strip;
-
 	const CHAR* ImageName(const VOID* image)
 	{
 		if (!image || IsBadReadPtr((const BYTE*)image + 0x1C, 4))
@@ -2148,241 +1775,6 @@ namespace ImageReplace
 		return anim->first;
 	}
 
-	VOID DropStripLinks(const DWORD* at)
-	{
-		FaceLink* l = FaceSlot((const BYTE*)at);
-		if (l->data == (const BYTE*)at)
-			l->data = NULL;
-
-		StoreImage* s = stores.count ? FindStoreData((const BYTE*)at) : NULL;
-		if (s)
-			UnlinkStoreData(s);
-	}
-
-	VOID StripPoint(const RECT* clip, DWORD k, LONG* x, LONG* y)
-	{
-		*x = clip->left + (LONG)(2 * (k % STRIP_GRID) + 1) * (clip->right - clip->left) / (2 * STRIP_GRID);
-		*y = clip->top + (LONG)(2 * (k / STRIP_GRID) + 1) * (clip->bottom - clip->top) / (2 * STRIP_GRID);
-	}
-
-	VOID OnStrip(const VOID* origin, LONG pitch, LONG width, LONG height, const StripFace* faces, DWORD count)
-	{
-		if (!origin || strip.links[0].origin != origin || strip.links[0].pitch != pitch)
-		{
-			strip.links[0].origin = (const DWORD*)origin;
-			strip.links[0].pitch = pitch;
-			strip.linkCount = origin ? 1 : 0;
-			strip.linkNext = 0;
-		}
-		if (origin)
-			DropStripLinks((const DWORD*)origin);
-
-		strip.width = width;
-		strip.height = height;
-		strip.count = min(count, STRIP_FACES);
-		if (!strip.count)
-			return;
-		MemoryCopy(strip.faces, faces, strip.count * sizeof(StripFace));
-
-		DWORD key = Hooks::Convert565toRGB(COLORKEY_CHECK_16);
-		for (DWORD i = 0; i < strip.count; ++i)
-		{
-			strip.sampled[i] = 0;
-			for (DWORD k = 0; k < STRIP_GRID * STRIP_GRID; ++k)
-			{
-				LONG sx, sy;
-				StripPoint(&strip.faces[i].clip, k, &sx, &sy);
-				if (sx < 0 || sy < 0 || sx >= width || sy >= height)
-					continue;
-				DWORD pix = ((const DWORD*)origin)[sy * pitch + sx];
-				if (pix == key)
-					continue;
-				strip.samples[i][k] = pix;
-				strip.sampled[i] |= 1 << k;
-			}
-		}
-	}
-
-	BOOL StripMatches(DWORD i, const DWORD* src, LONG stride, LONG w, LONG h, LONG ox, LONG oy, BOOL* checked)
-	{
-		for (DWORD k = 0; k < STRIP_GRID * STRIP_GRID; ++k)
-		{
-			if (!(strip.sampled[i] & (1 << k)))
-				continue;
-			LONG sx, sy;
-			StripPoint(&strip.faces[i].clip, k, &sx, &sy);
-			sx += ox;
-			sy += oy;
-			if (sx < 0 || sy < 0 || sx >= w || sy >= h)
-				continue;
-			if (src[sy * stride + sx] != strip.samples[i][k])
-				return FALSE;
-			*checked = TRUE;
-		}
-		return TRUE;
-	}
-
-	BOOL FindStrip(const DWORD* src, LONG stride, LONG w, LONG h, LONG* ox, LONG* oy, DWORD* found = NULL)
-	{
-		for (DWORD i = 0; i < strip.linkCount; ++i)
-		{
-			const StripLink* link = &strip.links[i];
-			if (stride != link->pitch || stride <= 0)
-				continue;
-
-			LONG d = link->origin - src;
-			*oy = d >= 0 ? d / stride : -((stride - 1 - d) / stride);
-			*ox = d - *oy * stride;
-			BOOL inside = *ox <= 0 && *oy <= 0 && -*ox < strip.width && -*oy < strip.height;
-			BOOL around = *ox >= 0 && *oy >= 0 && *ox + strip.width <= w && *oy + strip.height <= h;
-			if (inside || around)
-			{
-				if (found)
-					*found = i;
-				return TRUE;
-			}
-		}
-		return FALSE;
-	}
-
-	VOID FollowStrip(const DWORD* src, LONG stride, LONG w, LONG h, const DWORD* dst, LONG dstStride)
-	{
-		LONG ox, oy;
-		if (!strip.linkCount || !dst || dstStride <= 0 || !FindStrip(src, stride, w, h, &ox, &oy))
-			return;
-		++storeStats.stripAway;
-
-		const DWORD* to = dst + oy * dstStride + ox;
-		for (DWORD i = 0; i < strip.linkCount; ++i)
-			if (strip.links[i].origin == to && strip.links[i].pitch == dstStride)
-				return;
-
-		DropStripLinks(to);
-		DWORD slot = strip.linkCount < STRIP_LINKS ? strip.linkCount++ : 1 + strip.linkNext++ % (STRIP_LINKS - 1);
-		strip.links[slot].origin = to;
-		strip.links[slot].pitch = dstStride;
-		++storeStats.stripFollows;
-	}
-
-	VOID ClaimStrip(OpenDrawSurface* dst, LONG x, LONG y, const DWORD* src, LONG stride, LONG w, LONG h)
-	{
-		LONG ox, oy;
-		DWORD link;
-		if (!strip.linkCount || !FindStrip(src, stride, w, h, &ox, &oy, &link))
-			return;
-		++storeStats.stripHits;
-		if (!strip.count || !dst || dst != game.presented || !Enabled())
-			return;
-
-		BOOL checked[STRIP_FACES];
-		for (DWORD i = 0; i < strip.count; ++i)
-		{
-			checked[i] = FALSE;
-			if (!StripMatches(i, src, stride, w, h, ox, oy, &checked[i]))
-			{
-				strip.links[link].pitch = 0;
-				++storeStats.stripStale;
-				return;
-			}
-		}
-		++storeStats.stripClaims;
-
-		for (DWORD i = 0; i < strip.count && game.itemCount < MAX_ITEMS; ++i)
-		{
-			const StripFace* f = &strip.faces[i];
-			LONG l = max(ox + f->clip.left, 0), t = max(oy + f->clip.top, 0);
-			LONG r = min(ox + f->clip.right, w), b = min(oy + f->clip.bottom, h);
-			if (l >= r || t >= b || !checked[i])
-				continue;
-
-			Tex* tex = &pack.texs[f->frame];
-			Touch(tex, f->frame);
-			if (tex->state != TexUploaded)
-			{
-				++game.notReady;
-				continue;
-			}
-
-			if (game.target != dst)
-			{
-				game.target = dst;
-				game.replacedCount = 0;
-			}
-
-			Item* item = &game.items[game.itemCount++];
-			item->entry = NULL;
-			item->frame = f->frame;
-			item->flipped = f->flipped;
-			item->x = x + ox + f->rect.left;
-			item->y = y + oy + f->rect.top;
-			item->w = f->rect.right - f->rect.left;
-			item->h = f->rect.bottom - f->rect.top;
-			SetRect(&item->clip, x + l, y + t, x + r, y + b);
-			item->replaced = TRUE;
-			item->layer = ++game.seq;
-			item->look = f->look;
-			++game.replacedCount;
-			++game.replaced;
-			++storeStats.stripItems;
-			game.dirty = TRUE;
-		}
-	}
-
-	BOOL ClaimStore(StoreImage* s, OpenDrawSurface* dst, LONG x, LONG y, LONG w, LONG h, BOOL flipped)
-	{
-		Entry* entry = s->entry;
-		++storeStats.tries;
-		if (!Enabled() || !entry || game.itemCount >= MAX_ITEMS)
-		{
-			++storeStats.blocked;
-			return FALSE;
-		}
-
-		++entry->draws;
-		LONG index = Resolve(entry, (DWORD)s->dims);
-		if (index < 0 || pack.frames[index].w != (LONG)s->dims[0] || pack.frames[index].h != (LONG)s->dims[1])
-		{
-			++storeStats.missed;
-			return FALSE;
-		}
-
-		Tex* tex = &pack.texs[index];
-		Touch(tex, index);
-		if (tex->state != TexUploaded)
-		{
-			++storeStats.waited;
-			++game.notReady;
-			return FALSE;
-		}
-		++storeStats.claimed;
-
-		if (game.target != dst)
-		{
-			game.target = dst;
-			game.replacedCount = 0;
-		}
-
-		Item* item = &game.items[game.itemCount++];
-		item->entry = entry;
-		item->frame = index;
-		item->flipped = flipped;
-		item->x = x;
-		item->y = y;
-		item->w = s->dims[0];
-		item->h = s->dims[1];
-		SetRect(&item->clip, x, y, x + w, y + h);
-		item->replaced = TRUE;
-		item->layer = ++game.seq;
-		item->look = StripLook();
-		++game.replacedCount;
-		++game.replaced;
-		++game.skipped;
-		++entry->queued;
-		++entry->claimed;
-		game.dirty = TRUE;
-		return TRUE;
-	}
-
 	GroundObject* FindGroundObject(const VOID* obj, BOOL insert)
 	{
 		DWORD slot = ((DWORD)obj >> 3) * 2654435761u & (GROUND_OBJECTS - 1);
@@ -2420,17 +1812,6 @@ namespace ImageReplace
 		for (DWORD i = 0; i < ground.chunkCount; ++i)
 			if (ground.chunks[i].data == data && !ground.chunks[i].left && !ground.chunks[i].top)
 				return &ground.chunks[i];
-		return NULL;
-	}
-
-	GroundChunk* FindRegion(const VOID* data, LONG x, LONG y, LONG w, LONG h)
-	{
-		for (DWORD i = 0; i < ground.chunkCount; ++i)
-		{
-			GroundChunk* c = &ground.chunks[i];
-			if (c->data == data && x >= c->left && y >= c->top && x + w <= c->left + c->cw && y + h <= c->top + c->ch)
-				return c;
-		}
 		return NULL;
 	}
 
@@ -2490,38 +1871,6 @@ namespace ImageReplace
 		return dropped;
 	}
 
-	VOID FollowChunk(const VOID* srcData, LONG srcPitch, LONG sx, LONG sy, LONG w, LONG h, const VOID* dstData, LONG dx, LONG dy)
-	{
-		GroundChunk* s = FindRegion(srcData, sx, sy, w, h);
-		if (!s || !s->valid || srcData == dstData)
-			return;
-
-		if (sx != s->left || sy != s->top || w != s->cw || h != s->ch || HashRegion((const DWORD*)srcData, srcPitch, sx, sy, w, h) != s->hash)
-		{
-			++ground.partial;
-			DropRegions(dstData, dx, dy, w, h, NULL);
-			return;
-		}
-
-		GroundChunk* d = NULL;
-		for (DWORD i = 0; i < ground.chunkCount && !d; ++i)
-			if (ground.chunks[i].data == dstData && ground.chunks[i].left == dx && ground.chunks[i].top == dy && ground.chunks[i].cw == w && ground.chunks[i].ch == h)
-				d = &ground.chunks[i];
-		DropRegions(dstData, dx, dy, w, h, d);
-		if (!d)
-			d = AddChunk(dstData, dx, dy, w, h);
-		if (!d)
-			return;
-
-		MemoryCopy(d->ops, s->ops, s->count * sizeof(GroundOp));
-		d->count = s->count;
-		d->color = s->color;
-		d->hash = s->hash;
-		d->valid = TRUE;
-		++d->version;
-		++ground.follows;
-	}
-
 	VOID OnGroundFill(const Hooks::BlitObject* obj, DWORD color, const RECT* rect)
 	{
 		if (!game.initialized || !obj->isTrueColor)
@@ -2554,50 +1903,14 @@ namespace ImageReplace
 			++storeStats.faceMisses;
 		if (!s || width != (LONG)s->dims[0] || bottom != (LONG)s->dims[1] || !VerifyFace(s, linked, flipped, src, srcPitch, width, bottom))
 		{
-			DropStripLinks(dst);
+			FaceLink* l = FaceSlot((const BYTE*)dst);
+			if (l->data == (const BYTE*)dst)
+				l->data = NULL;
 			return;
 		}
 
 		++storeStats.faceLinks;
 		AddFaceLink((const BYTE*)dst, s, flipped != (mirror != 0));
-	}
-
-	VOID OnGroundCopy(const VOID* data, const RECT* rect, LONG pitch, const Hooks::BlitObject* obj, const POINT* loc)
-	{
-		if (!game.initialized)
-			return;
-
-		LONG w = rect->right - rect->left, h = rect->bottom - rect->top;
-		const BYTE* from = (const BYTE*)((const DWORD*)data + rect->top * pitch + rect->left);
-		const BYTE* to = (const BYTE*)((const DWORD*)obj->data + loc->y * (obj->pitch >> 1) + loc->x);
-		BOOL flipped = FALSE;
-		StoreImage* s = stores.count && obj->isTrueColor ? FindStoreData(from) : NULL;
-		StoreImage* f = s || !stores.count || !obj->isTrueColor ? NULL : FindFaceLink(from, &flipped);
-		NoteFace(s, from, pitch, w, h);
-		if (f && !VerifyFace(f, TRUE, flipped, (const DWORD*)from, pitch, w, h))
-			f = NULL;
-		if (s && w == (LONG)s->dims[0] && h == (LONG)s->dims[1])
-		{
-			++storeStats.rawLinks;
-			LinkStoreData(s, to);
-			s->left = loc->x;
-			s->top = loc->y;
-		}
-		else if (f && w == (LONG)f->dims[0] && h == (LONG)f->dims[1])
-		{
-			++storeStats.rawLinks;
-			AddFaceLink(to, f, flipped);
-		}
-		else if (stores.count)
-			DropStripLinks((const DWORD*)to);
-
-		if (!ground.chunkCount)
-			return;
-
-		if (FindRegion(data, rect->left, rect->top, w, h))
-			FollowChunk(data, pitch, rect->left, rect->top, w, h, obj->data, loc->x, loc->y);
-		else
-			ground.written += DropRegions(obj->data, loc->x, loc->y, w, h, NULL);
 	}
 
 	VOID BeginChunk(const Hooks::BlitObject* obj)
@@ -2683,490 +1996,21 @@ namespace ImageReplace
 		++c->version;
 	}
 
-	BOOL ClaimGround(OpenDrawSurface* dst, LONG x, LONG y, OpenDrawSurface* src, const RECT* srcRect)
-	{
-		LONG w = srcRect->right - srcRect->left, h = srcRect->bottom - srcRect->top;
-		GroundChunk* c = FindRegion(src->indexBuffer->data, srcRect->left, srcRect->top, w, h);
-		if (!c || !c->valid || !Enabled() || game.itemCount >= MAX_ITEMS)
-			return FALSE;
-
-		if (c->left + c->cw > (LONG)src->mode.width || c->top + c->ch > (LONG)src->mode.height
-			|| HashRegion((const DWORD*)src->indexBuffer->data, src->mode.width, c->left, c->top, c->cw, c->ch) != c->hash)
-		{
-			++ground.stale;
-			ResetChunk(c, FALSE, 0);
-			c->data = NULL;
-			return FALSE;
-		}
-
-		if (Config::IsMapZoomed())
-		{
-			RECT zoom;
-			Config::GetMapZoomRect(&zoom);
-			if (x < zoom.right && y < zoom.bottom && x + w > zoom.left && y + h > zoom.top)
-				return FALSE;
-		}
-
-		BOOL ready = TRUE;
-		for (DWORD i = 0; i < c->count; ++i)
-		{
-			const GroundOp* op = &c->ops[i];
-			LONG list[] = { op->tex, op->mask1, op->mask2 };
-			for (DWORD k = 0; k < 3; ++k)
-				if (list[k] >= 0)
-				{
-					Tex* tex = &pack.texs[list[k]];
-					Touch(tex, list[k]);
-					ready = ready && tex->state == TexUploaded;
-				}
-		}
-		if (!ready)
-		{
-			++game.notReady;
-			return FALSE;
-		}
-
-		if (c->pubVersion != c->version)
-		{
-			EnterCriticalSection(&game.cs);
-			MemoryCopy(c->pub, c->ops, c->count * sizeof(GroundOp));
-			c->pubCount = c->count;
-			c->pubColor = c->color;
-			c->pubVersion = c->version;
-			c->w = c->cw;
-			c->h = c->ch;
-			LeaveCriticalSection(&game.cs);
-		}
-
-		if (game.target != dst)
-		{
-			game.target = dst;
-			game.replacedCount = 0;
-		}
-
-		Item* item = &game.items[game.itemCount++];
-		item->entry = NULL;
-		item->frame = -1 - (LONG)(c - ground.chunks);
-		item->flipped = FALSE;
-		item->x = x - (srcRect->left - c->left);
-		item->y = y - (srcRect->top - c->top);
-		item->w = c->w;
-		item->h = c->h;
-		SetRect(&item->clip, x, y, x + w, y + h);
-		item->replaced = TRUE;
-		item->layer = ++game.seq;
-		item->look = StripLook();
-		++game.replacedCount;
-		++game.replaced;
-		++game.skipped;
-		++ground.claims;
-		game.dirty = TRUE;
-		return TRUE;
-	}
-
-	BOOL OnBlit(OpenDrawSurface* dst, LONG x, LONG y, OpenDrawSurface* src, const RECT* srcRect, LONG srcStride, BOOL keyed, DWORD key)
-	{
-		if (!game.initialized || dst == src)
-			return FALSE;
-
-		if (ground.chunkCount && src->indexBuffer && dst->indexBuffer)
-		{
-			if (dst == game.presented)
-			{
-				if (stores.count && src->indexBuffer->data && FindStoreData((const BYTE*)((const DWORD*)src->indexBuffer->data + srcRect->top * srcStride + srcRect->left)))
-					++storeStats.shadowed;
-				else if (ClaimGround(dst, x, y, src, srcRect))
-					return FALSE;
-			}
-			else if (FindRegion(src->indexBuffer->data, srcRect->left, srcRect->top, srcRect->right - srcRect->left, srcRect->bottom - srcRect->top))
-				FollowChunk(src->indexBuffer->data, src->mode.width, srcRect->left, srcRect->top, srcRect->right - srcRect->left, srcRect->bottom - srcRect->top, dst->indexBuffer->data, x, y);
-			else
-				ground.written += DropRegions(dst->indexBuffer->data, x, y, srcRect->right - srcRect->left, srcRect->bottom - srcRect->top, NULL);
-		}
-
-		LONG w = srcRect->right - srcRect->left, h = srcRect->bottom - srcRect->top;
-		if (Claim(dst, x, y, w, h, srcRect->left, srcRect->top, src))
-			return TRUE;
-
-		if (stores.count && src->indexBuffer && src->indexBuffer->data)
-		{
-			const BYTE* base = (const BYTE*)src->indexBuffer->data;
-			const DWORD* at = (const DWORD*)base + srcRect->top * srcStride + srcRect->left;
-			StoreImage* s = FindStoreData((const BYTE*)at);
-			if (!s)
-			{
-				s = FindStoreData(base);
-				if (s && (s->left != srcRect->left || s->top != srcRect->top))
-					s = NULL;
-			}
-			NoteFace(s, at, srcStride, w, h);
-			if (s && IsFace(s) && !VerifyFace(s, FALSE, FALSE, at, srcStride, w, h))
-				s = NULL;
-
-			BOOL face = FALSE, flipped = FALSE;
-			if (!s)
-			{
-				s = FindFaceLink((const BYTE*)at, &flipped);
-				if (s && !VerifyFace(s, TRUE, flipped, at, srcStride, w, h))
-					s = NULL;
-				face = s != NULL;
-			}
-
-			if (s && dst == game.presented)
-			{
-				++storeStats.finds;
-				if (ClaimStore(s, dst, x, y, w, h, flipped))
-					return TRUE;
-			}
-			else if (s && dst->indexBuffer && dst->indexBuffer->data && w == (LONG)s->dims[0] && h == (LONG)s->dims[1])
-			{
-				++storeStats.blitLinks;
-				const BYTE* to = (const BYTE*)((const DWORD*)dst->indexBuffer->data + y * dst->mode.width + x);
-				if (face)
-					AddFaceLink(to, s, flipped);
-				else
-				{
-					LinkStoreData(s, to);
-					s->left = x;
-					s->top = y;
-				}
-			}
-			else if (dst != game.presented && dst->indexBuffer && dst->indexBuffer->data)
-				DropStripLinks((const DWORD*)dst->indexBuffer->data + y * dst->mode.width + x);
-		}
-
-		if (dst == game.target)
-		{
-			game.dirty = TRUE;
-			const DWORD* pixels = (const DWORD*)src->indexBuffer->data + srcRect->top * srcStride + srcRect->left;
-			Cover(x, y, w, h, pixels, srcStride, keyed, key, NULL);
-		}
-
-		if (strip.linkCount && src->indexBuffer && src->indexBuffer->data)
-		{
-			const DWORD* from = (const DWORD*)src->indexBuffer->data + srcRect->top * srcStride + srcRect->left;
-			if (dst == game.presented)
-				ClaimStrip(dst, x, y, from, srcStride, w, h);
-			else if (dst->indexBuffer && dst->indexBuffer->data)
-				FollowStrip(from, srcStride, w, h, (const DWORD*)dst->indexBuffer->data + y * dst->mode.width + x, dst->mode.width);
-		}
-		return FALSE;
-	}
-
-	VOID OnFill(OpenDrawSurface* surface)
-	{
-		if (game.initialized && surface == game.target)
-			game.dirty = TRUE;
-	}
-
 	VOID OnRelease(OpenDrawSurface* surface)
 	{
 		if (game.initialized && ground.chunkCount && surface->indexBuffer && surface->indexBuffer->data)
 			DropRegions(surface->indexBuffer->data, 0, 0, 0x7FFF, 0x7FFF, NULL);
-
-		if (!game.initialized || surface != game.target)
-			return;
-
-		game.target = NULL;
-		game.itemCount = game.replacedCount = 0;
-		ResetExpect();
-	}
-
-	VOID OnFillRect(const VOID* data, const RECT* rect)
-	{
-		LONG ox, oy;
-		if (!game.initialized || !InTarget(data, &ox, &oy))
-			return;
-
-		game.dirty = TRUE;
-		Cover(ox + rect->left, oy + rect->top, rect->right - rect->left, rect->bottom - rect->top, NULL, 0, FALSE, 0, NULL);
-	}
-
-	VOID OnDiamond(const VOID* data, const POINT* loc, const RECT* rect)
-	{
-		LONG ox, oy;
-		if (!game.initialized || !InTarget(data, &ox, &oy))
-			return;
-
-		game.dirty = TRUE;
-		LONG l = max(loc->x, rect->left), t = max(loc->y, rect->top);
-		LONG r = min(loc->x + 64, rect->right), b = min(loc->y + 32, rect->bottom);
-		if (l < r && t < b)
-			Cover(ox + l, oy + t, r - l, b - t, NULL, 0, FALSE, 0, NULL);
-	}
-
-	VOID OnPixelCopy(const DWORD* srcData, LONG srcPitch, const POINT* srcPos, const DWORD* dstData, LONG dstPitch, const POINT* dstPos, const SIZE* size, BOOL keyed, DWORD key, DWORD alpha)
-	{
-		if (!game.initialized || !dstData || !srcData || size->cx <= 0 || size->cy <= 0)
-			return;
-
-		srcPitch /= 2;
-		dstPitch /= 2;
-		const DWORD* dst = dstData + dstPitch * dstPos->y + dstPos->x;
-		LONG dx, dy;
-		BOOL fromChunk = ground.chunkCount && FindRegion(srcData, srcPos->x, srcPos->y, size->cx, size->cy);
-		if (!InTarget(dst, &dx, &dy))
-		{
-			if (fromChunk)
-				FollowChunk(srcData, srcPitch, srcPos->x, srcPos->y, size->cx, size->cy, dstData, dstPos->x, dstPos->y);
-			const BYTE* from = (const BYTE*)(srcData + srcPitch * srcPos->y + srcPos->x);
-			BOOL flipped = FALSE;
-			StoreImage* s = stores.count ? FindStoreData(from) : NULL;
-			StoreImage* f = s || !stores.count ? NULL : FindFaceLink(from, &flipped);
-			NoteFace(s, from, srcPitch, size->cx, size->cy);
-			if (f && !VerifyFace(f, TRUE, flipped, (const DWORD*)from, srcPitch, size->cx, size->cy))
-				f = NULL;
-			if (s && size->cx == (LONG)s->dims[0] && size->cy == (LONG)s->dims[1])
-			{
-				++storeStats.pixelLinks;
-				LinkStoreData(s, (const BYTE*)dst);
-				s->left = dstPos->x;
-				s->top = dstPos->y;
-			}
-			else if (f && size->cx == (LONG)f->dims[0] && size->cy == (LONG)f->dims[1])
-			{
-				++storeStats.pixelLinks;
-				AddFaceLink((const BYTE*)dst, f, flipped);
-			}
-			else if (stores.count)
-				DropStripLinks(dst);
-			FollowStrip((const DWORD*)from, srcPitch, size->cx, size->cy, dst, dstPitch);
-			return;
-		}
-
-		if (fromChunk)
-			++ground.direct;
-		game.dirty = TRUE;
-		if (alpha >= 128)
-			Cover(dx, dy, size->cx, size->cy, srcData + srcPitch * srcPos->y + srcPos->x, srcPitch, keyed, key, NULL);
-		if (game.target == game.presented)
-			ClaimStrip(game.target, dx, dy, srcData + srcPitch * srcPos->y + srcPos->x, srcPitch, size->cx, size->cy);
-		else
-			FollowStrip(srcData + srcPitch * srcPos->y + srcPos->x, srcPitch, size->cx, size->cy, dst, dstPitch);
-	}
-
-	VOID OnPixelRows(const Hooks::BlendData* items, DWORD count)
-	{
-		if (!game.initialized)
-			return;
-
-		for (DWORD i = 0; i < count; ++i)
-		{
-			const Hooks::BlendData* item = &items[i];
-			if (!item->length || !item->dstData)
-				continue;
-
-			LONG x, y;
-			if (!InTarget(item->dstData, &x, &y))
-				continue;
-
-			game.dirty = TRUE;
-			Cover(x, y, item->length, 1, NULL, 0, FALSE, 0, item->mskData);
-		}
-	}
-
-	DWORD DrawRank(const DrawItem* d)
-	{
-		static const PackAnim* water;
-		if (!water)
-			water = FindAnim("WATERBKGND1");
-		if (d->frame < 0)
-			return 1;
-		return water && (DWORD)d->frame >= water->first && (DWORD)d->frame < water->first + water->count ? 0 : 2;
-	}
-
-	BOOL SlotReserve(Slot* slot, DWORD count)
-	{
-		if (count <= (slot->items ? MAX_ITEMS : 0))
-			return TRUE;
-		slot->items = (DrawItem*)MemoryAlloc(MAX_ITEMS * sizeof(DrawItem));
-		return slot->items != NULL;
-	}
-
-	BOOL dumpItems;
-
-	VOID DumpItems(OpenDrawSurface* back)
-	{
-		dumpItems = FALSE;
-		DebugLog("image items target=%d count=%d replaced=%d dirty=%d", back == game.target, game.itemCount, game.replacedCount, game.dirty);
-		for (DWORD i = 0; i < game.itemCount; ++i)
-		{
-			const Item* item = &game.items[i];
-			if (!item->replaced || item->clip.top >= 160)
-				continue;
-			DebugLog("image item %d frame=%d name=%s at=%d,%d size=%dx%d clip=%d,%d,%d,%d layer=%d gem=%d",
-				i, item->frame, item->entry && item->entry->name[0] ? item->entry->name : (item->frame < 0 ? "ground" : "strip/face"),
-				item->x, item->y, item->w, item->h, item->clip.left, item->clip.top, item->clip.right, item->clip.bottom, item->layer, item->look.gem);
-		}
-	}
-
-	VOID OnPresent(OpenDrawSurface* back, StateBuffer* frame, LONG left, LONG top)
-	{
-		if (!game.initialized)
-			return;
-
-		if (dumpItems)
-			DumpItems(back);
-		game.presented = back;
-		InterlockedIncrement(&game.frameNo);
-		if (back != game.target)
-		{
-			game.itemCount = game.replacedCount = 0;
-			ResetExpect();
-			return;
-		}
-
-		EnterCriticalSection(&game.cs);
-		{
-			Slot* slot = NULL;
-			for (DWORD i = 0; i < SLOTS && !slot; ++i)
-				if (game.slots[i].frame == frame)
-					slot = &game.slots[i];
-
-			if (!slot)
-			{
-				slot = &game.slots[0];
-				for (DWORD i = 1; i < SLOTS; ++i)
-					if (game.slots[i].age < slot->age)
-						slot = &game.slots[i];
-			}
-
-			Slot* newest = NULL;
-			for (DWORD i = 0; i < SLOTS; ++i)
-				if (&game.slots[i] != slot && game.slots[i].frame && (!newest || game.slots[i].age > newest->age))
-					newest = &game.slots[i];
-
-			slot->frame = frame;
-			slot->age = ++game.slotAge;
-
-			if (!game.dirty)
-			{
-				slot->count = 0;
-				if (newest && newest->count && SlotReserve(slot, newest->count))
-				{
-					MemoryCopy(slot->items, newest->items, newest->count * sizeof(DrawItem));
-					slot->count = newest->count;
-					if (newest->plane && (!slot->plane || slot->planeW != newest->planeW || slot->planeH != newest->planeH))
-					{
-						if (slot->plane)
-							MemoryFree(slot->plane);
-						slot->plane = (DWORD*)MemoryAlloc(newest->planeW * newest->planeH * sizeof(DWORD));
-						slot->planeW = slot->plane ? newest->planeW : 0;
-						slot->planeH = slot->plane ? newest->planeH : 0;
-					}
-					if (slot->plane && newest->plane)
-						MemoryCopy(slot->plane, newest->plane, slot->planeW * slot->planeH * sizeof(DWORD));
-				}
-			}
-			else
-			{
-				slot->count = 0;
-				if (game.replacedCount && SlotReserve(slot, game.replacedCount))
-				{
-					for (DWORD i = 0; i < game.itemCount; ++i)
-					{
-						const Item* item = &game.items[i];
-						if (!item->replaced)
-							continue;
-
-						DrawItem* d = &slot->items[slot->count++];
-						d->frame = item->frame;
-						d->x = item->x - left;
-						d->y = item->y - top;
-						d->w = item->w;
-						d->h = item->h;
-						SetRect(&d->clip, item->clip.left - left, item->clip.top - top, item->clip.right - left, item->clip.bottom - top);
-						d->flipped = item->flipped;
-						d->layer = item->layer;
-						d->look = item->look;
-
-						for (DrawItem* p = d; p > slot->items && (DrawRank(p) < DrawRank(p - 1) || (DrawRank(p) == DrawRank(p - 1) && p->layer < (p - 1)->layer)); --p)
-						{
-							DrawItem swap = *p;
-							*p = *(p - 1);
-							*(p - 1) = swap;
-						}
-					}
-
-					LONG width = config.mode->width, height = config.mode->height;
-					if (!slot->plane || slot->planeW != width || slot->planeH != height)
-					{
-						if (slot->plane)
-							MemoryFree(slot->plane);
-						slot->plane = (DWORD*)MemoryAlloc(width * height * sizeof(DWORD));
-						slot->planeW = slot->plane ? width : 0;
-						slot->planeH = slot->plane ? height : 0;
-					}
-
-					if (slot->plane)
-					{
-						for (LONG y = 0; y < height; ++y)
-							for (LONG x = 0; x < width; ++x)
-							{
-								LONG px = x + left, py = y + top;
-								slot->plane[y * width + x] = game.plane && px >= 0 && py >= 0 && px < game.planeW && py < game.planeH ? game.plane[py * game.planeW + px] : 0;
-							}
-					}
-				}
-			}
-		}
-		LeaveCriticalSection(&game.cs);
-
-		game.itemCount = game.replacedCount = 0;
-		ResetExpect();
-		game.dirty = FALSE;
 	}
 #pragma endregion
 
 #pragma region Render
-	BOOL Prepare(StateBufferAligned* frame, BOOL active)
+	BOOL Prepare(StateBufferAligned* /*frame*/, BOOL /*active*/)
 	{
 		if (!game.initialized)
 			return FALSE;
 
-		DWORD before = drawList.count;
-		drawList.count = 0;
-		if (active)
-		{
-			EnterCriticalSection(&game.cs);
-			for (DWORD i = 0; i < SLOTS; ++i)
-			{
-				Slot* slot = &game.slots[i];
-				if (slot->frame != (StateBuffer*)frame || !slot->count)
-					continue;
-
-				if (drawList.capacity < slot->count)
-				{
-					if (drawList.items)
-						MemoryFree(drawList.items);
-					drawList.items = (DrawItem*)MemoryAlloc(MAX_ITEMS * sizeof(DrawItem));
-					drawList.capacity = drawList.items ? MAX_ITEMS : 0;
-				}
-
-				if (drawList.items && slot->plane)
-				{
-					MemoryCopy(drawList.items, slot->items, slot->count * sizeof(DrawItem));
-					drawList.count = slot->count;
-
-					if (!drawList.plane || drawList.planeW != slot->planeW || drawList.planeH != slot->planeH)
-					{
-						if (drawList.plane)
-							MemoryFree(drawList.plane);
-						drawList.plane = (DWORD*)MemoryAlloc(slot->planeW * slot->planeH * sizeof(DWORD));
-						drawList.planeW = drawList.plane ? slot->planeW : 0;
-						drawList.planeH = drawList.plane ? slot->planeH : 0;
-					}
-					if (drawList.plane)
-						MemoryCopy(drawList.plane, slot->plane, slot->planeW * slot->planeH * sizeof(DWORD));
-					else
-						drawList.count = 0;
-				}
-				break;
-			}
-			LeaveCriticalSection(&game.cs);
-		}
-
-		return drawList.count || before || pack.decodedList.count;
+		InterlockedIncrement(&game.frameNo);
+		return pack.decodedList.count != 0;
 	}
 
 	GLuint Compile(const CHAR* source, GLenum type)
@@ -3249,35 +2093,6 @@ namespace ImageReplace
 			"	fLayer = vLayer;\n"
 			"}\n";
 
-		const CHAR* fragment =
-			"uniform sampler2D tex01;\n"
-			"uniform sampler2D tex02;\n"
-			"uniform vec4 shape;\n"
-			"uniform vec4 tint;\n"
-			"uniform vec4 rim;\n"
-			"in vec2 fTex;\n"
-			"in vec2 fPlane;\n"
-			"in float fLayer;\n"
-			"out vec4 FRAG_COLOR;\n"
-			"void main()\n"
-			"{\n"
-			"	if (texture(tex02, fPlane).r > fLayer + 0.5)\n"
-			"		discard;\n"
-			"	vec4 c = texture(tex01, fTex);\n"
-			"	if (shape.z > 0.0)\n"
-			"	{\n"
-			"		float n = abs(fTex.x - shape.x) / shape.z + abs(fTex.y - shape.y) / shape.w;\n"
-			"		if (n > 1.0)\n"
-			"			discard;\n"
-			"		vec3 p = c.a > 0.0 ? c.rgb / c.a : vec3(0.0);\n"
-			"		float s = p.r + p.g + p.b;\n"
-			"		if (tint.a > 0.0 && s > 250.0 / 255.0 && abs(p.r - p.b) < 60.0 / 255.0)\n"
-			"			p = min(tint.rgb * s * 13.0 / 30.0, vec3(1.0));\n"
-			"		c = vec4(n > 1.0 - rim.a ? rim.rgb : p, 1.0);\n"
-			"	}\n"
-			"	FRAG_COLOR = c;\n"
-			"}\n";
-
 		const CHAR* groundFragment =
 			"uniform sampler2D tex01;\n"
 			"uniform sampler2D tex02;\n"
@@ -3325,14 +2140,6 @@ namespace ImageReplace
 		QueryPerformanceFrequency(&gl.frequency);
 		GpuBudget();
 
-		gl.program = Link(vertex, fragment);
-		GLUseProgram(gl.program);
-		GLUniform1i(GLGetUniformLocation(gl.program, "tex01"), 0);
-		GLUniform1i(GLGetUniformLocation(gl.program, "tex02"), 1);
-		gl.shape = GLGetUniformLocation(gl.program, "shape");
-		gl.tint = GLGetUniformLocation(gl.program, "tint");
-		gl.rim = GLGetUniformLocation(gl.program, "rim");
-
 		groundGL.program = Link(vertex, groundFragment);
 		GLUseProgram(groundGL.program);
 		GLUniform1i(GLGetUniformLocation(groundGL.program, "tex01"), 0);
@@ -3355,15 +2162,7 @@ namespace ImageReplace
 		GLEnableVertexAttribArray(3);
 		GLVertexAttribPointer(3, 1, GL_FLOAT, GL_FALSE, sizeof(Vertex), (GLvoid*)24);
 
-		GLGenTextures(1, &gl.planeTexture);
-		GLBindTexture(GL_TEXTURE_2D, gl.planeTexture);
-		GLTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-		GLTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-		GLTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-		GLTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-		gl.planeW = gl.planeH = 0;
-
-		gl.ready = gl.program && gl.vao && gl.vbo && gl.planeTexture && groundGL.program && groundGL.fbo;
+		gl.ready = gl.vao && gl.vbo && groundGL.program && groundGL.fbo;
 		gl.failed = !gl.ready;
 		if (gl.failed)
 			DebugLog("image GL setup failed, 4K sprites off");
@@ -3630,184 +2429,22 @@ namespace ImageReplace
 		GLDisable(GL_BLEND);
 	}
 
-	VOID Draw(const Rect* rect, LONG offset, DWORD frameWidth, DWORD frameHeight)
+	VOID Draw(const Rect* /*rect*/, LONG /*offset*/, DWORD /*frameWidth*/, DWORD /*frameHeight*/)
 	{
-		BOOL visible = drawList.count && rect->width > 0 && rect->height > 0;
-		if (!pack.ready || (!visible && !pack.decodedList.count && pack.gpu <= pack.gpuBudget))
+		if (!pack.ready || (!pack.decodedList.count && pack.gpu <= pack.gpuBudget))
 			return;
 
-		GLint program, vao, buffer, active, texture0, texture1;
+		GLint program, vao, buffer, active, texture0;
 		GLGetIntegerv(GL_CURRENT_PROGRAM, &program);
 		GLGetIntegerv(GL_VERTEX_ARRAY_BINDING, &vao);
 		GLGetIntegerv(GL_ARRAY_BUFFER_BINDING, &buffer);
 		GLGetIntegerv(GL_ACTIVE_TEXTURE, &active);
-		GLActiveTexture(GL_TEXTURE1);
-		GLGetIntegerv(GL_TEXTURE_BINDING_2D, &texture1);
 		GLActiveTexture(GL_TEXTURE0);
 		GLGetIntegerv(GL_TEXTURE_BINDING_2D, &texture0);
 
 		if (InitGL())
 			Manage();
 
-		if (gl.ready && visible)
-		{
-			BOOL grounds = FALSE;
-			for (DWORD i = 0; i < drawList.count && !grounds; ++i)
-				grounds = drawList.items[i].frame < 0;
-			if (grounds)
-			{
-				GLint framebuffer, texture2;
-				GLfloat clear[4];
-				GLGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &framebuffer);
-				glGetFloatv(GL_COLOR_CLEAR_VALUE, clear);
-				GLActiveTexture(GL_TEXTURE2);
-				GLGetIntegerv(GL_TEXTURE_BINDING_2D, &texture2);
-
-				for (DWORD i = 0; i < drawList.count; ++i)
-					if (drawList.items[i].frame < 0)
-						RenderGround(-1 - drawList.items[i].frame);
-
-				GLBindFramebuffer(GL_DRAW_FRAMEBUFFER, framebuffer);
-				GLClearColor(clear[0], clear[1], clear[2], clear[3]);
-				GLActiveTexture(GL_TEXTURE2);
-				GLBindTexture(GL_TEXTURE_2D, texture2);
-			}
-
-			DWORD base = 0xFFFFFFFF;
-			for (DWORD i = 0; i < drawList.count; ++i)
-				base = min(base, drawList.items[i].layer);
-			--base;
-
-			LONG pw = drawList.planeW, ph = drawList.planeH;
-			if (!gl.planeData || gl.planeW != pw || gl.planeH != ph)
-			{
-				if (gl.planeData)
-					MemoryFree(gl.planeData);
-				gl.planeData = (FLOAT*)MemoryAlloc(pw * ph * sizeof(FLOAT));
-			}
-
-			GLActiveTexture(GL_TEXTURE1);
-			GLBindTexture(GL_TEXTURE_2D, gl.planeTexture);
-			if (gl.planeData)
-			{
-				for (LONG i = pw * ph - 1; i >= 0; --i)
-				{
-					DWORD v = drawList.plane[i];
-					gl.planeData[i] = v > base ? (FLOAT)(v - base) : 0.0f;
-				}
-
-				GLPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
-				GLPixelStorei(GL_UNPACK_ALIGNMENT, 4);
-				if (gl.planeW != pw || gl.planeH != ph)
-				{
-					gl.planeW = pw;
-					gl.planeH = ph;
-					GLTexImage2D(GL_TEXTURE_2D, 0, GL_R32F, pw, ph, 0, GL_RED, GL_FLOAT, gl.planeData);
-				}
-				else
-					GLTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, pw, ph, GL_RED, GL_FLOAT, gl.planeData);
-			}
-
-			GLUseProgram(gl.program);
-			GLUniform4f(gl.shape, 0.0f, 0.0f, 0.0f, 0.0f);
-			BOOL shaped = FALSE;
-			GLBindVertexArray(gl.vao);
-			GLBindBuffer(GL_ARRAY_BUFFER, gl.vbo);
-			GLViewport(rect->x, rect->y + offset, rect->width, rect->height);
-			GLEnable(GL_BLEND);
-			GLBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
-
-			FLOAT sx = (FLOAT)rect->width / frameWidth;
-			FLOAT sy = (FLOAT)rect->height / frameHeight;
-			FLOAT baseX = (FLOAT)((LONG)(config.mode->width - frameWidth) >> 1);
-			FLOAT baseY = (FLOAT)((LONG)(config.mode->height - frameHeight) >> 1);
-			FLOAT rw = (FLOAT)rect->width, rh = (FLOAT)rect->height;
-
-			for (DWORD i = 0; i < drawList.count && gl.planeData; ++i)
-			{
-				const DrawItem* item = &drawList.items[i];
-				GLuint id;
-				if (item->frame < 0)
-				{
-					id = groundGL.chunks[-1 - item->frame].texture;
-					if (!id)
-						continue;
-				}
-				else
-				{
-					Tex* tex = &pack.texs[item->frame];
-					if (tex->state != TexUploaded)
-						continue;
-					TouchGpu(item->frame);
-					id = tex->id;
-				}
-
-				LONG l = max(item->x, item->clip.left), t = max(item->y, item->clip.top);
-				LONG r = min(item->x + item->w, item->clip.right), b = min(item->y + item->h, item->clip.bottom);
-				if (l >= r || t >= b)
-					continue;
-
-				FLOAT u0 = (FLOAT)(l - item->x) / item->w, u1 = (FLOAT)(r - item->x) / item->w;
-				FLOAT v0 = (FLOAT)(t - item->y) / item->h, v1 = (FLOAT)(b - item->y) / item->h;
-				if (item->flipped)
-				{
-					u0 = 1.0f - u0;
-					u1 = 1.0f - u1;
-				}
-
-				const RECT* part = &item->look.part;
-				BOOL gem = FALSE;
-				if (item->frame >= 0 && part->right > part->left)
-				{
-					const PackFrame* pf = &pack.frames[item->frame];
-					FLOAT su = (FLOAT)part->left / pf->w, sw = (FLOAT)(part->right - part->left) / pf->w;
-					FLOAT sv = (FLOAT)part->top / pf->h, sh = (FLOAT)(part->bottom - part->top) / pf->h;
-					u0 = su + u0 * sw;
-					u1 = su + u1 * sw;
-					v0 = sv + v0 * sh;
-					v1 = sv + v1 * sh;
-
-					if (item->look.gem)
-					{
-						FLOAT rx = item->w / 2.0f, ry = item->h / 2.0f;
-						GLUniform4f(gl.shape, su + sw / 2.0f, sv + sh / 2.0f, sw / 2.0f, sh / 2.0f);
-						GLUniform4f(gl.tint, GetRValue(item->look.tint) / 255.0f, GetGValue(item->look.tint) / 255.0f, GetBValue(item->look.tint) / 255.0f, item->look.tint ? 1.0f : 0.0f);
-						GLUniform4f(gl.rim, GetRValue(item->look.rim) / 255.0f, GetGValue(item->look.rim) / 255.0f, GetBValue(item->look.rim) / 255.0f, sqrtf(1.0f / (rx * rx) + 1.0f / (ry * ry)));
-						gem = TRUE;
-					}
-				}
-				if (shaped && !gem)
-					GLUniform4f(gl.shape, 0.0f, 0.0f, 0.0f, 0.0f);
-				shaped = gem;
-
-				FLOAT x0 = (l - baseX) * sx, x1 = (r - baseX) * sx;
-				FLOAT y0 = (t - baseY) * sy, y1 = (b - baseY) * sy;
-				FLOAT nx0 = x0 / rw * 2.0f - 1.0f, nx1 = x1 / rw * 2.0f - 1.0f;
-				FLOAT ny0 = 1.0f - y0 / rh * 2.0f, ny1 = 1.0f - y1 / rh * 2.0f;
-				FLOAT pu0 = (FLOAT)l / pw, pu1 = (FLOAT)r / pw;
-				FLOAT pv0 = (FLOAT)t / ph, pv1 = (FLOAT)b / ph;
-				FLOAT layer = (FLOAT)(item->layer - base);
-
-				Vertex quad[6] = {
-					{ nx0, ny0, u0, v0, pu0, pv0, layer },
-					{ nx1, ny0, u1, v0, pu1, pv0, layer },
-					{ nx1, ny1, u1, v1, pu1, pv1, layer },
-					{ nx0, ny0, u0, v0, pu0, pv0, layer },
-					{ nx1, ny1, u1, v1, pu1, pv1, layer },
-					{ nx0, ny1, u0, v1, pu0, pv1, layer }
-				};
-
-				GLActiveTexture(GL_TEXTURE0);
-				GLBindTexture(GL_TEXTURE_2D, id);
-				GLBufferData(GL_ARRAY_BUFFER, sizeof(quad), quad, GL_STREAM_DRAW);
-				GLDrawArrays(GL_TRIANGLES, 0, 6);
-			}
-
-			GLDisable(GL_BLEND);
-		}
-
-		GLActiveTexture(GL_TEXTURE1);
-		GLBindTexture(GL_TEXTURE_2D, texture1);
 		GLActiveTexture(GL_TEXTURE0);
 		GLBindTexture(GL_TEXTURE_2D, texture0);
 		GLActiveTexture(active);
@@ -3824,10 +2461,8 @@ namespace ImageReplace
 				Evict(pack.gpuList.tail - 1);
 			InterlockedIncrement(&pack.evictGen);
 
-			GLDeleteTextures(1, &gl.planeTexture);
 			GLDeleteBuffers(1, &gl.vbo);
 			GLDeleteVertexArrays(1, &gl.vao);
-			GLDeleteProgram(gl.program);
 
 			for (DWORD i = 0; i < GROUND_CHUNKS; ++i)
 				if (groundGL.chunks[i].texture)
@@ -3840,8 +2475,7 @@ namespace ImageReplace
 
 		gl.ready = FALSE;
 		gl.failed = FALSE;
-		gl.program = gl.vao = gl.vbo = gl.planeTexture = 0;
-		gl.planeW = gl.planeH = 0;
+		gl.vao = gl.vbo = 0;
 	}
 #pragma endregion
 
@@ -4150,21 +2784,17 @@ namespace ImageReplace
 
 	struct Summary {
 		const Entry* first;
-		DWORD frames, mapped, sizeMiss, draws, queued, claimed;
+		DWORD frames, mapped, sizeMiss, draws;
 	};
 
 	const CHAR* SummaryStatus(const Summary* s)
 	{
 		if (!s->first->anim)
 			return "no-pack";
-		if (s->claimed)
-			return "4k";
-		if (s->queued)
-			return "unmatched";
 		if (s->sizeMiss)
 			return "size-mismatch";
 		if (s->mapped)
-			return "not-ready";
+			return "mapped";
 		return "frame-range";
 	}
 
@@ -4194,8 +2824,6 @@ namespace ImageReplace
 			else if (e->anim && e->origin == OriginSprite)
 				++s->sizeMiss;
 			s->draws += e->draws;
-			s->queued += e->queued;
-			s->claimed += e->claimed;
 		}
 
 		CHAR path[MAX_PATH];
@@ -4207,7 +2835,7 @@ namespace ImageReplace
 		HANDLE file = CreateFile(path, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 		if (file != INVALID_HANDLE_VALUE)
 		{
-			const CHAR* order[] = { "unmatched", "size-mismatch", "not-ready", "frame-range", "no-pack", "4k" };
+			const CHAR* order[] = { "size-mismatch", "frame-range", "no-pack", "mapped" };
 			CHAR line[256];
 			DWORD written;
 			for (DWORD k = 0; k < sizeof(order) / sizeof(*order); ++k)
@@ -4218,8 +2846,8 @@ namespace ImageReplace
 						continue;
 
 					const DWORD* dims = (const DWORD*)s->first->rec;
-					DWORD n = StrPrint(line, "%-13s %-24s %4dx%-4d frames %d mapped %d draws %d queued %d claimed %d pack %s\r\n",
-						order[k], s->first->owner, dims[0], dims[1], s->frames, s->mapped, s->draws, s->queued, s->claimed,
+					DWORD n = StrPrint(line, "%-13s %-24s %4dx%-4d frames %d mapped %d draws %d pack %s\r\n",
+						order[k], s->first->owner, dims[0], dims[1], s->frames, s->mapped, s->draws,
 						s->first->anim ? pack.names + s->first->anim->id : "-");
 					WriteFile(file, line, n, &written, NULL);
 				}
@@ -4231,8 +2859,8 @@ namespace ImageReplace
 
 	VOID LogStats()
 	{
-		dumpItems = TRUE;
 		MapOrder::Dump();
+		Twin::LogStats();
 		WriteCoverage();
 		EnterCriticalSection(&requests.cs);
 		DWORD demand = (requests.demand.tail + REQUEST_SIZE - requests.demand.head) % REQUEST_SIZE;
@@ -4240,13 +2868,10 @@ namespace ImageReplace
 		DWORD decodedCount = pack.decodedList.count;
 		LeaveCriticalSection(&requests.cs);
 
-		DebugLog("image stats builds=%d draws=%d unknown=%d replaced=%d skipped=%d notReady=%d ground chunks=%d builds=%d ops=%d unnamed=%d unmasked=%d rejected=%d written=%d follows=%d partial=%d direct=%d stale=%d claims=%d",
-			stats.builds, stats.draws, stats.unknown, game.replaced, game.skipped, game.notReady,
-			ground.chunkCount, ground.builds, ground.ops, ground.unnamed, ground.unmasked, ground.rejected, ground.written, ground.follows, ground.partial, ground.direct, ground.stale, ground.claims);
-		DebugLog("image store tries=%d blocked=%d missed=%d waited=%d claimed=%d shadowed=%d drawLinks=%d blitLinks=%d pixelLinks=%d rawLinks=%d faceLinks=%d finds=%d faceLoads=%d",
-			storeStats.tries, storeStats.blocked, storeStats.missed, storeStats.waited, storeStats.claimed, storeStats.shadowed, storeStats.drawLinks, storeStats.blitLinks, storeStats.pixelLinks, storeStats.rawLinks, storeStats.faceLinks, storeStats.finds, storeStats.faceLoads);
-		DebugLog("image strip faceCopies=%d faceMisses=%d faceRejects=%d takes=%d takeLinks=%d takeFrames=%d hits=%d away=%d follows=%d claims=%d items=%d",
-			storeStats.faceCopies, storeStats.faceMisses, storeStats.faceRejects, storeStats.takes, storeStats.takeLinks, storeStats.takeFrames, storeStats.stripHits, storeStats.stripAway, storeStats.stripFollows, storeStats.stripClaims, storeStats.stripItems);
+		DebugLog("image stats builds=%d draws=%d unknown=%d ground chunks=%d builds=%d ops=%d unnamed=%d unmasked=%d rejected=%d",
+			stats.builds, stats.draws, stats.unknown, ground.chunkCount, ground.builds, ground.ops, ground.unnamed, ground.unmasked, ground.rejected);
+		DebugLog("image store drawLinks=%d faceLinks=%d faceLoads=%d faceCopies=%d faceMisses=%d faceRejects=%d takes=%d takeLinks=%d takeFrames=%d",
+			storeStats.drawLinks, storeStats.faceLinks, storeStats.faceLoads, storeStats.faceCopies, storeStats.faceMisses, storeStats.faceRejects, storeStats.takes, storeStats.takeLinks, storeStats.takeFrames);
 		DebugLog("image tables entries=%d/%d full=%d stores=%d/%d archives=%d queue demand=%d prefetch=%d decoded=%d (%d MB) gpu=%d (%d MB of %d MB budget)",
 			entries.count, entries.used, stats.full, stores.count, stores.used, archives.count, demand, prefetch,
 			decodedCount, pack.decoded >> 20, pack.gpuList.count, pack.gpu >> 20, pack.gpuBudget >> 20);
@@ -4264,7 +2889,7 @@ namespace ImageReplace
 		else
 		{
 			++entry->draws;
-			Queue(entry, rec, start, offset, size, area);
+			Queue(entry, rec);
 		}
 
 		DWORD tick = GetTickCount();

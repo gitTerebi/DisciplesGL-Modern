@@ -34,6 +34,7 @@
 #include "Mods.h"
 #include "TextReplace.h"
 #include "ImageReplace.h"
+#include "Twin.h"
 
 OpenDrawSurface::OpenDrawSurface(IDrawUnknown** list, OpenDraw* lpDD, SurfaceType type, OpenDrawSurface* attached)
 	: IDrawSurface7(list)
@@ -367,6 +368,18 @@ VOID OpenDrawSurface::CreateBuffer(DWORD width, DWORD height, DWORD bpp, VOID* b
 		}
 	}
 
+	if (config.bpp32Hooked)
+	{
+		if (!buffer && (this->mode.bpp == 16 || this->mode.bpp == 32))
+			Twin::OnCreate(this->indexBuffer, this->mode.width, this->mode.height);
+
+		if (this->type == SurfacePrimary && !buffer)
+		{
+			Twin::OnCreate(this->secondaryBuffer, config.mode->width, config.mode->height);
+			Twin::OnCreate(this->backBuffer, config.mode->width, config.mode->height);
+		}
+	}
+
 	TextReplace::OnBuffer(this);
 }
 
@@ -374,6 +387,9 @@ VOID OpenDrawSurface::ReleaseBuffer()
 {
 	TextReplace::OnRelease(this);
 	ImageReplace::OnRelease(this);
+	Twin::OnRelease(this->indexBuffer);
+	Twin::OnRelease(this->secondaryBuffer);
+	Twin::OnRelease(this->backBuffer);
 
 	delete this->indexBuffer;
 	this->indexBuffer = NULL;
@@ -406,7 +422,11 @@ VOID OpenDrawSurface::SwapBuffers()
 		}
 
 		Mods::DrawFrame((config.mode->width - stateBuffer->size.width) >> 1, (config.mode->height - stateBuffer->size.height) >> 1, stateBuffer->size.width, stateBuffer->size.height, *(LONG*)&pitch, fomat, lpBuffer);
+		if (config.bpp32Hooked)
+			Twin::OnWrite(lpBuffer, config.mode->width, stateBuffer->size.width, stateBuffer->size.height);
 	}
+
+	Twin::OnPresent(stateBuffer, (config.mode->width - stateBuffer->size.width) >> 1, (config.mode->height - stateBuffer->size.height) >> 1);
 
 	stateBuffer->isReady = TRUE;
 
@@ -449,6 +469,7 @@ VOID OpenDrawSurface::Flush()
 		surfaceBuffer->isZoomed = Config::IsZoomed();
 		surfaceBuffer->size = surfaceBuffer->isZoomed ? config.zoom.size : *(Size*)config.mode;
 
+		Twin::OnWriteAll(this->backBuffer);
 		this->SwapBuffers();
 		Sleep(0);
 	}
@@ -535,6 +556,8 @@ VOID OpenDrawSurface::Flush()
 				src += sctPitch;
 			} while (--height);
 
+			Twin::OnWriteAll(this->backBuffer);
+
 			StateBufferAligned* back = (StateBufferAligned*)this->backBuffer;
 			back->isZoomed = surfaceBuffer->isZoomed;
 			back->borders = surfaceBuffer->borders;
@@ -550,7 +573,6 @@ VOID OpenDrawSurface::Flush()
 		((StateBufferAligned*)this->backBuffer)->size = surfaceBuffer->isZoomed ? config.zoom.size : *(Size*)config.mode;
 
 		TextReplace::OnPresent(surface, this->backBuffer, textLeft, textTop);
-		ImageReplace::OnPresent(surface, this->backBuffer, textLeft, textTop);
 		this->SwapBuffers();
 
 #ifdef BENCH
@@ -773,15 +795,17 @@ HRESULT __stdcall OpenDrawSurface::Blt(LPRECT lpDestRect, IDrawSurface7* lpDDSrc
 		if (this->drawEnabled)
 		{
 			TextReplace::OnFill(this);
-			ImageReplace::OnFill(this);
 
 			DWORD size = this->mode.width * this->mode.height * (this->mode.bpp == 8 ? 1 : (config.bpp32Hooked ? sizeof(DWORD) : sizeof(WORD)));
 			MemoryZero(this->indexBuffer->data, size);
+			Twin::OnFill(this->indexBuffer, NULL, 0);
 
 			if (this->type == SurfaceSecondary)
 			{
 				((StateBufferAligned*)this->indexBuffer)->borders = config.borders.active ? config.borders.type : BordersNone;
 				this->DrawBorders(this->indexBuffer->data, this->mode.width, this->mode.height);
+				if (config.borders.allowed && config.borders.active)
+					Twin::OnWriteAll(this->indexBuffer);
 			}
 		}
 	}
@@ -841,10 +865,14 @@ HRESULT __stdcall OpenDrawSurface::Blt(LPRECT lpDestRect, IDrawSurface7* lpDDSrc
 		if (config.bpp32Hooked)
 		{
 			TextReplace::OnBlit(this, lpDestRect->left, lpDestRect->top, surface, lpSrcRect, sWidth, FALSE, 0);
-			ImageReplace::OnBlit(this, lpDestRect->left, lpDestRect->top, surface, lpSrcRect, sWidth, FALSE, 0);
 
 			DWORD* src = (DWORD*)surface->indexBuffer->data + lpSrcRect->top * sWidth + lpSrcRect->left;
 			DWORD* dst = (DWORD*)this->indexBuffer->data + lpDestRect->top * dWidth + lpDestRect->left;
+
+			if (sWidth == surface->mode.width && dWidth == this->mode.width)
+				Twin::OnCopy(this->indexBuffer, lpDestRect->left, lpDestRect->top, surface->indexBuffer, lpSrcRect, FALSE, 0);
+			else
+				Twin::OnWrite(dst, dWidth, width, height);
 
 			width *= sizeof(DWORD);
 			do
@@ -909,8 +937,7 @@ HRESULT __stdcall OpenDrawSurface::BltFast(DWORD dwX, DWORD dwY, IDrawSurface7* 
 		if (config.bpp32Hooked)
 		{
 			TextReplace::OnBlit(this, dwX, dwY, surface, lpSrcRect, sWidth, surface->colorKey.enabled, surface->colorKey.high);
-			// a claimed blit still lands in 1x: the game reads the screen back (e.g. the roster hover area) and would get black
-			ImageReplace::OnBlit(this, dwX, dwY, surface, lpSrcRect, sWidth, surface->colorKey.enabled, surface->colorKey.high);
+			Twin::OnCopy(this->indexBuffer, dwX, dwY, surface->indexBuffer, lpSrcRect, surface->colorKey.enabled, surface->colorKey.high);
 
 			DWORD* src = (DWORD*)surface->indexBuffer->data + lpSrcRect->top * sWidth + lpSrcRect->left;
 			DWORD* dst = (DWORD*)this->indexBuffer->data + lpDestRect->top * dWidth + lpDestRect->left;

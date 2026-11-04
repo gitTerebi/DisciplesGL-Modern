@@ -50,6 +50,7 @@
 #include "BattleSpeed.h"
 #include "FastAI.h"
 #include "ImageReplace.h"
+#include "Twin.h"
 
 #define PANEL_WIDTH 160
 #define NUM(a, b) ((a << 16) | b)
@@ -1754,6 +1755,7 @@ namespace Hooks
 		LONG res = ((LONG(__stdcall*)(VOID*, DWORD*, DWORD, DWORD, DWORD, DWORD, DWORD))pBinkCopyToBuffer)(hBnk, dst, pitch << 1, height, x, y, BINKCOPYALL | (config.renderer == RendererGDI ? BINKSURFACE32 : BINKSURFACE32R));
 		if (!res)
 		{
+			Twin::OnWrite(dst, pitch >> 1, pitch >> 1, height);
 			DWORD c = height * (pitch >> 1);
 			do
 				*dst++ |= ALPHA_COMPONENT;
@@ -1769,6 +1771,7 @@ namespace Hooks
 		if (!res)
 		{
 			pitch >>= 1;
+			Twin::OnWrite(dst, pitch, pitch, height);
 
 			if (!(pitch & 0xF))
 			{
@@ -2014,7 +2017,6 @@ namespace Hooks
 	VOID __stdcall Pixel_Blit_Indexed_to_565(BYTE* srcData, LONG srcPitch, DWORD* palette, DWORD* dstData, LONG dstPitch, RECT* rect)
 	{
 		TextReplace::OnFillRect(dstData, rect);
-		ImageReplace::OnFillRect(dstData, rect);
 
 		BYTE* lpSrc = srcData + rect->top * srcPitch + rect->left;
 		dstPitch /= 2;
@@ -2022,6 +2024,7 @@ namespace Hooks
 
 		LONG width = rect->right - rect->left;
 		LONG height = rect->bottom - rect->top;
+		Twin::OnWrite(lpDst, dstPitch, width, height);
 
 		if (config.renderer == RendererGDI)
 		{
@@ -2086,7 +2089,6 @@ namespace Hooks
 	VOID __stdcall Pixel_Blit_By_Masks(DWORD* srcData, LONG srcPitch, DWORD redMask, DWORD greenMask, DWORD blueMask, DWORD alphaMask, BYTE* dstData, LONG dstPitch, RECT* rect)
 	{
 		TextReplace::OnFillRect(dstData, rect);
-		ImageReplace::OnFillRect(dstData, rect);
 
 		srcPitch /= 2;
 
@@ -2131,7 +2133,6 @@ namespace Hooks
 	VOID __stdcall Pixel_Blit_RGB_to_565(BYTE* srcData, LONG srcPitch, DWORD* dstData, LONG dstPitch, RECT* rect)
 	{
 		TextReplace::OnFillRect(dstData, rect);
-		ImageReplace::OnFillRect(dstData, rect);
 
 		dstPitch /= 2;
 
@@ -2139,6 +2140,7 @@ namespace Hooks
 		dstData += rect->left + rect->top * dstPitch;
 
 		LONG height = rect->bottom - rect->top;
+		Twin::OnWrite(dstData, dstPitch, rect->right - rect->left, height);
 		do
 		{
 			BYTE* src = srcData;
@@ -2209,11 +2211,18 @@ namespace Hooks
 		return Blend_SSE(pix, r | (g << 8) | (b << 16), msk, _mm_setzero_si128(), _mm_set1_epi16(0xFF));
 	}
 
+	VOID TwinRows(const BlendData* items, DWORD count)
+	{
+		for (; count; --count, ++items)
+			if (items->length)
+				Twin::OnWrite(items->dstData, items->length, items->length, 1);
+	}
+
 	VOID __stdcall Pixel_BlitBlend(BlendData blendItem)
 	{
 		TextReplace::TracePixel("blend", blendItem.dstData, blendItem.srcData, blendItem.length, 1, 0, _ReturnAddress());
 		TextReplace::OnPixelRows(&blendItem, 1);
-		ImageReplace::OnPixelRows(&blendItem, 1);
+		TwinRows(&blendItem, 1);
 
 		for (; blendItem.length; --blendItem.length, ++blendItem.srcData, ++blendItem.dstData, ++blendItem.mskData)
 			*blendItem.dstData = Blend(*blendItem.dstData, *blendItem.srcData, *blendItem.mskData);
@@ -2223,7 +2232,7 @@ namespace Hooks
 	{
 		TextReplace::TracePixel("blend", blendItem.dstData, blendItem.srcData, blendItem.length, 1, 0, _ReturnAddress());
 		TextReplace::OnPixelRows(&blendItem, 1);
-		ImageReplace::OnPixelRows(&blendItem, 1);
+		TwinRows(&blendItem, 1);
 
 		__m128i zero = _mm_setzero_si128();
 		__m128i and1 = _mm_set1_epi16(0xFF);
@@ -2235,7 +2244,7 @@ namespace Hooks
 	{
 		TextReplace::TracePixel("blendkey", count ? blendItem->dstData : NULL, count ? blendItem->srcData : NULL, count ? blendItem->length : 0, count, 0, _ReturnAddress());
 		TextReplace::OnPixelRows(blendItem, count);
-		ImageReplace::OnPixelRows(blendItem, count);
+		TwinRows(blendItem, count);
 
 		if (count)
 		{
@@ -2270,7 +2279,7 @@ namespace Hooks
 	{
 		TextReplace::TracePixel("blendkey", count ? blendItem->dstData : NULL, count ? blendItem->srcData : NULL, count ? blendItem->length : 0, count, 0, _ReturnAddress());
 		TextReplace::OnPixelRows(blendItem, count);
-		ImageReplace::OnPixelRows(blendItem, count);
+		TwinRows(blendItem, count);
 
 		if (count)
 		{
@@ -2309,9 +2318,6 @@ namespace Hooks
 		{
 			TextReplace::TracePixel("average", dstData + dstPitch / 2 * dstPos->y + dstPos->x, srcData + srcPitch / 2 * srcPos->y + srcPos->x, size->cx, size->cy, flag, _ReturnAddress());
 			TextReplace::OnPixelCopy(srcData, srcPitch, srcPos, dstData, dstPitch, dstPos, size, TRUE, Convert565toRGB(colorKey), flag);
-			if (ImageReplace::OnPixelBlit(srcPos, dstData, dstPitch, dstPos, size))
-				return;
-			ImageReplace::OnPixelCopy(srcData, srcPitch, srcPos, dstData, dstPitch, dstPos, size, TRUE, Convert565toRGB(colorKey), flag);
 		}
 
 		if (!flag || !dstData || size->cx <= 0 || size->cy < 0)
@@ -2323,6 +2329,7 @@ namespace Hooks
 
 		DWORD* src = srcData + srcPitch * srcPos->y + srcPos->x;
 		DWORD* dst = dstData + dstPitch * dstPos->y + dstPos->x;
+		Twin::OnWrite(dst, dstPitch, size->cx, size->cy);
 
 		srcPitch -= size->cx;
 		dstPitch -= size->cx;
@@ -2373,9 +2380,6 @@ namespace Hooks
 		{
 			TextReplace::TracePixel("average", dstData + dstPitch / 2 * dstPos->y + dstPos->x, srcData + srcPitch / 2 * srcPos->y + srcPos->x, size->cx, size->cy, flag, _ReturnAddress());
 			TextReplace::OnPixelCopy(srcData, srcPitch, srcPos, dstData, dstPitch, dstPos, size, TRUE, Convert565toRGB(colorKey), flag);
-			if (ImageReplace::OnPixelBlit(srcPos, dstData, dstPitch, dstPos, size))
-				return;
-			ImageReplace::OnPixelCopy(srcData, srcPitch, srcPos, dstData, dstPitch, dstPos, size, TRUE, Convert565toRGB(colorKey), flag);
 		}
 
 		if (!flag || !dstData || size->cx <= 0 || size->cy < 0)
@@ -2387,6 +2391,7 @@ namespace Hooks
 
 		DWORD* src = srcData + srcPitch * srcPos->y + srcPos->x;
 		DWORD* dst = dstData + dstPitch * dstPos->y + dstPos->x;
+		Twin::OnWrite(dst, dstPitch, size->cx, size->cy);
 
 		LONG width = size->cx;
 		LONG height = size->cy;
@@ -2541,9 +2546,6 @@ namespace Hooks
 	{
 		TextReplace::TracePixel("add", dst, src, size->cx, size->cy, 0, _ReturnAddress());
 
-		if (ImageReplace::OnPixelBlit(srcPos, dst, dstPitch, dstPos, size))
-			return;
-
 		if (!dst || size->cx <= 0 || size->cy <= 0)
 			return;
 
@@ -2552,6 +2554,7 @@ namespace Hooks
 
 		src += srcPitch * srcPos->y + srcPos->x;
 		dst += dstPitch * dstPos->y + dstPos->x;
+		Twin::OnWrite(dst, dstPitch, size->cx, size->cy);
 
 		srcPitch -= size->cx;
 		dstPitch -= size->cx;
@@ -2589,9 +2592,6 @@ namespace Hooks
 	{
 		TextReplace::TracePixel("add", dst, src, size->cx, size->cy, 0, _ReturnAddress());
 
-		if (ImageReplace::OnPixelBlit(srcPos, dst, dstPitch, dstPos, size))
-			return;
-
 		if (!dst || size->cx <= 0 || size->cy <= 0)
 			return;
 
@@ -2600,6 +2600,7 @@ namespace Hooks
 
 		src += srcPitch * srcPos->y + srcPos->x;
 		dst += dstPitch * dstPos->y + dstPos->x;
+		Twin::OnWrite(dst, dstPitch, size->cx, size->cy);
 
 		srcPitch -= size->cx;
 		dstPitch -= size->cx;
@@ -2636,9 +2637,6 @@ namespace Hooks
 	{
 		TextReplace::TracePixel("sub", dst, src, size->cx, size->cy, 0, _ReturnAddress());
 
-		if (ImageReplace::OnPixelBlit(srcPos, dst, dstPitch, dstPos, size))
-			return;
-
 		if (!dst || size->cx <= 0 || size->cy <= 0)
 			return;
 
@@ -2647,6 +2645,7 @@ namespace Hooks
 
 		src += srcPitch * srcPos->y + srcPos->x;
 		dst += dstPitch * dstPos->y + dstPos->x;
+		Twin::OnWrite(dst, dstPitch, size->cx, size->cy);
 
 		srcPitch -= size->cx;
 		dstPitch -= size->cx;
@@ -2684,9 +2683,6 @@ namespace Hooks
 	{
 		TextReplace::TracePixel("sub", dst, src, size->cx, size->cy, 0, _ReturnAddress());
 
-		if (ImageReplace::OnPixelBlit(srcPos, dst, dstPitch, dstPos, size))
-			return;
-
 		if (!dst || size->cx <= 0 || size->cy <= 0)
 			return;
 
@@ -2695,6 +2691,7 @@ namespace Hooks
 
 		src += srcPitch * srcPos->y + srcPos->x;
 		dst += dstPitch * dstPos->y + dstPos->x;
+		Twin::OnWrite(dst, dstPitch, size->cx, size->cy);
 
 		srcPitch -= size->cx;
 		dstPitch -= size->cx;
@@ -2734,9 +2731,6 @@ namespace Hooks
 		{
 			TextReplace::TracePixel("colorkey", dstData + dstPitch / 2 * dstPos->y + dstPos->x, srcData + srcPitch / 2 * srcPos->y + srcPos->x, size->cx, size->cy, flag, _ReturnAddress());
 			TextReplace::OnPixelCopy(srcData, srcPitch, srcPos, dstData, dstPitch, dstPos, size, TRUE, Convert565toRGB(colorKey), min(255, flag * 2) / 2);
-			if (ImageReplace::OnPixelBlit(srcPos, dstData, dstPitch, dstPos, size))
-				return;
-			ImageReplace::OnPixelCopy(srcData, srcPitch, srcPos, dstData, dstPitch, dstPos, size, TRUE, Convert565toRGB(colorKey), min(255, flag * 2) / 2);
 		}
 
 		if (!flag || !dstData || size->cx <= 0 || size->cy <= 0)
@@ -2750,6 +2744,7 @@ namespace Hooks
 
 		srcData += srcPitch * srcPos->y + srcPos->x;
 		dstData += dstPitch * dstPos->y + dstPos->x;
+		Twin::OnWrite(dstData, dstPitch, size->cx, size->cy);
 
 		BOOL check = (~dstPos->y ^ dstPos->x) & 1;
 
@@ -2823,9 +2818,6 @@ namespace Hooks
 		{
 			TextReplace::TracePixel("colorkey", dstData + dstPitch / 2 * dstPos->y + dstPos->x, srcData + srcPitch / 2 * srcPos->y + srcPos->x, size->cx, size->cy, flag, _ReturnAddress());
 			TextReplace::OnPixelCopy(srcData, srcPitch, srcPos, dstData, dstPitch, dstPos, size, TRUE, Convert565toRGB(colorKey), min(255, flag * 2) / 2);
-			if (ImageReplace::OnPixelBlit(srcPos, dstData, dstPitch, dstPos, size))
-				return;
-			ImageReplace::OnPixelCopy(srcData, srcPitch, srcPos, dstData, dstPitch, dstPos, size, TRUE, Convert565toRGB(colorKey), min(255, flag * 2) / 2);
 		}
 
 		if (!flag || !dstData || size->cx <= 0 || size->cy <= 0)
@@ -2839,6 +2831,7 @@ namespace Hooks
 
 		srcData += srcPitch * srcPos->y + srcPos->x;
 		dstData += dstPitch * dstPos->y + dstPos->x;
+		Twin::OnWrite(dstData, dstPitch, size->cx, size->cy);
 
 		BOOL check = (~dstPos->y ^ dstPos->x) & 1;
 
@@ -2917,9 +2910,6 @@ namespace Hooks
 		{
 			TextReplace::TracePixel("empty", dstData + dstPitch / 2 * dstPos->y + dstPos->x, srcData + srcPitch / 2 * srcPos->y + srcPos->x, size->cx, size->cy, 127, _ReturnAddress());
 			TextReplace::OnPixelCopy(srcData, srcPitch, srcPos, dstData, dstPitch, dstPos, size, TRUE, 0, 127);
-			if (ImageReplace::OnPixelBlit(srcPos, dstData, dstPitch, dstPos, size))
-				return;
-			ImageReplace::OnPixelCopy(srcData, srcPitch, srcPos, dstData, dstPitch, dstPos, size, TRUE, 0, 127);
 		}
 
 		if (!dstData || size->cx <= 0 || size->cy <= 0)
@@ -2930,6 +2920,7 @@ namespace Hooks
 
 		srcData += srcPitch * srcPos->y + srcPos->x;
 		dstData += dstPitch * dstPos->y + dstPos->x;
+		Twin::OnWrite(dstData, dstPitch, size->cx, size->cy);
 
 		BOOL check = (~dstPos->y ^ dstPos->x) & 1;
 
@@ -2972,6 +2963,7 @@ namespace Hooks
 
 		colorKey = Convert565toRGB(colorKey);
 		pitch /= 2;
+		Twin::OnWrite(data, pitch, size->cx, size->cy);
 		pitch -= size->cx;
 
 		LONG height = size->cy;
@@ -3084,9 +3076,6 @@ namespace Hooks
 
 	VOID __fastcall DrawMinimapObjects(BlitObject* obj, DWORD /*edx*/, VOID* data, RECT* rect, DWORD pitch, DWORD colorKey, POINT* loc)
 	{
-		if (data && rect->left <= rect->right && rect->top <= rect->bottom)
-			ImageReplace::OnGroundCopy(data, rect, obj->isTrueColor ? pitch >> 1 : pitch, obj, loc);
-
 		if (data && rect->left <= rect->right && rect->top <= rect->bottom && (colorKey <= (obj->isTrueColor ? 0xFFFFu : 0xFFu) || colorKey == 0xFFFFFFFF))
 		{
 			POINT shift = *(POINT*)rect;
@@ -3095,6 +3084,9 @@ namespace Hooks
 
 			if (Clip(&shift, &pt, &size, &obj->rect))
 			{
+				if (obj->isTrueColor)
+					Twin::OnWrite((DWORD*)obj->data + pt.y * (obj->pitch >> 1) + pt.x, obj->pitch >> 1, size.cx, size.cy);
+
 				if (colorKey == 0xFFFFFFFF)
 				{
 					if (obj->isTrueColor)
@@ -3219,9 +3211,11 @@ namespace Hooks
 	VOID __fastcall FillColor(BlitObject* obj, DWORD /*edx*/, DWORD color, RECT* rect)
 	{
 		if (obj->isTrueColor)
+		{
 			TextReplace::OnFillRect(obj->data, rect);
-			ImageReplace::OnFillRect(obj->data, rect);
 			ImageReplace::OnGroundFill(obj, color == COLORKEY_CHECK_16 ? 0 : Convert565toRGB(color) | ALPHA_COMPONENT, rect);
+			Twin::OnWrite((DWORD*)obj->data + rect->top * (obj->pitch >> 1) + rect->left, obj->pitch >> 1, rect->right - rect->left, rect->bottom - rect->top);
+		}
 
 		LONG width = rect->right - rect->left;
 		LONG height = rect->bottom - rect->top;
@@ -3262,10 +3256,18 @@ namespace Hooks
 		}
 	}
 
+	VOID TwinDiamond(BlitObject* obj, POINT* loc, RECT* rect)
+	{
+		LONG l = max(loc->x, rect->left), t = max(loc->y, rect->top);
+		LONG r = min(loc->x + 64, rect->right), b = min(loc->y + 32, rect->bottom);
+		if (l < r && t < b)
+			Twin::OnWrite((DWORD*)obj->data + t * (obj->pitch >> 1) + l, obj->pitch >> 1, r - l, b - t);
+	}
+
 	VOID __fastcall DrawWaterBorders(DWORD* thisObj, DWORD /*edx*/, BlitObject* obj, POINT* loc, RECT* rect)
 	{
 		TextReplace::OnDiamond(obj->data, loc, rect);
-		ImageReplace::OnDiamond(obj->data, loc, rect);
+		TwinDiamond(obj, loc, rect);
 		ImageReplace::OnGround(ImageReplace::GroundBorder, thisObj, obj, NULL, loc, rect, NULL, NULL);
 
 		DWORD pitch = obj->pitch >> 1;
@@ -3334,7 +3336,7 @@ namespace Hooks
 	VOID __fastcall DrawGround(DWORD* thisObj, DWORD /*edx*/, BlitObject* obj, POINT* srcLoc, POINT* dstLoc, RECT* rect, BYTE* blendMask, DWORD* alphaMask)
 	{
 		TextReplace::OnDiamond(obj->data, dstLoc, rect);
-		ImageReplace::OnDiamond(obj->data, dstLoc, rect);
+		TwinDiamond(obj, dstLoc, rect);
 		ImageReplace::OnGround(ImageReplace::GroundCopy, thisObj, obj, srcLoc, dstLoc, rect, blendMask, alphaMask);
 
 		static BlendData blendList[32];
@@ -3448,7 +3450,7 @@ namespace Hooks
 	VOID __stdcall ClearGround(BlitObject* obj, POINT* loc, RECT* rect)
 	{
 		TextReplace::OnDiamond(obj->data, loc, rect);
-		ImageReplace::OnDiamond(obj->data, loc, rect);
+		TwinDiamond(obj, loc, rect);
 		ImageReplace::OnGround(ImageReplace::GroundClear, NULL, obj, NULL, loc, rect, NULL, NULL);
 
 		DWORD pitch = obj->pitch >> 1;
@@ -3530,6 +3532,16 @@ namespace Hooks
 				dstPitch /= 2;
 				DWORD* dst = (DWORD*)data + pt.y * dstPitch + pt.x;
 
+				LONG l = pt.x, t = pt.y, r = pt.x + size.cx, b = pt.y + size.cy;
+				if (castShadow)
+				{
+					l = min(l, max(l - 1, rect->left));
+					t = min(t, max(t - 1, rect->top));
+					r = max(r, min(r + 1, rect->right));
+					b = max(b, min(b + 1, rect->bottom));
+				}
+				Twin::OnWrite((DWORD*)data + t * dstPitch + l, dstPitch, r - l, b - t);
+
 				LONG height = size.cy;
 				LONG y = pt.y;
 				do
@@ -3596,6 +3608,7 @@ namespace Hooks
 			colorFill = Convert565toRGB(colorFill);
 
 			DWORD* dst = (DWORD*)data + pt.y * sizePitch->cx + pt.x;
+			Twin::OnWrite(dst, sizePitch->cx, width, 1);
 			do
 				*dst++ = colorFill;
 			while (--width);
@@ -3613,6 +3626,7 @@ namespace Hooks
 			colorFill = Convert565toRGB(colorFill);
 
 			DWORD* dst = (DWORD*)data + pt.y * sizePitch->cx + pt.x;
+			Twin::OnWrite(dst, sizePitch->cx, 1, height);
 			do
 			{
 				*dst = colorFill;
@@ -3642,6 +3656,7 @@ namespace Hooks
 
 			LONG dstPitch = obj->pitch >> 1;
 			DWORD* dstData = (DWORD*)obj->data + top * dstPitch + left;
+			Twin::OnWrite(dstData, dstPitch, 4, 2);
 
 			DWORD y = 1;
 
@@ -3728,6 +3743,7 @@ namespace Hooks
 
 			DWORD* srcData = *((DWORD**)thisObj[11] + 1);
 			DWORD* dstData = (DWORD*)obj->data;
+			Twin::OnWrite(dstData, dstPitch, size->cx, size->cy);
 
 			if (!isBlend)
 			{
@@ -3812,6 +3828,7 @@ namespace Hooks
 
 			DWORD* srcData = *((DWORD**)thisObj[11] + 1);
 			DWORD* dstData = (DWORD*)obj->data;
+			Twin::OnWrite(dstData, dstPitch, size->cx, size->cy);
 
 			if (!isBlend)
 			{
@@ -3869,6 +3886,7 @@ namespace Hooks
 		if (!flag)
 			return;
 
+		Twin::OnWrite(dstData + top * dstPitch, dstPitch, width, bottom - top);
 		srcData += top * srcPitch;
 		dstData += top * dstPitch + (isMirror ? width - 1 : 0);
 
@@ -3945,6 +3963,7 @@ namespace Hooks
 		if (!flag)
 			return;
 
+		Twin::OnWrite(dstData + top * dstPitch, dstPitch, width, bottom - top);
 		srcData += top * srcPitch;
 		dstData += top * dstPitch + (isMirror ? width - 1 : 0);
 
@@ -4023,6 +4042,7 @@ namespace Hooks
 	{
 		DWORD pitch = obj->pitch >> 1;
 		color = Convert565toRGB(color);
+		Twin::OnWrite((DWORD*)obj->data + loc->y * pitch + loc->x, pitch, count, 1);
 
 		for (DWORD* data = (DWORD*)obj->data + loc->y * pitch + loc->x; count; ++data, --count)
 			*data = color;
