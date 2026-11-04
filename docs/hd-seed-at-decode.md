@@ -30,7 +30,8 @@ All seeds go through `ImageReplace.cpp:AddRange`. That is the one place where na
 | Store image (`StoreLoad` / `StoreDraw`) | `ImageReplace.cpp:StoreDraw`, after the game decoded the file into `desc` (data, rect, pitch) | `SeedStore`: when the file is a packer sheet, a sheet seed (below). Otherwise one piece, the pack frame the file name resolves to (`StoreFrame`), over the whole image |
 | Packer sheet behind `Build`/`Render` images | Loaded through the image store too: the sheet PNG is a file of the `.ff`, decoded by `StoreDraw`. Evidence: `_CUDEFAUL` is a `Build` image with one 24x54 part, and its store decode resolved to the same pack frame | `ImageReplace.cpp:SeedSheet` builds the sheet from the archive's `-INDEX.OPT`, `-IMAGES.OPT` and `-ANIMS.OPT` (`LoadSheets`) |
 | Face | `ImageReplace.cpp:FaceLoad` decodes it, but the stride is unknown there; `OnFaceCopy` registers it at its first `DrawFaces` with the real pitch. That happens before the hook's twin calls | `SeedStore`, kind `face`, one piece |
-| Image decoded by a loader other than the store (full-screen backgrounds, battle backgrounds, the map buffers' art) | The `.ff` record the game read last with that image's size, then the indexed blit of exactly that size out of the scratch (see Record reads) | `RecordDecode` builds the pieces like `SeedStore`/`SeedSheet`; they are seeded at the blit's destination, the 1152x1152 scratch, and travel with the copy out of it |
+| Full-screen backgrounds, dialog panels, battle sheets, the map buffers' art | Also `StoreDraw` (see The loader is StoreDraw). The 8-bit decode is too big for the store's 32 bpp range, so it is captured for the transfer only, and the indexed blit out of the scratch is named by its source pointer | The decode snapshot path (`XferIndexedTry`), or the loader's own pieces (`XferLoaderSeed`), seeded at the blit's destination in the 1152x1152 scratch; the copy out of it carries the 4K |
+| Image decoded by a loader other than the store (none seen so far) | The `.ff` record the game read last with that image's size, then the indexed blit of exactly that size out of the scratch (see Record reads) | `RecordDecode` builds the pieces like `SeedStore`/`SeedSheet` |
 | Ground tile and border textures (`TileFactory` / `BorderFactory`) | Not seeded | Nothing replays from them; see Ground |
 
 `StoreDraw` now reseeds on every call in seed mode. The match path returned early when the same image was drawn into the same memory again, but a repeat decode through a hooked routine marks the memory dirty, and that drops the earlier seed. A repeat decode over the image's own range keeps the range and its twin (`AddRange`, `rangeW`/`rangeH`). If no hook saw a write since the last seed there, the seed is skipped as still intact (`repeat decodes still intact`).
@@ -159,7 +160,7 @@ The main menu background and many interface parts were still 1x: `from 1x-only t
 2. `Pixel_Blit_Indexed_to_565` converts them into twin 4, the 1152x1152 scratch surface. The first such blit's caller is `Discipl2.exe+105107`.
 3. A `Blt` (`+267FB8 < +267EEE`) copies twin 4 into the surface of the image's size, which is then copied to the screen.
 
-None of these decodes passes `StoreDraw`: the `twin indexed blit #n from other memory` lines show `latest decode #0 -` or a small, older store decode. So some other loader decodes them, and nothing named them.
+The `twin indexed blit #n from other memory` lines show `latest decode #0 -` or a small, older store decode, so these decodes looked as if they did not pass `StoreDraw`, and nothing named them. The 17:54 run showed that they do pass it, and that the store range had rejected them (see The loader is StoreDraw).
 
 The binary is not in the repository, so the loader's address could not be found from the code alone. Every image loader reads its PNG from a `.ff` record, though, and the game does that through its own `ReadFile` import. So the record read is hooked at the import, not inside the game.
 
@@ -206,14 +207,64 @@ The DLL writes the game's code around the addresses the logs name to `twin-code.
 - per region: its address, size, file offset and a 20-byte reason;
 - the bytes.
 
-There is at most 64 KB in 64 regions; overlapping regions are merged. The regions are:
+There is at most 160 KB in 128 regions; overlapping regions are merged. The regions are:
 
 - v2.02b only: ±0x400 around `0x00505107`, `0x0050515E`, `0x00667FB8`, `0x00667EEE` and `0x0067298E`;
+- v2.02b only: ±0x600 around `StoreDraw`'s caller `0x0052AF88`, the record open and size `0x00523A00`/`0x00523A9D`, the row remap `0x005220A1`, the conversion's `0x0066DD79`/`0x0066E011`, and the `ReadFile` callers `0x005208FE`, `0x00520DE5`, `0x005A5FC4`, `0x0051FEE4`;
+- ±0x600 around `StoreDraw`'s caller, each frame of a loader-named blit's chain, and each return address the stack scan found above it (`Twin::StackCallers`: up to 2048 DWORDs above the blit's slot, values into the game that follow a call; the conversion keeps no frame pointer, so its caller is only found this way, and a stale value can be among them);
 - ±0x400 around `StoreDraw` and `StoreLoad`, and ±0x200 around the `FaceLoad` call;
 - ±0x200 around each of the first 6 `call` targets in `StoreDraw`'s first 0x200 bytes (the decode routine is one of them);
 - ±0x400 around each frame of every new call chain of an unnamed or record-named indexed blit, and around each `.ff` `ReadFile` caller.
 
 Call chains come from `Twin::WalkFrames`. It takes the return address in the blit's own slot (`_AddressOfReturnAddress()` in `Pixel_Blit_Indexed_to_565`), then the first saved-EBP and return-address pair above it, then the EBP chain, up to 6 frames, each checked to follow a `call` in the game. To disassemble one region: `dd if=twin-code.bin bs=1 skip=<offset> count=<size> of=r.bin` and `objdump -D -b binary -m i386 --adjust-vma=<address> r.bin`.
+
+## The loader is StoreDraw (17:54 run)
+
+### What the run showed
+
+The city development screen, the main menu background and most panels were still 1x. Every unnamed indexed blit (800x600, 688x1014, 748x896, 800x664, 640x600, 483x600, 419x600, 990x600, 800x1095 and others) came right after a `twin decode named #n ... found by the store decode` line of exactly its size: `_WATER.PNG 688x1014`, `DLG_MAIN_MENU.PNG 800x664`, `DLG_BUILD_STRUCTURE.PNG 483x600`, `BG_UNDEAD.PNG 640x600`, `CITY_0_BG.PNG 990x600` and so on. So these images do pass `StoreDraw`, and their names are known. No other loader was seen.
+
+They were still unnamed for two reasons:
+
+1. **`AddRange` rejected the decode.** The store range reads the decode as 32 bpp at half the pitch field: 576 DWORDs, 2304 bytes a row. The decode is 8-bit, 1152 bytes a row, in a 1152x1152 scratch. Any image wider than 576 failed `pitch < w`, and any image of more than about 576 rows failed `IsBadReadPtr`, because the 32 bpp reading runs past the scratch. `SeedStore` never ran, so there was no capture, no `twin seed decode` line and no seed. Small sprites fit, which is why they worked. In the 17:54 log, 6 of the first 11 store draws have no art (`decodes with art store 5`), and they are exactly the 6 unnamed blits.
+2. **The record read could not stand in.** `StoreDraw` reads its own record (below), so `RecordTaken` claimed the read, and the blit found `no record read of this size`. Most reads were not even seen. `StoreDraw` opens the `.ff` again for every record, and the long-lived handles had filled the 48-slot handle table: `untracked` grew with every store draw (62, 154, 178). Only 1 read was taken by `StoreDraw`, and none named a blit.
+
+### Disassembly (v2.02b, Discipl2.exe stamp 3FFD92DC, `twin-code.bin` of 17:54)
+
+| Address | What | Convention and arguments |
+|---|---|---|
+| `0x00520C53` | `StoreDraw`, the store image's draw slot (`image_store_draw`, already hooked through the vtable slot `0x006D6854`) | `__thiscall`, `ecx` = store image (`+4` archive holder, `+8` record id, `+0x10` palette holder with the palette index at byte `+0x408` and the row remap flag at byte `+0x41C`); one stack argument, the destination `BlitObject` (format byte `+0`, data `+4`, clip rect `+8..+0x14`, pitch field `+0x18`); `ret 4`. It checks the clip against the record's size, reads the record (`0x00520D81`), gets a decoder (`0x00544A80`), wraps the buffer in a stream (`0x0057F8C9`) and calls the decoder's `+8` with the data, pitch and height, so the PNG is decoded straight into `desc->data` at `desc->pitch`. With the remap flag set, every row goes through `0x005220A1`. It returns to `0x0052AF88` |
+| `0x00520D81` | reads one record into a buffer | `__thiscall`, `ecx` = buffer; stack: archive holder, record id, a third argument. It opens the record's file at its data (`0x00523A00`), takes its size (`0x00523A9D`), resizes the buffer (`0x0051AFA4`), makes one `ReadFile` (return address `0x00520DE5`, the record-read caller in the log) and calls `CloseHandle` |
+| `0x00520884` | reads a record by name (`-INDEX.OPT`, `-IMAGES.OPT`) | opens it by name (`0x0052396F`), takes its size (`0x00523A5B`), and its `ReadFile` returns to `0x005208FE` |
+| `0x0051FEE4` | the MqDB's chunked reader on its long-lived handle: `SetFilePointer`, then `ReadFile` | these are the 10654 reads "inside a record" |
+| `0x005A5FC4` | ground and border tile reads (the `TileFactory`/`BorderFactory` path) | not converted through the scratch |
+| `0x0066DDC0` | converts an 8-bit DirectDraw surface into a 16 bpp one | `__cdecl (src surface, dst surface, rect)`. It gets `GetSurfaceDesc` of both surfaces, the source's palette (`GetPalette`, `GetEntries(0, 256)`) and its source colour key (`GetColorKey(DDCKEY_SRCBLT)`, mapped to magenta), locks both and calls `0x0066DD50`. It has no frame pointer, so `WalkFrames` stops in it |
+| `0x0066DD50` | thunk into the pixel function table (`[0x008304EC]`, slot `+4`, `Pixel_Blit_Indexed_to_565`) | 6 stack arguments, `ret 0x18`. Its return address `0x0066DD79` is the blit's slot; `0x0066E011` is the return into `0x0066DDC0` |
+| `0x0066DC20`, `0x0066DCC0` | methods that call `0x0066DDC0`, of the object that owns the two surfaces (`+0x10` source, `+0x14` destination, `+0x18` palette, `+0x08`/`+0x0C` size) | `__thiscall`, no stack arguments |
+
+So the store's own PNG decoder inside `StoreDraw` writes the 8-bit data into the scratch (`1FFB0000` or `0F1C0000`, an 8-bit 1152x1152 surface). `0x0066DDC0` then converts it into twin 4. At `StoreDraw`, the image name, the record id (`this+8`), and the scratch pointer and size (`desc`) are all known. This dump does not hold `StoreDraw`'s caller at `0x0052AF88` or the caller of `0x0066DDC0`; the next one does (see Code dump).
+
+### The hook
+
+No new game hook is needed: `StoreDraw` is the loader, and it is hooked in every build that has `image_store` addresses (v2.02b and v3.01b).
+
+- **Loader record.** `ImageReplace.cpp:StoreDrawn` keeps the latest decode (`loader`): file, archive, `BlitObject` data, pitch field, format byte, clip rect, frame, caller, a sequence number and the transfer capture it got.
+- **Capture without a 32 bpp range.** When the 32 bpp reading does not fit and the decode is 8-bit, `AddRange` still calls `SeedStore`, with `memoryTwin = FALSE`. `SeedArt` then only captures the decode for the transfer (`XferCapture`, snapshot readable as 16 and 8 bpp). It makes no memory twin over the scratch.
+- **Naming the blit.** `XferIndexedTry` asks `ImageReplace::LoaderDecode` whether the blit's source lies inside the latest decode, at its pitch, within 600 frames. If it does, the name is certain: there is no size match and no pixel compare.
+  - If the capture belongs to that decode, the existing "indexed blit from the decode" path seeds it (guard and `XferSeed`), and the loader line says `the decode snapshot`. If its guard fails, the loader's pieces are seeded anyway.
+  - Otherwise `XferLoaderSeed` builds the pieces from the file. `NamePieces` takes a sheet's pieces from `-INDEX.OPT`/`-IMAGES.OPT`/`-ANIMS.OPT`, or a plain image's pack frame. `XferLoaderSeed` clips the pieces to the blitted part and seeds them at the blit's destination (`SeedAt`, as a transfer). Twin 4 then carries the 4K into the surface the game copies it to.
+  - Once a newer decode in the scratch has no capture of its own, the capture of an older decode is no longer used, because the scratch now holds the newer image.
+- **Sheets.** 688x1014, 748x896, 640x1072 and the battle sheets are sheets. Their pieces come from the same `SheetPieces` as a store sheet's. A sheet with no piece is logged with the reason (unmapped, additive or outside), either on its loader line or as `twin decode without 4K #n`.
+
+### Record reads
+
+- The handle table has 1024 slots. The summary line now says why a `.ff` open was not tracked (table full, or an archive without a file table), and how many tracked handles are open now and at most.
+- With the table no longer full, `StoreDraw`'s own reads are records again. `RecordTaken` claims them, so the record path stays a fallback for a loader that does not pass `StoreDraw`. None has been seen.
+
+### Coverage by screen
+
+- **Per screen.** Each large plain image (at least 480x480, not a sheet) that `StoreDraw` decodes names the current screen (`Twin::ScreenLabel`). Every copy is counted under that screen, 4K px against 1x px, in `twin coverage per screen since start` (24 screens; the one with the fewest px makes room).
+- **Names of 1x sources.** Every twin keeps the latest named image that reached it (`Arrival.known`), whether seeded into it or carried in by a copy. The coverage list shows the store name or, marked `~`, that name.
 
 ## Streaming
 
@@ -332,15 +383,18 @@ Ground in seed mode therefore keeps `GroundArt`/`DrawGround` (`CmdGround`), exac
 | `twin seed records ...` | every 5 s | pending, evicted, redraws, repeats, wait avg/max, replayed commands/pieces, art missing at replay, masked keyed copies |
 | `image seed sources since start: ...` | every 5 s | store draws, faces, ranges, sheet archives, ground, files and frames prefetched at the store load |
 | `twin coverage 5s: ...` | every 5 s | copies from sources carrying 4K, from 1x-only twins, from untwinned memory (count, px) |
-| `twin coverage top 1x-only copy sources ...` | every 5 s, up to 4 lines | rank, twin, kind, buffer, size, px, copies, store name. This is the coverage checklist |
+| `twin coverage top 1x-only copy sources ...` | every 5 s, up to 4 lines | rank, twin, kind, buffer, size, px, copies, store name, or `~` and the latest named image that reached the twin. This is the coverage checklist |
 | `twin arrival copies in [rank] twin ...` | every 5 s, top 4 | count, the first and the last copy in: source twin and rect, 4K or 1x, game caller, the source's counters and its last write there |
 | `twin copy in #n` | first 96 | each copy of at least 400x400 or into a priority surface, as above; also from untwinned surfaces |
-| `twin indexed blit #n from other memory` | first 32, then each new size and call chain (96 more) | an indexed blit no store decode and no record read names: source, size, destination, the latest decode, and the call chain (6 frames, module+offset) |
+| `twin indexed blit #n from other memory` | first 32, then each new size and call chain (96 more) | an indexed blit that no store decode, no loader decode and no record read names: source, size, destination, the latest decode, the call chain (6 frames, module+offset) and the stack scan above it |
 | `image record read #n` | first 48 | a `.ff` read by the game: archive, record id, file name, PNG size, position, bytes, game or other thread, `ReadFile` caller < its caller |
-| `image record reads since start` | every 5 s | `.ff` opens, reads (records, PNG, sheet or plain, header only, inside a record), reads on other threads, decodes named by a read, reads taken by `StoreDraw`, decodes no read matched, the distinct `ReadFile` callers |
+| `image record reads since start` | every 5 s | `.ff` opens (untracked: table full, no file table; open now, max), reads (records, PNG, sheet or plain, header only, inside a record), reads on other threads, decodes named by a read, reads taken by `StoreDraw`, decodes no read matched, the distinct `ReadFile` callers |
 | `twin decode named #n` | first 240 | a named decode: name, size, record, archive, the loader and how the name was found. Store decodes: `StoreDraw`'s caller, first decode of each loaded file. Record reads: the `ReadFile` caller and the blit's call chain, frames between read and blit, other unread reads of the size, the target and the seed outcome or why there is no 4K |
-| `twin decode without 4K #n` | first 32 | a blit of a store decode that has a name but no 4K, with the reason |
-| `twin decode unnamed since start` | every 5 s | unnamed indexed blits (total, in 5 s, distinct sizes and chains), record seeds (seeded, deferred, no 4K, no twin), blits of named decodes without 4K, and the top 5 unnamed sizes with count, age and the first 3 frames of their chain |
+| `twin decode named #n via loader` | first 160 | a blit named by the latest `StoreDraw` decode: name, decode size, record, archive, sheet or plain, pieces (all, and in the blitted part), the part, decode number and age, `StoreDraw`'s caller, the blit's chain and the stack scan above it, the destination twin and pixel, the path (the decode snapshot, or the loader's pieces and why) and the outcome or why there is no 4K. Blits through the decode snapshot are logged from 256x256 |
+| `twin decode without 4K #n` | first 32 | a blit of a store decode that has a name but no 4K, with the reason; small loader-named sprites without 4K land here too |
+| `twin decode unnamed since start` | every 5 s | unnamed indexed blits (total, in 5 s, distinct sizes and chains), named via loader (sheets, by the decode snapshot, by loader pieces: seeded, deferred, no 4K, no twin; 8-bit decodes captured without a memory twin), record seeds (seeded, deferred, no 4K, no twin), blits of named decodes without 4K, and the top 5 unnamed sizes with count, age and the first 3 frames of their chain |
+| `image loader decodes since start` | every 5 s | `StoreDraw` decodes (8-bit), decodes captured without a 32 bpp range (and 32 bpp readings that were unreadable), indexed blits from the latest decode (part of one), from a decode older than 600 frames |
+| `twin coverage per screen since start` | every 5 s | per screen (named by its background, `*` = now): share of 4K px, 4K and 1x Mpx, untwinned Kpx; the top 10 by px |
 | `twin code dump #n` | when a region was added, at the 5 s log | `twin-code.bin`: regions, bytes, refused regions, exe base and timestamp, each region's exe offset and size |
 | `twin trap priority ...` | every 5 s | the priority surfaces with their trapped writes, arms, pairs, skipped quick re-arms, trapped writes marked dirty, `rep movs` hints replayed or failing the guard |
 | `twin trap priority write #n` | first 96 | a new writer on a priority surface, with registers |
@@ -358,6 +412,7 @@ The tile check (`twin tiles check`, `twin repair`), the GPU check (`twin check t
 
 ## Open gaps
 
+1. **The loader match is by pointer into the latest decode.** If other code wrote the scratch between `StoreDraw` and the blit (none is known; the 17:54 log has none), the blit would take the latest decode's name. The 600-frame limit bounds it, and `image loader decodes` counts the matches. The capture-only seed reads the decode as 16 and 8 bpp; a true-colour decode too big for its 32 bpp reading is still not seeded.
 1. **Record reads are assumed, not seen.** If the game memory-maps the `.ff` files or reads them through a CRT DLL, `ReadRecordHook` sees nothing: `image record reads since start` then shows 0 reads, and the unnamed line still names the loader's call chain. `twin-code.bin` holds that code for the next round, which can hook the record read or the loader directly. A record read that is not followed by its decode, then another image of the same size decoded with no read, would take the wrong name; `twin decode named` logs the number of unread reads of the size, and the read is claimed by its first match.
 1. **The routine that writes the decode into the surface is still unknown.** The 15:32 run showed it uses no lock. The trap names it in the next run (`twin trap writer`), and its first write into a fresh surface is itself a transfer candidate. If the writer is plainly a copy from the decode scratch (or from another seeded record) into the surface, that EIP is the transfer point to hook directly. The 8-bit reading of the snapshot is still a suspicion until the `twin seed decode` lines show format byte 0.
 2. **Flipped records** (`Build` with flipped = 1) use a mirrored sheet. Only the decoded, unflipped sheet is seeded. If the game mirrors with a hooked op, the 4K follows. If it uses an unhooked CPU loop, the tile check repairs it to 1x.

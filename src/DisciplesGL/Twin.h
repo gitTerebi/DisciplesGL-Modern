@@ -59,7 +59,12 @@ namespace Twin
 		DWORD outside;
 		DWORD shared;
 	};
-	VOID SeedArt(const VOID* first, LONG pitch, LONG width, LONG height, SeedKind kind, const CHAR* name, const SeedPiece* pieces, DWORD count, const SeedConflict* conflicts, DWORD conflictCount, const SeedSheetStats* sheet);
+	// memoryTwin FALSE: an 8-bit decode whose 32 bpp reading runs past the scratch; it is only captured for the transfer, no memory twin is made over it
+	VOID SeedArt(const VOID* first, LONG pitch, LONG width, LONG height, SeedKind kind, const CHAR* name, const SeedPiece* pieces, DWORD count, const SeedConflict* conflicts, DWORD conflictCount, const SeedSheetStats* sheet, BOOL memoryTwin = TRUE);
+	// the latest transfer capture's sequence, and whether it holds a snapshot with pieces
+	DWORD CaptureSeq(BOOL* valid);
+	// the image the coverage is counted under: the latest large plain image a loader decoded (the screen's background)
+	VOID ScreenLabel(const CHAR* name);
 	// the game decodes store art into a scratch buffer and then writes it into a surface by CPU; these follow it there
 	VOID DecodeBegin();
 	VOID DecodeEnd();

@@ -171,8 +171,12 @@
 #define UNNAMED_LOGS 96
 #define DECODE_LOGS 240
 #define ARTLESS_LOGS 32
-#define CODE_LIMIT (64 * 1024)
-#define CODE_REGIONS 64
+#define CODE_LIMIT (160 * 1024)
+#define CODE_REGIONS 128
+#define LOADER_LOGS 160
+#define STACK_SCAN 2048
+#define STACK_CALLERS 6
+#define SCREEN_LABELS 24
 #define SEED_PENDING_FRAMES 3600
 #define SEED_WAIT_DEFAULT 0
 #define SEED_CONFLICT_CELL 16
@@ -396,6 +400,8 @@ namespace Twin
 		CopyIn lastIn;
 		WriteNote notes[WRITE_RING];
 		DWORD noteHead;
+		// the latest named image that reached this twin: seeded into it, or carried by a copy in
+		CHAR known[32];
 	};
 
 	struct Record {
@@ -731,6 +737,8 @@ namespace Twin
 		DWORD palette[256];
 		DWORD chain[INDEXED_CHAIN];
 		DWORD chainCount;
+		DWORD scan[STACK_CALLERS];
+		DWORD scanCount;
 	};
 
 	// indexed blits from memory that neither the latest store decode nor a record read names, by size and call chain
@@ -750,6 +758,22 @@ namespace Twin
 		DWORD interval;
 		DWORD logs;
 	} unnamed;
+
+	// copies counted under the screen they happened on, named by its background
+	struct ScreenCover {
+		CHAR name[32];
+		LONGLONG px4K;
+		LONGLONG px1x;
+		LONGLONG pxUntwinned;
+		DWORD since;
+	};
+
+	struct {
+		ScreenCover list[SCREEN_LABELS];
+		DWORD count;
+		DWORD current;
+		DWORD evicted;
+	} screens;
 
 	// the game's code around addresses the logs name, written to twin-code.bin
 	struct {
@@ -858,6 +882,17 @@ namespace Twin
 		DWORD recordDeferred;
 		DWORD recordNoArt;
 		DWORD recordNoFit;
+		DWORD loaderNamed;
+		DWORD loaderSnapshot;
+		DWORD loaderSeeded;
+		DWORD loaderDeferred;
+		DWORD loaderNoArt;
+		DWORD loaderNoFit;
+		DWORD loaderSheets;
+		DWORD loaderLogs;
+		SeedPiece* loaderPieces;
+		DWORD loaderCap;
+		DWORD captureOnly;
 		DWORD namedLogs;
 		DWORD blank;
 		DWORD exact[5];
@@ -1023,6 +1058,8 @@ namespace Twin
 	DWORD GameCaller();
 	VOID RegText(DWORD value, CHAR* text);
 	VOID TrapName(DWORD address, CHAR* text);
+	BOOL TrapExe(DWORD address);
+	BOOL TrapReturn(DWORD address);
 	VOID LogCopyIns(const DWORD* top, DWORD found);
 	VOID CodeFlush();
 	VOID TrapDrain();
@@ -3925,6 +3962,8 @@ namespace Twin
 		SeedCounters* c = &seeds.kinds[kind];
 		RECT rect = *at;
 		LONG width = rect.right - rect.left, height = rect.bottom - rect.top;
+		if (label)
+			lstrcpyn(twin->arrive.known, label, sizeof(twin->arrive.known));
 		if (twin->seedCount)
 			for (DWORD i = 0; i < seeds.top; ++i)
 			{
@@ -4158,10 +4197,10 @@ namespace Twin
 		}
 	}
 
-	VOID SeedArt(const VOID* first, LONG pitch, LONG width, LONG height, SeedKind kind, const CHAR* name, const SeedPiece* pieces, DWORD count, const SeedConflict* conflicts, DWORD conflictCount, const SeedSheetStats* sheet)
+	VOID SeedArt(const VOID* first, LONG pitch, LONG width, LONG height, SeedKind kind, const CHAR* name, const SeedPiece* pieces, DWORD count, const SeedConflict* conflicts, DWORD conflictCount, const SeedSheetStats* sheet, BOOL memoryTwin)
 	{
 		Timed timed("SeedArt");
-		if (!Active() || !SeedMode() || !first || width <= 0 || height <= 0 || pitch < width || (DWORD)kind >= SeedKinds)
+		if (!Active() || !SeedMode() || !first || width <= 0 || height <= 0 || (memoryTwin && pitch < width) || (DWORD)kind >= SeedKinds)
 			return;
 
 		Sync();
@@ -4188,6 +4227,12 @@ namespace Twin
 		{
 			++c->noArt;
 			SeedLog("skipped: no piece maps to a pack frame", kind, label, NULL, TWIN_NONE, &local, pitch, NULL, 0);
+			return;
+		}
+		// the 8-bit scratch read as 32 bpp is no image; the indexed blit out of it takes the pieces
+		if (!memoryTwin)
+		{
+			++xfer.captureOnly;
 			return;
 		}
 
@@ -4222,6 +4267,41 @@ namespace Twin
 	VOID XferBind();
 	BOOL XferSnapshot(const VOID* first, LONG pitch, LONG width, LONG height, const SeedPiece* pieces, DWORD count, const SeedConflict* conflicts, DWORD conflictCount);
 	VOID XferLogDecode();
+
+	DWORD CaptureSeq(BOOL* valid)
+	{
+		*valid = xfer.valid;
+		return xfer.seq;
+	}
+
+	VOID ScreenLabel(const CHAR* name)
+	{
+		if (!name || !*name)
+			return;
+		for (DWORD i = 0; i < screens.count; ++i)
+			if (!StrCompareNum(screens.list[i].name, name, sizeof(screens.list[i].name) - 1))
+			{
+				screens.current = i + 1;
+				return;
+			}
+		DWORD k = screens.count;
+		if (k == SCREEN_LABELS)
+		{
+			// the screen with the fewest pixels makes room
+			k = 0;
+			for (DWORD i = 1; i < SCREEN_LABELS; ++i)
+				if (screens.list[i].px4K + screens.list[i].px1x < screens.list[k].px4K + screens.list[k].px1x)
+					k = i;
+			++screens.evicted;
+		}
+		else
+			++screens.count;
+		ScreenCover* c = &screens.list[k];
+		MemoryZero(c, sizeof(ScreenCover));
+		lstrcpyn(c->name, name, sizeof(c->name));
+		c->since = game.frameNo;
+		screens.current = k + 1;
+	}
 
 	VOID DecodeSource(const VOID* data, LONG pitchField, BYTE trueColor, const RECT* rect)
 	{
@@ -5069,12 +5149,150 @@ namespace Twin
 			ChainText(u->chain, min(u->chainCount, (DWORD)3), chain);
 			at += StrPrint(at, " %dx%d x%u %u frames ago: %.80s;", u->w, u->h, u->count, game.frameNo - u->frameNo, chain);
 		}
-		DebugLog("twin decode unnamed since start: %u indexed blits (%u in 5s) of %u sizes and chains (table full %u) | named by a record read %u (seeded %u, deferred %u, no 4K %u, no twin %u), blits of named decodes without 4K %u | left:%s",
-			unnamed.total, unnamed.interval, unnamed.count, unnamed.full, xfer.recordMatches, xfer.recordSeeded, xfer.recordDeferred, xfer.recordNoArt, xfer.recordNoFit, xfer.indexedArtless, *text ? text : " none");
+		DebugLog("twin decode unnamed since start: %u indexed blits (%u in 5s) of %u sizes and chains (table full %u) | named via loader %u (sheets %u; by the decode snapshot %u; by loader pieces: seeded %u, deferred %u, no 4K %u, no twin %u; 8-bit decodes captured without a memory twin %u) | named by a record read %u (seeded %u, deferred %u, no 4K %u, no twin %u), blits of named decodes without 4K %u | left:%s",
+			unnamed.total, unnamed.interval, unnamed.count, unnamed.full, xfer.loaderNamed, xfer.loaderSheets, xfer.loaderSnapshot, xfer.loaderSeeded, xfer.loaderDeferred, xfer.loaderNoArt, xfer.loaderNoFit,
+			xfer.captureOnly, xfer.recordMatches, xfer.recordSeeded, xfer.recordDeferred, xfer.recordNoArt, xfer.recordNoFit, xfer.indexedArtless, *text ? text : " none");
 		unnamed.interval = 0;
 	}
 
-	VOID XferIndexedTry(const BYTE* src, LONG srcPitch, const DWORD* palette, const DWORD* dst, LONG dstPitch, LONG width, LONG height, const DWORD* chain, DWORD chainCount)
+	// the stack above the blit, past the frame pointer chain: the 8-bit conversion (0x0066DDC0 in v2.02b) keeps no frame pointer, so its caller is only found by a scan; a stale value can be among them
+	DWORD StackCallers(const DWORD* slot, const DWORD* chain, DWORD chainCount, DWORD* out, DWORD max)
+	{
+		if (!slot)
+			return 0;
+		const NT_TIB* tib = (const NT_TIB*)__readfsdword(0x18);
+		DWORD high = (DWORD)tib->StackBase;
+		if ((DWORD)slot < (DWORD)tib->StackLimit || (DWORD)slot + sizeof(DWORD) > high || ((DWORD)slot & 3))
+			return 0;
+		DWORD n = 0;
+		for (DWORD i = 1; i < STACK_SCAN && (DWORD)(slot + i + 1) <= high && n < max; ++i)
+		{
+			DWORD v = slot[i];
+			if (!TrapExe(v) || !TrapReturn(v))
+				continue;
+			BOOL seen = FALSE;
+			for (DWORD k = 0; k < chainCount && !seen; ++k)
+				seen = chain[k] == v;
+			for (DWORD k = 0; k < n && !seen; ++k)
+				seen = out[k] == v;
+			if (!seen)
+				out[n++] = v;
+		}
+		return n;
+	}
+
+	VOID LoaderLog(const ImageReplace::RecordName* ln, LONG width, LONG height, DWORD allPieces, DWORD partPieces, const Record* twin, DWORD id, LONG x, LONG y, const CHAR* path, const CHAR* outcome,
+		const DWORD* chain, DWORD chainCount, const DWORD* scan, DWORD scanCount)
+	{
+		if (xfer.loaderLogs >= LOADER_LOGS)
+			return;
+		++xfer.loaderLogs;
+		CodeDump(ln->caller, 0x600, "StoreDraw caller");
+		for (DWORD k = 0; k < chainCount; ++k)
+			CodeDump(chain[k], 0x600, "loader blit caller");
+		for (DWORD k = 0; k < scanCount; ++k)
+			CodeDump(scan[k], 0x600, "loader stack caller");
+		CHAR loaderText[48], blit[200], above[200];
+		TrapName(ln->caller, loaderText);
+		ChainText(chain, chainCount, blit);
+		ChainText(scan, scanCount, above);
+		DebugLog("twin decode named #%u via loader: %.40s %dx%d record %u (%s) %s, pieces %u (in the blitted part %u) | blit of %d,%d %dx%d, decode #%u %u frames before | StoreDraw called from %s, converted by %s, stack above %s | -> twin %d %s at %d,%d | %s: %s",
+			xfer.loaderLogs, ln->name, ln->width, ln->height, ln->record, ln->archive, ln->sheet ? "sheet" : "plain", allPieces, partPieces, ln->sx, ln->sy, width, height, ln->seq, ln->framesAgo,
+			loaderText, blit, above, twin ? (INT)id : -1, twin ? TwinKind(twin) : "none", x, y, path, outcome);
+	}
+
+	// the latest StoreDraw decode names the blit by its source pointer, not by its size; certain without a pixel compare
+	VOID XferLoaderSeed(const BYTE* src, LONG srcPitch, const DWORD* dst, LONG dstPitch, LONG width, LONG height, const DWORD* chain, DWORD chainCount, const DWORD* scan, DWORD scanCount,
+		const CHAR* path)
+	{
+		ImageReplace::RecordName name;
+		if (!ImageReplace::LoaderDecode(src, srcPitch, width, height, &name, TRUE))
+			return;
+		const ImageReplace::RecordName* ln = &name;
+		++xfer.loaderNamed;
+		if (ln->sheet)
+			++xfer.loaderSheets;
+		DWORD id = TWIN_NONE;
+		LONG x = -1, y = -1;
+		Record* twin = FindAddress(dst, &id);
+		BOOL fits = twin && !twin->memory && PixelPos(twin, dst, dstPitch, width, height, &x, &y);
+
+		const SeedPiece* pieces = ln->pieces;
+		DWORD count = ln->count;
+		const SeedConflict* conflicts = ln->conflicts;
+		DWORD conflictCount = ln->conflictCount;
+		BOOL whole = !ln->sx && !ln->sy && width == ln->width && height == ln->height;
+		if (!whole && count)
+		{
+			if (count > xfer.loaderCap)
+			{
+				if (xfer.loaderPieces)
+					MemoryFree(xfer.loaderPieces);
+				xfer.loaderPieces = (SeedPiece*)MemoryAlloc(count * sizeof(SeedPiece));
+				xfer.loaderCap = xfer.loaderPieces ? count : 0;
+			}
+			RECT sub = { ln->sx, ln->sy, ln->sx + width, ln->sy + height };
+			DWORD n = 0;
+			for (DWORD i = 0; i < count && xfer.loaderPieces; ++i)
+			{
+				SeedPiece p = ln->pieces[i];
+				if (!IntersectRect(&p.to, &ln->pieces[i].to, &sub))
+					continue;
+				OffsetRect(&p.to, -sub.left, -sub.top);
+				OffsetRect(&p.place, -sub.left, -sub.top);
+				xfer.loaderPieces[n++] = p;
+			}
+			pieces = xfer.loaderPieces;
+			count = n;
+			conflicts = NULL;
+			conflictCount = 0;
+		}
+
+		SeedKind kind = ln->sheet ? SeedSheet : SeedStore;
+		DWORD outcome = 0;
+		const CHAR* text;
+		CHAR reason[160];
+		if (!count)
+		{
+			++xfer.loaderNoArt;
+			StrPrint(reason, "no 4K: %.140s", ln->count ? "no piece of the sheet falls in the blitted part" : ln->reason ? ln->reason : "no piece");
+			text = reason;
+			if (fits)
+				lstrcpyn(twin->arrive.known, ln->name, sizeof(twin->arrive.known));
+		}
+		else if (!fits)
+		{
+			++xfer.loaderNoFit;
+			text = twin ? "the destination is memory or does not fit its twin" : "no twin holds the destination";
+		}
+		else
+		{
+			Sync();
+			RECT at = { x, y, x + width, y + height };
+			++seeds.kinds[kind].events;
+			outcome = SeedAt(twin, id, &at, twin->pitch, kind, ln->name, pieces, count, conflicts, conflictCount, TRUE);
+			if (outcome)
+				++xfer.loaderSeeded;
+			if (outcome == 2)
+				++xfer.loaderDeferred;
+			text = outcome == 2 ? "seeded, art deferred" : outcome ? "seeded" : "nothing recorded (repeat)";
+		}
+		if (!count)
+			++xfer.indexedArtless;
+		// small sprites without 4K keep their own line, so the loader lines stay for the images that were unnamed before
+		BOOL big = (LONGLONG)ln->width * ln->height >= 256 * 256;
+		if (big || (count && !fits) || (!count && xfer.artlessLogs >= ARTLESS_LOGS))
+			LoaderLog(ln, width, height, ln->count, count, fits ? twin : NULL, id, x, y, path, text, chain, chainCount, scan, scanCount);
+		else if (!count)
+		{
+			++xfer.artlessLogs;
+			DebugLog("twin decode without 4K #%u: %s %.40s %dx%d record %u (%s) blitted at %d,%d %dx%d | %s", xfer.artlessLogs, ln->sheet ? "sheet" : "plain", ln->name, ln->width, ln->height,
+				ln->record, ln->archive, ln->sx, ln->sy, width, height, text);
+		}
+	}
+
+	VOID XferIndexedTry(const BYTE* src, LONG srcPitch, const DWORD* palette, const DWORD* dst, LONG dstPitch, LONG width, LONG height, const DWORD* chain, DWORD chainCount,
+		const DWORD* scan, DWORD scanCount)
 	{
 		if (xfer.valid && (xfer.layouts & Layout32) && (const BYTE*)dst >= xfer.rawData && (const BYTE*)dst < xfer.rawData + (xfer.rawTop + xfer.height) * xfer.rawPitch * 2)
 		{
@@ -5084,7 +5302,18 @@ namespace Twin
 		LONG offset = xfer.rawData ? LONG(src - xfer.rawData) : -1;
 		LONG sy = offset >= 0 && srcPitch > 0 ? offset / srcPitch - xfer.rawTop : -1;
 		LONG sx = offset >= 0 && srcPitch > 0 ? offset % srcPitch - xfer.rawLeft : -1;
-		if (!xfer.valid || !(xfer.layouts & Layout8) || srcPitch != xfer.rawPitch || sx < 0 || sy < 0 || sx + width > xfer.width || sy + height > xfer.height)
+		ImageReplace::RecordName ln;
+		BOOL loader = ImageReplace::LoaderDecode(src, srcPitch, width, height, &ln, FALSE);
+		BOOL fromDecode = xfer.valid && (xfer.layouts & Layout8) && srcPitch == xfer.rawPitch && sx >= 0 && sy >= 0 && sx + width <= xfer.width && sy + height <= xfer.height;
+		// a capture left from an earlier decode in the same scratch fits a part of a newer, uncaptured decode by position alone
+		if (fromDecode && ln.seq && ln.captureSeq != xfer.seq)
+			fromDecode = FALSE;
+		if (!fromDecode && loader)
+		{
+			XferLoaderSeed(src, srcPitch, dst, dstPitch, width, height, chain, chainCount, scan, scanCount, ln.captureSeq ? "loader pieces (the capture did not hold this part)" : "loader pieces (decode not captured)");
+			return;
+		}
+		if (!fromDecode)
 		{
 			++xfer.indexedOther;
 			if (XferArtless(src, srcPitch, dst, dstPitch, width, height))
@@ -5099,13 +5328,16 @@ namespace Twin
 					++game.indexedOtherLogs;
 				else
 					++unnamed.logs;
-				CHAR from[96], to[96], text[200];
+				CHAR from[96], to[96], text[200], above[200];
 				RegText((DWORD)src, from);
 				RegText((DWORD)dst, to);
 				ChainText(chain, chainCount, text);
-				DebugLog("twin indexed blit #%u from other memory: src %s pitch %d %dx%d -> %s pitch %d | latest decode #%u %.32s %dx%d raw %08X pitch %d (at %d,%d of it) %u frames ago | no record read of this size | chain %s",
+				ChainText(scan, scanCount, above);
+				for (DWORD k = 0; k < scanCount; ++k)
+					CodeDump(scan[k], 0x600, "unnamed stack caller");
+				DebugLog("twin indexed blit #%u from other memory: src %s pitch %d %dx%d -> %s pitch %d | latest decode #%u %.32s %dx%d raw %08X pitch %d (at %d,%d of it) %u frames ago | not the loader's latest decode, no record read of this size | chain %s | stack above %s",
 					game.indexedOtherLogs + unnamed.logs, from, srcPitch, width, height, to, dstPitch, xfer.seq, xfer.name[0] ? xfer.name : "-", xfer.width, xfer.height, xfer.rawData, xfer.rawPitch, sx, sy,
-					game.frameNo - xfer.frameNo, text);
+					game.frameNo - xfer.frameNo, text, above);
 			}
 			return;
 		}
@@ -5148,6 +5380,9 @@ namespace Twin
 			++twin->arrive.guardFails;
 			++xfer.guardFails;
 			XferLogReject(via, reason, twin, id, x, y, &g, height);
+			// the source pointer is the loader's decode, so the name holds even where the compare does not
+			if (loader)
+				XferLoaderSeed(src, srcPitch, dst, dstPitch, width, height, chain, chainCount, scan, scanCount, "loader pieces (the decode snapshot's guard failed)");
 			return;
 		}
 
@@ -5159,6 +5394,22 @@ namespace Twin
 		XferCount(verdict, format);
 		DWORD outcome = XferSeed(twin, id, x, y, &sub);
 		XferLogAccept(via, twin, id, x, y, &sub, outcome, &g, verdict, format);
+		if (loader)
+		{
+			++xfer.loaderNamed;
+			++xfer.loaderSnapshot;
+			if (ln.sheet)
+				++xfer.loaderSheets;
+			DWORD inPart = 0;
+			for (DWORD i = 0; i < xfer.count; ++i)
+			{
+				RECT r;
+				inPart += IntersectRect(&r, &xfer.pieces[i].to, &sub) != 0;
+			}
+			if ((LONGLONG)width * height >= 256 * 256)
+				LoaderLog(&ln, width, height, xfer.count, inPart, twin, id, x, y, "the decode snapshot", outcome == 2 ? "seeded, art deferred" : outcome ? "seeded" : "nothing recorded (repeat or no piece)",
+					chain, chainCount, scan, scanCount);
+		}
 	}
 
 	VOID OnIndexedBlit(const BYTE* src, LONG srcPitch, const DWORD* palette, const DWORD* dst, LONG dstPitch, LONG width, LONG height, const DWORD* slot)
@@ -5198,11 +5449,13 @@ namespace Twin
 			b->height = height;
 			MemoryCopy(b->palette, palette, sizeof(b->palette));
 			b->chainCount = WalkFrames(slot, b->chain, INDEXED_CHAIN);
+			b->scanCount = StackCallers(slot, b->chain, b->chainCount, b->scan, STACK_CALLERS);
 			return;
 		}
-		DWORD chain[INDEXED_CHAIN];
+		DWORD chain[INDEXED_CHAIN], scan[STACK_CALLERS];
 		DWORD chainCount = WalkFrames(slot, chain, INDEXED_CHAIN);
-		XferIndexedTry(src, srcPitch, palette, dst, dstPitch, width, height, chain, chainCount);
+		DWORD scanCount = StackCallers(slot, chain, chainCount, scan, STACK_CALLERS);
+		XferIndexedTry(src, srcPitch, palette, dst, dstPitch, width, height, chain, chainCount, scan, scanCount);
 	}
 
 	VOID DecodeBegin()
@@ -5238,7 +5491,7 @@ namespace Twin
 		for (DWORD i = 0; i < blits; ++i)
 		{
 			const XferIndexed* b = &xfer.indexedInside[i];
-			XferIndexedTry(b->src, b->srcPitch, b->palette, b->dst, b->dstPitch, b->width, b->height, b->chain, b->chainCount);
+			XferIndexedTry(b->src, b->srcPitch, b->palette, b->dst, b->dstPitch, b->width, b->height, b->chain, b->chainCount, b->scan, b->scanCount);
 		}
 	}
 
@@ -6507,15 +6760,20 @@ namespace Twin
 	VOID CountCoverage(Record* source, const RECT* from)
 	{
 		LONG px = Area(from);
+		ScreenCover* screen = screens.current ? &screens.list[screens.current - 1] : NULL;
 		if (!source)
 		{
 			++seeds.coverUntwinned;
 			seeds.coverUntwinnedPx += px;
+			if (screen)
+				screen->pxUntwinned += px;
 		}
 		else if (Carries4K(source, from))
 		{
 			++seeds.coverSeeded;
 			seeds.coverSeededPx += px;
+			if (screen)
+				screen->px4K += px;
 		}
 		else
 		{
@@ -6523,7 +6781,38 @@ namespace Twin
 			seeds.coverUnseededPx += px;
 			source->coverPx += px;
 			++source->coverCopies;
+			if (screen)
+				screen->px1x += px;
 		}
+	}
+
+	VOID LogScreens()
+	{
+		if (!screens.count)
+			return;
+		DWORD order[SCREEN_LABELS];
+		for (DWORD i = 0; i < screens.count; ++i)
+		{
+			DWORD k = i;
+			while (k && screens.list[order[k - 1]].px4K + screens.list[order[k - 1]].px1x < screens.list[i].px4K + screens.list[i].px1x)
+			{
+				order[k] = order[k - 1];
+				--k;
+			}
+			order[k] = i;
+		}
+		CHAR text[SCREEN_LABELS * 96 + 1];
+		CHAR* at = text;
+		*at = 0;
+		for (DWORD i = 0; i < screens.count && i < 10; ++i)
+		{
+			const ScreenCover* c = &screens.list[order[i]];
+			LONGLONG all = c->px4K + c->px1x;
+			DWORD pct = all ? DWORD(c->px4K * 100 / all) : 0;
+			at += StrPrint(at, " %s%.28s: 4K %u%% (4K %u Mpx, 1x %u Mpx, untwinned %u Kpx);", order[i] + 1 == screens.current ? "*" : "", c->name, pct,
+				DWORD(c->px4K / 1000000), DWORD(c->px1x / 1000000), DWORD(c->pxUntwinned / 1000));
+		}
+		DebugLog("twin coverage per screen since start (named by the latest large plain image the loader decoded, * = now, %u screens, %u replaced):%s", screens.count, screens.evicted, text);
 	}
 
 	VOID LogSeeds()
@@ -6565,6 +6854,7 @@ namespace Twin
 		ImageReplace::LogSeedSources();
 		DebugLog("twin coverage 5s: copies from sources carrying 4K %u (px %u) | from 1x-only twins %u (px %u) | from untwinned memory %u (px %u)",
 			seeds.coverSeeded, (DWORD)seeds.coverSeededPx, seeds.coverUnseeded, (DWORD)seeds.coverUnseededPx, seeds.coverUntwinned, (DWORD)seeds.coverUntwinnedPx);
+		LogScreens();
 		seeds.coverSeeded = seeds.coverUnseeded = seeds.coverUntwinned = 0;
 		seeds.coverSeededPx = seeds.coverUnseededPx = seeds.coverUntwinnedPx = 0;
 
@@ -6595,10 +6885,11 @@ namespace Twin
 			{
 				const Record* twin = &game.twins[top[k]];
 				const CHAR* store = ImageReplace::MemoryName(twin->base);
-				ptr += StrPrint(ptr, " [%u] %u %s %08X %dx%d px %u n %u %.20s", k + 1, top[k], twin->anonymous ? "anon" : twin->memory ? "mem" : "surf", (DWORD)twin->owner,
-					twin->width, twin->height, twin->coverPx, twin->coverCopies, store ? store : "-");
+				// for a surface, the latest named image that reached it (seeded into it or copied in), marked ~
+				ptr += StrPrint(ptr, " [%u] %u %s %08X %dx%d px %u n %u %s%.24s", k + 1, top[k], twin->anonymous ? "anon" : twin->memory ? "mem" : "surf", (DWORD)twin->owner,
+					twin->width, twin->height, twin->coverPx, twin->coverCopies, !store && twin->arrive.known[0] ? "~" : "", store ? store : twin->arrive.known[0] ? twin->arrive.known : "-");
 			}
-			DebugLog("twin coverage top 1x-only copy sources (rank twin kind buffer size px copies store):%s", text);
+			DebugLog("twin coverage top 1x-only copy sources (rank twin kind buffer size px copies store or ~latest name in):%s", text);
 		}
 
 		TrapPriority(top, found);
@@ -6884,6 +7175,8 @@ namespace Twin
 	VOID CopyInRecord(Record* target, DWORD dstId, const RECT* to, Record* source, DWORD srcId, const RECT* from, BOOL keyed)
 	{
 		Arrival* a = &target->arrive;
+		if (source->arrive.known[0] && source != target)
+			MemoryCopy(a->known, source->arrive.known, sizeof(a->known));
 		CopyIn* c = a->inCount ? &a->lastIn : &a->firstIn;
 		++a->inCount;
 		c->frameNo = game.frameNo;

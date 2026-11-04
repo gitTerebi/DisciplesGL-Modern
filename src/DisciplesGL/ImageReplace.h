@@ -48,9 +48,17 @@ namespace ImageReplace
 		const Twin::SeedConflict* conflicts;
 		DWORD conflictCount;
 		const CHAR* reason;
+		// loader decodes: where the blit's part starts in the decode, the decode's size, its sequence and the transfer capture it got (0: none)
+		LONG sx, sy;
+		LONG width, height;
+		DWORD seq;
+		DWORD captureSeq;
 	};
 	// the latest record read of an image of exactly this size that no decode took yet; the pieces stay valid until the next call
 	BOOL RecordDecode(LONG width, LONG height, RecordName* out);
+	// StoreDraw (Discipl2.exe v2.02b 0x00520C53) reads the .ff record and decodes it into the 8-bit scratch: an indexed blit from inside its latest decode is that image
+	// withPieces FALSE: the name, record and sheet flag only; TRUE also builds the pieces, valid until the next call
+	BOOL LoaderDecode(const BYTE* src, LONG srcPitch, LONG width, LONG height, RecordName* out, BOOL withPieces);
 	const CHAR* MemoryName(const VOID* ptr);
 	VOID LogSeedSources();
 	BOOL FindMemory(const VOID* ptr, const VOID** base, LONG* pitch, LONG* width, LONG* height, LONG* frame, BOOL* flipped);
