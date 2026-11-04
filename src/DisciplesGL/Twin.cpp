@@ -4,6 +4,7 @@
 #include "Config.h"
 #include "GLib.h"
 #include "ImageReplace.h"
+#include "Hooks.h"
 #include "PngLib.h"
 
 #ifndef GL_CURRENT_PROGRAM
@@ -135,7 +136,25 @@
 #define XFER_FRAMES 600
 #define XFER_UNBOUND_FRAMES 2
 #define XFER_LOGS 200
-#define XFER_FAIL_LOGS 48
+#define XFER_FAIL_LOGS 64
+#define XFER_DECODE_LOGS 24
+#define XFER_LARGE_LOGS 8
+#define XFER_LARGE 4
+#define XFER_TOLERANT_PCT 90
+#define XFER_TOLERANCE 8
+#define XFER_INDEXED_INSIDE 16
+#define TRAP_RING 4096
+#define TRAP_WRITERS 256
+#define TRAP_TOP 20
+#define TRAP_PAGE 4096
+#define TRAP_REARM_MS 1000
+#define TRAP_REARM_MAX_MS 16000
+#define TRAP_PAGES_SECOND 2048
+#define TRAP_TOTAL 400000
+#define TRAP_RETRIES 4
+#define TRAP_STACK_SCAN 32
+#define TRAP_QUICK 64
+#define TRAP_REOPEN 64
 #define ARRIVAL_TOP 12
 #define SEED_PENDING_FRAMES 3600
 #define SEED_WAIT_DEFAULT 100
@@ -308,6 +327,8 @@ namespace Twin
 		DWORD xferSeq;
 		DWORD failSeq;
 		DWORD watchFailSeq;
+		DWORD trapWrites;
+		DWORD trapEip;
 	};
 
 	struct Record {
@@ -592,6 +613,8 @@ namespace Twin
 		DWORD repeats;
 	} seeds;
 
+	enum XferVia { ViaWrite, ViaCreated, ViaTrap, ViaUnlock };
+
 	struct XferWatch {
 		StateBuffer* owner;
 		DWORD id;
@@ -600,8 +623,20 @@ namespace Twin
 		DWORD seq;
 		LONG rows;
 		DWORD frameNo;
-		BOOL created;
+		DWORD via;
 	};
+
+	struct XferIndexed {
+		const BYTE* src;
+		LONG srcPitch;
+		const DWORD* dst;
+		LONG dstPitch;
+		LONG width;
+		LONG height;
+		DWORD palette[256];
+	};
+
+	enum XferLayout { Layout32 = 1, Layout16 = 2, Layout8 = 4 };
 
 	// the last named decode, kept so a CPU transfer of its pixels into a surface can take its seed; only the latest decode is a candidate
 	struct {
@@ -621,8 +656,30 @@ namespace Twin
 		DWORD pieceCap;
 		SeedConflict* conflicts;
 		DWORD conflictCount;
-		DWORD* pixels;
-		DWORD pixelCap;
+		SeedPiece* subPieces;
+		DWORD subCap;
+		// the decode's BlitObject as StoreDraw passed it; its format decides how the snapshot is read
+		BOOL srcSet;
+		const BYTE* srcData;
+		LONG srcPitchField;
+		BYTE srcTrue;
+		RECT srcRect;
+		// raw bytes of the decode, readable as 32, 16 or 8 bpp rows
+		BYTE* raw;
+		DWORD rawCap;
+		const BYTE* rawData;
+		LONG rawPitch;
+		LONG rawLeft;
+		LONG rawTop;
+		LONG off32;
+		LONG off16;
+		LONG off8;
+		DWORD layouts;
+		BYTE trueColor;
+		DWORD palette[256];
+		BOOL paletteSet;
+		XferIndexed indexedInside[XFER_INDEXED_INSIDE];
+		DWORD indexedInsideCount;
 		XferWatch inside[XFER_INSIDE];
 		DWORD insideCount;
 		XferWatch watch[XFER_WATCH];
@@ -630,6 +687,7 @@ namespace Twin
 		DWORD decodes;
 		DWORD named;
 		DWORD snapshotFailed;
+		DWORD formatBytes[4];
 		DWORD locks;
 		DWORD unlocks;
 		DWORD unlocksUntwinned;
@@ -650,9 +708,141 @@ namespace Twin
 		DWORD byWrite;
 		DWORD byCreated;
 		DWORD createdWatches;
+		DWORD byTrap;
+		DWORD trapWatches;
+		DWORD trapLate;
+		DWORD byIndexed;
+		DWORD indexed;
+		DWORD indexedFromDecode;
+		DWORD indexedIntoDecode;
+		DWORD indexedPartial;
+		DWORD indexedNoTwin;
+		DWORD indexedOther;
+		DWORD indexedInsideDropped;
+		DWORD unlockLarge;
+		DWORD blank;
+		DWORD exact[5];
+		DWORD tolerant[5];
+		DWORD weakTolerant;
 		DWORD logs;
 		DWORD failLogs;
+		DWORD largeLogs;
+		DWORD decodeLogs;
 	} xfer;
+
+	enum TrapFlags { TrapDecode = 1, TrapRender = 2, TrapHooked = 4, TrapOtherThread = 8 };
+
+	// written by the exception handler on whatever thread faulted; drained on the game thread
+	struct TrapEvent {
+		volatile LONG ready;
+		DWORD eip;
+		DWORD addr;
+		DWORD caller;
+		DWORD ret[4];
+		DWORD id;
+		const BYTE* start;
+		DWORD seq;
+		DWORD frameNo;
+		DWORD flags;
+	};
+
+	struct TrapRange {
+		const BYTE* volatile start;
+		volatile DWORD bytes;
+		volatile LONG faults;
+		volatile LONG own;
+		// game thread only: armed pages that no announced write of ours opened yet
+		DWORD* bits;
+		DWORD bitWords;
+		DWORD pages;
+		DWORD armedBits;
+		DWORD lastArm;
+		DWORD interval;
+		DWORD foreignSinceArm;
+		BOOL fresh;
+		DWORD quickArms;
+		BOOL queued;
+		DWORD reFirst;
+		DWORD reLast;
+	};
+
+	struct TrapWriter {
+		DWORD eip;
+		DWORD caller;
+		DWORD ret[4];
+		DWORD count;
+		DWORD twins[4];
+		DWORD twinCount;
+		DWORD sampleId;
+		LONG sampleW;
+		LONG sampleH;
+		LONG sampleX;
+		LONG sampleY;
+		DWORD decode;
+		DWORD render;
+		DWORD hooked;
+		DWORD other;
+		DWORD fresh;
+		CHAR module[24];
+		DWORD moduleOffset;
+	};
+
+	struct {
+		BOOL chosen;
+		BOOL wanted;
+		BOOL initialized;
+		volatile BOOL on;
+		DWORD selfLo;
+		DWORD selfHi;
+		DWORD exeLo;
+		DWORD exeHi;
+		DWORD gameThread;
+		volatile LONG renderDepth;
+		TrapRange ranges[TWIN_MAX];
+		TrapEvent ring[TRAP_RING];
+		volatile LONG head;
+		DWORD tail;
+		volatile LONG faults;
+		volatile LONG own;
+		volatile LONG foreign;
+		volatile LONG dropped;
+		volatile LONG retried;
+		struct {
+			volatile DWORD tid;
+			volatile DWORD addr;
+			volatile LONG count;
+		} retry[64];
+		TrapWriter writers[TRAP_WRITERS];
+		DWORD writerCount;
+		DWORD writersFull;
+		DWORD lost;
+		DWORD stale;
+		DWORD attached;
+		DWORD notPaged;
+		DWORD armFails;
+		DWORD createArms;
+		DWORD rearms;
+		DWORD budgetSkips;
+		DWORD tooBig;
+		DWORD opens;
+		DWORD openPages;
+		DWORD windowTick;
+		DWORD windowPages;
+		DWORD cursor;
+		DWORD reopen[TRAP_REOPEN];
+		DWORD reopenCount;
+		DWORD quickArms;
+		BOOL spentLogged;
+		BOOL draining;
+	} trap;
+
+	VOID TrapDrain();
+	VOID TrapReopen();
+	VOID TrapOpen(Record* twin, const RECT* rect);
+	VOID TrapAttach(Record* twin, DWORD id);
+	VOID TrapDetach(DWORD id);
+	VOID TrapRearm(DWORD now);
+	VOID TrapLog();
 
 	struct {
 		const CHAR* name;
@@ -1625,6 +1815,11 @@ namespace Twin
 			DebugLog("twin rebuild after GL release, twins %u", game.alive);
 		}
 
+		if (trap.tail != (DWORD)trap.head)
+			TrapDrain();
+		if (drain && trap.reopenCount)
+			TrapReopen();
+
 		// a pixel hook that defers its syncs is still mid-write
 		if (drain && xfer.watchCount)
 			XferResolve(FALSE);
@@ -1670,6 +1865,7 @@ namespace Twin
 
 	VOID Release(Record* twin, DWORD id)
 	{
+		TrapDetach(id);
 		if (Active())
 		{
 			Cmd* cmd = Emit(CmdDestroy);
@@ -3211,6 +3407,7 @@ namespace Twin
 
 	VOID SeedWrite(Record* twin, const RECT* rect)
 	{
+		TrapOpen(twin, rect);
 		if (!twin->seedCount)
 			return;
 
@@ -3649,14 +3846,29 @@ namespace Twin
 #pragma region Transfer
 	VOID XferBind();
 	BOOL XferSnapshot(const VOID* first, LONG pitch, LONG width, LONG height, const SeedPiece* pieces, DWORD count, const SeedConflict* conflicts, DWORD conflictCount);
+	VOID XferLogDecode();
+
+	VOID DecodeSource(const VOID* data, LONG pitchField, BYTE trueColor, const RECT* rect)
+	{
+		if (!xfer.depth || !data || !rect)
+			return;
+
+		xfer.srcSet = TRUE;
+		xfer.srcData = (const BYTE*)data;
+		xfer.srcPitchField = pitchField;
+		xfer.srcTrue = trueColor;
+		xfer.srcRect = *rect;
+	}
 
 	VOID XferCapture(const VOID* first, LONG pitch, LONG width, LONG height, SeedKind kind, const CHAR* label, const SeedPiece* pieces, DWORD count, const SeedConflict* conflicts, DWORD conflictCount)
 	{
+		TrapDrain();
 		// whatever was watched for the previous decode is complete by now
 		XferResolve(TRUE);
 
 		++xfer.seq;
 		++xfer.decodes;
+		++xfer.formatBytes[!xfer.srcSet ? 3 : xfer.srcTrue > 1 ? 2 : xfer.srcTrue];
 		xfer.valid = FALSE;
 		xfer.target = NULL;
 		xfer.frameNo = game.frameNo;
@@ -3665,6 +3877,8 @@ namespace Twin
 		xfer.width = width;
 		xfer.height = height;
 		xfer.kind = kind;
+		xfer.paletteSet = FALSE;
+		xfer.layouts = 0;
 		DWORD length = min((DWORD)StrLength(label), (DWORD)sizeof(xfer.name) - 1);
 		MemoryCopy(xfer.name, label, length);
 		xfer.name[length] = 0;
@@ -3673,18 +3887,51 @@ namespace Twin
 			xfer.valid = TRUE;
 			++xfer.named;
 		}
+		XferLogDecode();
+		xfer.srcSet = FALSE;
 		XferBind();
 	}
 
 	BOOL XferSnapshot(const VOID* first, LONG pitch, LONG width, LONG height, const SeedPiece* pieces, DWORD count, const SeedConflict* conflicts, DWORD conflictCount)
 	{
-		DWORD px = (DWORD)width * height;
-		if (px > xfer.pixelCap)
+		// the range and the seed read the decode as 32 bpp at half the pitch field; the BlitObject also allows 16 bpp, or 8-bit indices at the pitch field itself
+		const BYTE* data = (const BYTE*)first;
+		LONG raw = pitch * 2, left = 0, top = 0;
+		BOOL described = FALSE;
+		xfer.trueColor = 0xFF;
+		if (xfer.srcSet && xfer.srcPitchField > 0 && xfer.srcData + (xfer.srcRect.top * (xfer.srcPitchField >> 1) + xfer.srcRect.left) * (LONG)sizeof(DWORD) == (const BYTE*)first)
 		{
-			if (xfer.pixels)
-				MemoryFree(xfer.pixels);
-			xfer.pixels = (DWORD*)MemoryAlloc(px * sizeof(DWORD));
-			xfer.pixelCap = xfer.pixels ? px : 0;
+			data = xfer.srcData;
+			raw = xfer.srcPitchField;
+			left = xfer.srcRect.left;
+			top = xfer.srcRect.top;
+			described = TRUE;
+			xfer.trueColor = xfer.srcTrue;
+		}
+
+		LONG low = top * raw;
+		LONG end32 = (top + height - 1) * raw * 2 + (left + width) * (LONG)sizeof(DWORD);
+		LONG end16 = (top + height - 1) * raw + (left + width) * (LONG)sizeof(WORD);
+		DWORD layouts = 0;
+		LONG end = 0;
+		if (!IsBadReadPtr(data + low, end32 - low))
+		{
+			layouts = described ? Layout32 | Layout16 | Layout8 : Layout32;
+			end = end32;
+		}
+		else if (described && !IsBadReadPtr(data + low, end16 - low))
+		{
+			layouts = Layout16 | Layout8;
+			end = end16;
+		}
+
+		DWORD bytes = layouts ? DWORD(end - low) : 0;
+		if (bytes > xfer.rawCap)
+		{
+			if (xfer.raw)
+				MemoryFree(xfer.raw);
+			xfer.raw = (BYTE*)MemoryAlloc(bytes);
+			xfer.rawCap = xfer.raw ? bytes : 0;
 		}
 		count = min(count, (DWORD)SEED_PIECES);
 		if (count > xfer.pieceCap)
@@ -3696,15 +3943,21 @@ namespace Twin
 		}
 		if (!xfer.conflicts)
 			xfer.conflicts = (SeedConflict*)MemoryAlloc(SEED_CONFLICTS * sizeof(SeedConflict));
-		if (!xfer.pixels || !xfer.pieces || !xfer.conflicts || IsBadReadPtr(first, ((height - 1) * pitch + width) * sizeof(DWORD)))
+		if (!layouts || !xfer.raw || !xfer.pieces || !xfer.conflicts)
 		{
 			++xfer.snapshotFailed;
 			return FALSE;
 		}
 
-		const DWORD* src = (const DWORD*)first;
-		for (LONG y = 0; y < height; ++y)
-			MemoryCopy(xfer.pixels + y * width, src + y * pitch, width * sizeof(DWORD));
+		MemoryCopy(xfer.raw, data + low, bytes);
+		xfer.rawData = data;
+		xfer.rawPitch = raw;
+		xfer.rawLeft = left;
+		xfer.rawTop = top;
+		xfer.off32 = top * raw * 2 + left * (LONG)sizeof(DWORD) - low;
+		xfer.off16 = top * raw + left * (LONG)sizeof(WORD) - low;
+		xfer.off8 = top * raw + left - low;
+		xfer.layouts = layouts;
 		MemoryCopy(xfer.pieces, pieces, count * sizeof(SeedPiece));
 		xfer.count = count;
 		xfer.conflictCount = conflicts ? min(conflictCount, (DWORD)SEED_CONFLICTS) : 0;
@@ -3713,29 +3966,315 @@ namespace Twin
 		return TRUE;
 	}
 
-	// leading rows of the decode that the surface holds at x,y; the alpha byte is not compared
-	LONG XferGuard(const Record* twin, LONG x, LONG y, LONG fromRow, LONG* badX, DWORD* got, DWORD* want)
+	VOID XferLogDecode()
 	{
-		for (LONG row = fromRow; row < xfer.height; ++row)
+		if (xfer.decodeLogs >= XFER_DECODE_LOGS)
+			return;
+		++xfer.decodeLogs;
+
+		CHAR format[64], bytes[40];
+		if (xfer.srcSet)
+			StrPrint(format, "%u (%s)", xfer.srcTrue, xfer.srcTrue ? "true colour" : "8-bit indices");
+		else
+			StrCopy(format, "unknown (no StoreDraw source)");
+		bytes[0] = 0;
+		if (xfer.layouts)
+		{
+			const BYTE* b = xfer.raw + ((xfer.layouts & Layout8) ? xfer.off8 : xfer.off32);
+			StrPrint(bytes, "%02X %02X %02X %02X %02X %02X %02X %02X", b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7]);
+		}
+		DebugLog("twin seed decode #%u %.32s %dx%d: BlitObject format byte %s, pitch field %d, data %08X, clip %d,%d | snapshot %s%s%s%s | first bytes %s",
+			xfer.seq, xfer.name, xfer.width, xfer.height, format, xfer.srcSet ? xfer.srcPitchField : xfer.pitch * 2, xfer.srcSet ? (DWORD)xfer.srcData : (DWORD)xfer.first,
+			xfer.srcSet ? xfer.srcRect.left : 0, xfer.srcSet ? xfer.srcRect.top : 0, xfer.layouts ? "readable as" : (xfer.valid ? "none" : "not taken (no piece or unreadable)"),
+			(xfer.layouts & Layout32) ? " 32" : "", (xfer.layouts & Layout16) ? " 16" : "", (xfer.layouts & Layout8) ? " 8 bpp" : "", bytes);
+	}
+
+	enum GuardFormat { GuardRgb, GuardBgr, Guard565, GuardIndexed, GuardPalette, GuardFormats };
+	const CHAR* const guardNames[GuardFormats] = { "rgb32", "bgr32", "565", "8-bit indices, consistent colours", "8-bit indices through the blit's palette" };
+
+	struct GuardResult {
+		DWORD format;
+		LONG lead;
+		LONG rows;
+		LONG badX;
+		LONG badY;
+		DWORD got;
+		DWORD want;
+		BOOL blank;
+		LONG leads[GuardFormats];
+		LONG matches[GuardFormats];
+	};
+
+	BOOL GuardKey(const Record* twin, DWORD color)
+	{
+		return !((color ^ COLORKEY_CHECK) & 0x00FFFFFF) || (twin->keyed && !((color ^ twin->key) & 0x00FFFFFF));
+	}
+
+	BOOL GuardNear(DWORD a, DWORD b)
+	{
+		for (DWORD shift = 0; shift < 24; shift += 8)
+		{
+			LONG d = LONG((a >> shift) & 0xFF) - LONG((b >> shift) & 0xFF);
+			if (d > XFER_TOLERANCE || d < -XFER_TOLERANCE)
+				return FALSE;
+		}
+		return TRUE;
+	}
+
+	// one decode row in one format against the surface row: the first column that differs, or width; within is the 565 compare to XFER_TOLERANCE
+	LONG GuardRow(const Record* twin, DWORD format, const DWORD* have, LONG sx, LONG row, LONG width, BOOL final, BOOL* within, DWORD* map, DWORD* firstSeen, BOOL* varied, DWORD* want)
+	{
+		*within = TRUE;
+		LONG bad = width;
+		const BYTE* line32 = xfer.raw + xfer.off32 + row * xfer.rawPitch * 2;
+		const BYTE* line16 = xfer.raw + xfer.off16 + row * xfer.rawPitch;
+		const BYTE* line8 = xfer.raw + xfer.off8 + row * xfer.rawPitch;
+		for (LONG i = 0; i < width; ++i)
+		{
+			DWORD got = have[i];
+			BOOL key = GuardKey(twin, got);
+			DWORD expect;
+			BOOL same, close;
+			if (format == GuardRgb || format == GuardBgr)
+			{
+				expect = ((const DWORD*)line32)[sx + i];
+				if (format == GuardBgr)
+					expect = (expect & 0xFF00FF00) | ((expect >> 16) & 0xFF) | ((expect & 0xFF) << 16);
+				same = !((got ^ expect) & 0x00FFFFFF) || (key && (!((expect ^ COLORKEY_CHECK) & 0x00FFFFFF) || !(expect >> 24)));
+				close = same;
+			}
+			else if (format == Guard565)
+			{
+				// the wrapper's own conversion, so its rounding and its key mapping
+				expect = Hooks::Convert565toRGB(((const WORD*)line16)[sx + i]);
+				same = key ? GuardKey(twin, expect) : !((got ^ expect) & 0x00FFFFFF);
+				close = same || (!key && !GuardKey(twin, expect) && GuardNear(got, expect));
+			}
+			else if (format == GuardIndexed)
+			{
+				BYTE index = line8[sx + i];
+				DWORD seen = key ? 0x02000000 : (got & 0x00FFFFFF) | 0x01000000;
+				if (!map[index])
+				{
+					map[index] = seen;
+					if (!*firstSeen)
+						*firstSeen = seen;
+					else if (seen != *firstSeen)
+						*varied = TRUE;
+				}
+				expect = index;
+				// every written pixel carries alpha; before the final check a zero is memory the game has not written yet
+				same = close = map[index] == seen && (got || final);
+			}
+			else
+			{
+				expect = xfer.palette[line8[sx + i]] | ALPHA_COMPONENT;
+				if ((expect & COLORKEY_AND) == 0xFFF800F8)
+					expect = COLORKEY_CHECK;
+				same = key ? GuardKey(twin, expect) : !((got ^ expect) & 0x00FFFFFF);
+				close = same;
+			}
+
+			if (!same && bad == width)
+			{
+				bad = i;
+				*want = expect;
+			}
+			if (!close)
+			{
+				*within = FALSE;
+				return bad;
+			}
+		}
+		return bad;
+	}
+
+	// how the surface at x,y holds the decode's sub rect in every format the snapshot can be read as; a check that is not final stops at the first bad row
+	VOID XferGuard(const Record* twin, LONG x, LONG y, const RECT* sub, BOOL final, GuardResult* out)
+	{
+		LONG width = sub->right - sub->left, height = sub->bottom - sub->top;
+		MemoryZero(out, sizeof(GuardResult));
+		out->format = GuardFormats;
+		out->badY = height;
+
+		DWORD map[256];
+		for (DWORD f = 0; f < GuardFormats; ++f)
+		{
+			out->leads[f] = out->matches[f] = -1;
+			BOOL usable = f <= GuardBgr ? (xfer.layouts & Layout32) != 0 : f == Guard565 ? (xfer.layouts & Layout16) != 0 : f == GuardIndexed ? (xfer.layouts & Layout8) != 0 : (xfer.layouts & Layout8) && xfer.paletteSet;
+			if (!usable)
+				continue;
+
+			MemoryZero(map, sizeof(map));
+			DWORD firstSeen = 0;
+			BOOL varied = FALSE;
+			LONG lead = 0, rows = 0, badX = 0, badY = -1;
+			DWORD got = 0, want = 0;
+			for (LONG row = 0; row < height; ++row)
+			{
+				const DWORD* have = (const DWORD*)twin->base + (y + row) * twin->pitch + x;
+				BOOL within;
+				DWORD expect = 0;
+				LONG bad = GuardRow(twin, f, have, sub->left, sub->top + row, width, final, &within, map, &firstSeen, &varied, &expect);
+				if (bad == width)
+				{
+					if (badY < 0)
+						++lead;
+					++rows;
+					continue;
+				}
+				if (badY < 0)
+				{
+					badY = row;
+					badX = bad;
+					got = have[bad];
+					want = expect;
+				}
+				if (within)
+					++rows;
+				if (!final)
+					break;
+			}
+			// one colour for every index proves nothing
+			if (f == GuardIndexed && !varied)
+				lead = rows = 0;
+
+			out->leads[f] = lead;
+			out->matches[f] = rows;
+			if (out->format == GuardFormats || lead > out->lead || (lead == out->lead && rows > out->rows))
+			{
+				out->format = f;
+				out->lead = lead;
+				out->rows = rows;
+				out->badX = badX;
+				out->badY = badY < 0 ? height : badY;
+				out->got = got;
+				out->want = want;
+			}
+		}
+
+		// zeroed memory matches zero bytes of a decode in some readings; a surface no one wrote yet confirms nothing
+		if (!out->lead && !final)
+			return;
+		out->blank = TRUE;
+		for (LONG row = 0; row < height && out->blank; ++row)
 		{
 			const DWORD* have = (const DWORD*)twin->base + (y + row) * twin->pitch + x;
-			const DWORD* decoded = xfer.pixels + row * xfer.width;
-			for (LONG i = 0; i < xfer.width; ++i)
-				if ((have[i] ^ decoded[i]) & 0x00FFFFFF)
+			for (LONG i = 0; i < width; ++i)
+				if (have[i])
 				{
-					*badX = i;
-					*got = have[i];
-					*want = decoded[i];
-					return row;
+					out->blank = FALSE;
+					break;
 				}
 		}
-		return xfer.height;
+	}
+
+	// 0 rejected, 1 exact in some format, 2 tolerant: a fresh surface of the decode's size where XFER_TOLERANT_PCT of the rows match within XFER_TOLERANCE
+	DWORD GuardVerdict(const GuardResult* g, LONG height, BOOL strong, const CHAR** reason, DWORD* format)
+	{
+		*format = g->format;
+		if (g->blank)
+		{
+			*reason = "the surface is still blank there";
+			return 0;
+		}
+		if (g->format == GuardFormats)
+		{
+			*reason = "the decode snapshot has no readable layout";
+			return 0;
+		}
+		if (g->lead == height)
+			return 1;
+
+		DWORD best = GuardFormats;
+		for (DWORD f = Guard565; f < GuardFormats; ++f)
+			if (g->matches[f] >= 0 && (best == GuardFormats || g->matches[f] > g->matches[best]))
+				best = f;
+		BOOL enough = best != GuardFormats && g->matches[best] * 100 >= height * XFER_TOLERANT_PCT;
+		if (enough && strong)
+		{
+			*format = best;
+			return 2;
+		}
+		if (enough)
+			++xfer.weakTolerant;
+		*reason = enough ? "most rows match, but only a fresh surface of the decode's size may pass the tolerant compare" : "no format holds the decode there";
+		return 0;
+	}
+
+	VOID GuardText(CHAR* text, const GuardResult* g)
+	{
+		StrPrint(text, "rgb32 %d bgr32 %d 565 %d (near %d) idx %d pal %d", (INT)g->leads[GuardRgb], (INT)g->leads[GuardBgr], (INT)g->leads[Guard565], (INT)g->matches[Guard565],
+			(INT)g->leads[GuardIndexed], (INT)g->leads[GuardPalette]);
+	}
+
+	VOID XferLogReject(const CHAR* via, const CHAR* reason, const Record* twin, DWORD id, LONG x, LONG y, const GuardResult* g, LONG height)
+	{
+		if (xfer.failLogs >= XFER_FAIL_LOGS)
+			return;
+		++xfer.failLogs;
+		CHAR text[160];
+		GuardText(text, g);
+		DebugLog("twin seed transfer rejected via %s: %s | decode %.32s %dx%d (#%u, %u frames ago, format byte %u) -> twin %u %08X %dx%d at %d,%d | best %s: leading rows %d, matching rows %d of %d, px %d,%d holds %08X, decode %08X | leading rows per format: %s | lock caller %08X<%08X locks %u",
+			via, reason, xfer.name, xfer.width, xfer.height, xfer.seq, game.frameNo - xfer.frameNo, xfer.trueColor, id, (DWORD)twin->owner, twin->width, twin->height, x, y,
+			g->format < GuardFormats ? guardNames[g->format] : "none", g->lead, g->rows, height, g->badX, g->badY, g->got, g->want, text,
+			twin->arrive.lockCaller, twin->arrive.lockOuter, twin->arrive.locks);
+	}
+
+	DWORD XferSeed(Record* twin, DWORD id, LONG x, LONG y, const RECT* sub)
+	{
+		RECT rect = { x, y, x + sub->right - sub->left, y + sub->bottom - sub->top };
+		++seeds.kinds[xfer.kind].events;
+		if (!sub->left && !sub->top && sub->right == xfer.width && sub->bottom == xfer.height)
+			return SeedAt(twin, id, &rect, twin->pitch, (SeedKind)xfer.kind, xfer.name, xfer.pieces, xfer.count, xfer.conflicts, xfer.conflictCount, TRUE);
+
+		// part of the decode: its pieces clipped to that part, in the part's coordinates
+		if (xfer.count > xfer.subCap)
+		{
+			if (xfer.subPieces)
+				MemoryFree(xfer.subPieces);
+			xfer.subPieces = (SeedPiece*)MemoryAlloc(xfer.count * sizeof(SeedPiece));
+			xfer.subCap = xfer.subPieces ? xfer.count : 0;
+		}
+		DWORD n = 0;
+		for (DWORD i = 0; i < xfer.count && xfer.subPieces; ++i)
+		{
+			SeedPiece p = xfer.pieces[i];
+			if (!IntersectRect(&p.to, &xfer.pieces[i].to, sub))
+				continue;
+			OffsetRect(&p.to, -sub->left, -sub->top);
+			OffsetRect(&p.place, -sub->left, -sub->top);
+			xfer.subPieces[n++] = p;
+		}
+		return n ? SeedAt(twin, id, &rect, twin->pitch, (SeedKind)xfer.kind, xfer.name, xfer.subPieces, n, NULL, 0, TRUE) : 0;
+	}
+
+	VOID XferLogAccept(const CHAR* via, const Record* twin, DWORD id, LONG x, LONG y, const RECT* sub, DWORD outcome, const GuardResult* g, DWORD verdict, DWORD format)
+	{
+		if (xfer.logs >= XFER_LOGS)
+			return;
+		++xfer.logs;
+		DebugLog("twin seed transfer #%u via %s: decode %.32s %dx%d part %d,%d %dx%d (#%u, %u frames ago, seeded into %08X) -> twin %u %08X %dx%d at %d,%d | %s | guard %s %s (leading rows %d, matching rows %d of %d, format byte %u) | lock caller %08X<%08X",
+			xfer.logs, via, xfer.name, xfer.width, xfer.height, sub->left, sub->top, sub->right - sub->left, sub->bottom - sub->top, xfer.seq, game.frameNo - xfer.frameNo, (DWORD)xfer.target,
+			id, (DWORD)twin->owner, twin->width, twin->height, x, y, outcome == 1 ? "seeded" : outcome == 2 ? "seeded, art deferred" : "nothing recorded (repeat or no piece)",
+			verdict == 2 ? "tolerant" : "exact", guardNames[format], g->lead, format < GuardFormats ? g->matches[format] : 0, sub->bottom - sub->top, xfer.trueColor,
+			twin->arrive.lockCaller, twin->arrive.lockOuter);
+	}
+
+	VOID XferCount(DWORD verdict, DWORD format)
+	{
+		if (format >= GuardFormats)
+			return;
+		if (verdict == 2)
+			++xfer.tolerant[format];
+		else
+			++xfer.exact[format];
 	}
 
 	enum XferResult { XferSkip, XferDone, XferPartial, XferFailed };
 
-	// the provenance (the latest decode, the lock or write that followed it) picks the image and its place; the pixel compare only confirms it
-	XferResult XferTry(Record* twin, DWORD id, const POINT* at, DWORD atCount, const CHAR* via, DWORD* by, BOOL final, LONG* doneRows, BOOL quiet = FALSE)
+	// the provenance (the latest decode, the lock, write or first trapped write that followed it) picks the image and its place; the pixel compare only confirms it
+	XferResult XferTry(Record* twin, DWORD id, const POINT* at, DWORD atCount, const CHAR* via, DWORD* by, BOOL final, BOOL fresh, LONG* doneRows, BOOL quiet = FALSE)
 	{
 		++xfer.tries;
 		if (!xfer.valid)
@@ -3759,29 +4298,32 @@ namespace Twin
 			return XferSkip;
 		}
 
-		LONG rows = 0, badX = 0, badY = 0;
-		DWORD got = 0, want = 0;
-		const POINT* place = NULL;
+		RECT whole = { 0, 0, xfer.width, xfer.height };
+		// a tolerant compare is only for a surface made for this decode, judged once it is written
+		BOOL strong = fresh && final && twin->height == xfer.height && (twin->width == xfer.width || twin->width == xfer.width + 1);
+		GuardResult best, g;
+		MemoryZero(&best, sizeof(best));
+		DWORD bestK = 0, verdict = 0, format = GuardFormats;
+		const CHAR* reason = "no format holds the decode there";
 		BOOL fitted = FALSE;
-		for (DWORD k = 0; k < atCount && !place; ++k)
+		for (DWORD k = 0; k < atCount && !verdict; ++k)
 		{
 			if (at[k].x < 0 || at[k].y < 0 || at[k].x + xfer.width > twin->width || at[k].y + xfer.height > twin->height)
 				continue;
-			fitted = TRUE;
-			LONG from = doneRows ? *doneRows : 0;
-			LONG x = 0;
-			DWORD g = 0, w = 0;
-			LONG equal = XferGuard(twin, at[k].x, at[k].y, from, &x, &g, &w);
-			if (equal == xfer.height)
-				place = &at[k];
-			else if (k == 0 || equal > rows)
+			XferGuard(twin, at[k].x, at[k].y, &whole, final, &g);
+			const CHAR* why = NULL;
+			DWORD f = GuardFormats;
+			DWORD v = GuardVerdict(&g, xfer.height, strong, &why, &f);
+			if (!fitted || v || g.lead > best.lead)
 			{
-				rows = equal;
-				badX = x;
-				badY = equal;
-				got = g;
-				want = w;
+				best = g;
+				bestK = k;
+				format = f;
+				if (why)
+					reason = why;
 			}
+			fitted = TRUE;
+			verdict = v;
 		}
 		if (!fitted)
 		{
@@ -3789,29 +4331,26 @@ namespace Twin
 			return XferSkip;
 		}
 
-		if (!place)
+		if (!verdict)
 		{
 			// a watched surface may not be written yet; it is judged at the next decode or present
 			if (!final)
 			{
 				if (doneRows)
-					*doneRows = rows;
+					*doneRows = best.lead;
 				return XferPartial;
 			}
-			if (rows && doneRows)
+			if (doneRows && *doneRows)
 				++xfer.partialExpired;
+			if (best.blank)
+				++xfer.blank;
 			++twin->arrive.guardFails;
 			if (twin->arrive.failSeq != xfer.seq)
 			{
 				twin->arrive.failSeq = xfer.seq;
 				++xfer.guardFails;
-				if (!quiet && xfer.failLogs < XFER_FAIL_LOGS)
-				{
-					++xfer.failLogs;
-					DebugLog("twin seed transfer guard failed via %s: decode %.32s %dx%d (#%u, %u frames ago) -> twin %u %08X %dx%d at %d,%d: equal rows %d, px %d,%d holds %08X, decode %08X | lock caller %08X<%08X locks %u",
-						via, xfer.name, xfer.width, xfer.height, xfer.seq, game.frameNo - xfer.frameNo, id, (DWORD)twin->owner, twin->width, twin->height, at[0].x, at[0].y,
-						rows, badX, badY, got, want, twin->arrive.lockCaller, twin->arrive.lockOuter, twin->arrive.locks);
-				}
+				if (!quiet)
+					XferLogReject(via, reason, twin, id, at[bestK].x, at[bestK].y, &best, xfer.height);
 			}
 			return XferFailed;
 		}
@@ -3820,24 +4359,48 @@ namespace Twin
 		twin->arrive.xferSeq = xfer.seq;
 		++twin->arrive.transfers;
 		++*by;
-		RECT rect = { place->x, place->y, place->x + xfer.width, place->y + xfer.height };
-		++seeds.kinds[xfer.kind].events;
-		DWORD outcome = SeedAt(twin, id, &rect, twin->pitch, (SeedKind)xfer.kind, xfer.name, xfer.pieces, xfer.count, xfer.conflicts, xfer.conflictCount, TRUE);
-		if (xfer.logs < XFER_LOGS)
-		{
-			++xfer.logs;
-			DebugLog("twin seed transfer #%u via %s: decode %.32s %dx%d (#%u, %u frames ago, seeded into %08X) -> twin %u %08X %dx%d at %d,%d | %s | lock caller %08X<%08X",
-				xfer.logs, via, xfer.name, xfer.width, xfer.height, xfer.seq, game.frameNo - xfer.frameNo, (DWORD)xfer.target, id, (DWORD)twin->owner, twin->width, twin->height,
-				place->x, place->y, outcome == 1 ? "seeded" : outcome == 2 ? "seeded, art deferred" : "nothing recorded (repeat or no piece)", twin->arrive.lockCaller, twin->arrive.lockOuter);
-		}
+		XferCount(verdict, format);
+		DWORD outcome = XferSeed(twin, id, at[bestK].x, at[bestK].y, &whole);
+		XferLogAccept(via, twin, id, at[bestK].x, at[bestK].y, &whole, outcome, &best, verdict, format);
 		return XferDone;
 	}
 
-	VOID XferAdd(XferWatch* list, DWORD* count, DWORD limit, Record* twin, DWORD id, LONG x, LONG y, DWORD seq, BOOL created)
+	// the ground atlas and other big buffers are locked constantly; such an unlock is only a candidate when its lock rect is the decode's size
+	BOOL XferLarge(const Record* twin, DWORD id, const CHAR* via)
+	{
+		const Arrival* a = &twin->arrive;
+		if ((LONGLONG)twin->width * twin->height <= (LONGLONG)XFER_LARGE * xfer.width * xfer.height)
+			return FALSE;
+		if (a->lockRectSet && a->lockRect.right - a->lockRect.left == xfer.width && a->lockRect.bottom - a->lockRect.top == xfer.height)
+			return FALSE;
+
+		++xfer.unlockLarge;
+		if (xfer.largeLogs < XFER_LARGE_LOGS)
+		{
+			++xfer.largeLogs;
+			DebugLog("twin seed transfer rejected via %s: twin %u %08X %dx%d is over %ux the decode %.32s %dx%d (#%u) and its lock rect %s | lock caller %08X<%08X locks %u",
+				via, id, (DWORD)twin->owner, twin->width, twin->height, XFER_LARGE, xfer.name, xfer.width, xfer.height, xfer.seq,
+				a->lockRectSet ? "is another size" : "covers the whole surface", a->lockCaller, a->lockOuter, a->locks);
+		}
+		return TRUE;
+	}
+
+	VOID XferAdd(XferWatch* list, DWORD* count, DWORD limit, Record* twin, DWORD id, LONG x, LONG y, DWORD seq, DWORD via)
 	{
 		for (DWORD i = 0; i < *count; ++i)
 			if (list[i].owner == twin->owner)
+			{
+				// a trapped first write is the more exact provenance of the two
+				if (via == ViaTrap && list[i].via != ViaTrap)
+				{
+					list[i].via = ViaTrap;
+					list[i].x = x;
+					list[i].y = y;
+					if (seq)
+						list[i].seq = seq;
+				}
 				return;
+			}
 
 		XferWatch* w = NULL;
 		if (*count < limit)
@@ -3858,7 +4421,27 @@ namespace Twin
 		w->seq = seq;
 		w->rows = 0;
 		w->frameNo = game.frameNo;
-		w->created = created;
+		w->via = via;
+	}
+
+	const CHAR* XferViaName(DWORD via, BOOL inside)
+	{
+		switch (via)
+		{
+		case ViaCreated:
+			return "surface created before the decode";
+		case ViaTrap:
+			return inside ? "first write into a fresh surface inside the decode call (trap)" : "first write into a fresh surface after the decode (trap)";
+		case ViaUnlock:
+			return "unlock inside the decode call";
+		default:
+			return inside ? "hooked write inside the decode call" : "hooked write";
+		}
+	}
+
+	DWORD* XferViaCounter(DWORD via, BOOL inside)
+	{
+		return via == ViaTrap ? &xfer.byTrap : inside ? &xfer.byInside : via == ViaCreated ? &xfer.byCreated : &xfer.byWrite;
 	}
 
 	// a hooked write announces itself before the CPU writes, so the surface is checked at the next twin call
@@ -3869,13 +4452,13 @@ namespace Twin
 		// inside the decode call the decode it belongs to is not captured yet
 		if (xfer.depth)
 		{
-			XferAdd(xfer.inside, &xfer.insideCount, XFER_INSIDE, twin, id, rect->left, rect->top, 0, FALSE);
+			XferAdd(xfer.inside, &xfer.insideCount, XFER_INSIDE, twin, id, rect->left, rect->top, 0, ViaWrite);
 			return;
 		}
 		if (!xfer.valid || twin->arrive.xferSeq == xfer.seq || twin->arrive.watchFailSeq == xfer.seq || xfer.target == twin->owner || game.frameNo - xfer.frameNo > XFER_FRAMES)
 			return;
 		DWORD before = xfer.watchCount;
-		XferAdd(xfer.watch, &xfer.watchCount, XFER_WATCH, twin, id, rect->left, rect->top, xfer.seq, FALSE);
+		XferAdd(xfer.watch, &xfer.watchCount, XFER_WATCH, twin, id, rect->left, rect->top, xfer.seq, ViaWrite);
 		if (xfer.watchCount != before)
 			++xfer.watches;
 	}
@@ -3886,7 +4469,7 @@ namespace Twin
 		if (twin->memory || !SeedMode())
 			return;
 		DWORD before = xfer.watchCount;
-		XferAdd(xfer.watch, &xfer.watchCount, XFER_WATCH, twin, id, 0, 0, 0, TRUE);
+		XferAdd(xfer.watch, &xfer.watchCount, XFER_WATCH, twin, id, 0, 0, 0, ViaCreated);
 		if (xfer.watchCount != before)
 			++xfer.createdWatches;
 	}
@@ -3927,8 +4510,8 @@ namespace Twin
 				POINT at = { w->x, w->y };
 				// several surfaces can be made before one decode; only those of the decode's size (even width) are worth a log line when they miss
 				BOOL sized = twin->height == xfer.height && (twin->width == xfer.width || twin->width == xfer.width + 1);
-				result = XferTry(twin, w->id, &at, 1, w->created ? "surface created before the decode" : "hooked write", w->created ? &xfer.byCreated : &xfer.byWrite, final, &w->rows,
-					w->created && !sized && !w->rows);
+				result = XferTry(twin, w->id, &at, 1, XferViaName(w->via, FALSE), XferViaCounter(w->via, FALSE), final, w->via == ViaCreated || w->via == ViaTrap, &w->rows,
+					w->via == ViaCreated && !sized && !w->rows);
 				if (result == XferFailed)
 					twin->arrive.watchFailSeq = xfer.seq;
 			}
@@ -3938,6 +4521,102 @@ namespace Twin
 				xfer.watch[i] = xfer.watch[--xfer.watchCount];
 		}
 		resolving = FALSE;
+	}
+
+	// the hooked indexed blit names its source: when that is the decode's 8-bit snapshot, the provenance is exact and the blit's palette converts the snapshot
+	VOID XferIndexedTry(const BYTE* src, LONG srcPitch, const DWORD* palette, const DWORD* dst, LONG dstPitch, LONG width, LONG height)
+	{
+		if (xfer.valid && (xfer.layouts & Layout32) && (const BYTE*)dst >= xfer.rawData && (const BYTE*)dst < xfer.rawData + (xfer.rawTop + xfer.height) * xfer.rawPitch * 2)
+		{
+			++xfer.indexedIntoDecode;
+			return;
+		}
+		LONG offset = xfer.rawData ? LONG(src - xfer.rawData) : -1;
+		LONG sy = offset >= 0 && srcPitch > 0 ? offset / srcPitch - xfer.rawTop : -1;
+		LONG sx = offset >= 0 && srcPitch > 0 ? offset % srcPitch - xfer.rawLeft : -1;
+		if (!xfer.valid || !(xfer.layouts & Layout8) || srcPitch != xfer.rawPitch || sx < 0 || sy < 0 || sx + width > xfer.width || sy + height > xfer.height)
+		{
+			++xfer.indexedOther;
+			return;
+		}
+
+		++xfer.indexedFromDecode;
+		MemoryCopy(xfer.palette, palette, sizeof(xfer.palette));
+		xfer.paletteSet = TRUE;
+		DWORD id;
+		LONG x, y;
+		Record* twin = FindAddress(dst, &id);
+		if (!twin || twin->memory || !PixelPos(twin, dst, dstPitch, width, height, &x, &y))
+		{
+			++xfer.indexedNoTwin;
+			return;
+		}
+
+		RECT sub = { sx, sy, sx + width, sy + height };
+		BOOL whole = !sx && !sy && width == xfer.width && height == xfer.height;
+		if (!whole)
+			++xfer.indexedPartial;
+		if (whole && twin->arrive.xferSeq == xfer.seq)
+		{
+			++xfer.consumed;
+			return;
+		}
+		if (xfer.target == twin->owner)
+		{
+			++xfer.direct;
+			return;
+		}
+
+		const CHAR* via = "indexed blit from the decode";
+		GuardResult g;
+		XferGuard(twin, x, y, &sub, TRUE, &g);
+		const CHAR* reason = NULL;
+		DWORD format = GuardFormats;
+		DWORD verdict = GuardVerdict(&g, height, TRUE, &reason, &format);
+		if (!verdict)
+		{
+			++twin->arrive.guardFails;
+			++xfer.guardFails;
+			XferLogReject(via, reason, twin, id, x, y, &g, height);
+			return;
+		}
+
+		Sync();
+		if (whole)
+			twin->arrive.xferSeq = xfer.seq;
+		++twin->arrive.transfers;
+		++xfer.byIndexed;
+		XferCount(verdict, format);
+		DWORD outcome = XferSeed(twin, id, x, y, &sub);
+		XferLogAccept(via, twin, id, x, y, &sub, outcome, &g, verdict, format);
+	}
+
+	VOID OnIndexedBlit(const BYTE* src, LONG srcPitch, const DWORD* palette, const DWORD* dst, LONG dstPitch, LONG width, LONG height)
+	{
+		Timed timed("OnIndexedBlit");
+		if (!src || !dst || !palette || width <= 0 || height <= 0 || !Active() || !SeedMode())
+			return;
+
+		++xfer.indexed;
+		// inside the decode call its snapshot is not taken yet; the blit is judged when the call returns
+		if (xfer.depth)
+		{
+			if (xfer.indexedInsideCount == XFER_INDEXED_INSIDE)
+			{
+				++xfer.indexedInsideDropped;
+				return;
+			}
+			XferIndexed* b = &xfer.indexedInside[xfer.indexedInsideCount++];
+			b->src = src;
+			b->srcPitch = srcPitch;
+			b->dst = dst;
+			b->dstPitch = dstPitch;
+			b->width = width;
+			b->height = height;
+			MemoryCopy(b->palette, palette, sizeof(b->palette));
+			return;
+		}
+		XferIndexedTry(src, srcPitch, palette, dst, dstPitch, width, height);
 	}
 
 	VOID DecodeBegin()
@@ -3951,9 +4630,11 @@ namespace Twin
 			--xfer.depth;
 		if (xfer.depth)
 			return;
-		DWORD count = xfer.insideCount;
+		xfer.srcSet = FALSE;
+		DWORD count = xfer.insideCount, blits = xfer.indexedInsideCount;
 		xfer.insideCount = 0;
-		if (!count || !Active())
+		xfer.indexedInsideCount = 0;
+		if ((!count && !blits) || !Active())
 			return;
 
 		Sync();
@@ -3963,8 +4644,15 @@ namespace Twin
 			Record* twin = &game.twins[w->id];
 			if (twin->owner != w->owner)
 				continue;
+			if (w->via == ViaUnlock && xfer.valid && XferLarge(twin, w->id, XferViaName(w->via, TRUE)))
+				continue;
 			POINT at[2] = { { w->x, w->y }, { 0, 0 } };
-			XferTry(twin, w->id, at, w->x || w->y ? 2 : 1, "unlock or hooked write inside the decode call", &xfer.byInside, TRUE, NULL);
+			XferTry(twin, w->id, at, w->x || w->y ? 2 : 1, XferViaName(w->via, TRUE), XferViaCounter(w->via, TRUE), TRUE, w->via == ViaTrap, NULL);
+		}
+		for (DWORD i = 0; i < blits; ++i)
+		{
+			const XferIndexed* b = &xfer.indexedInside[i];
+			XferIndexedTry(b->src, b->srcPitch, b->palette, b->dst, b->dstPitch, b->width, b->height);
 		}
 	}
 
@@ -4015,7 +4703,7 @@ namespace Twin
 		{
 			++xfer.unlocksInside;
 			const Arrival* a = &twin->arrive;
-			XferAdd(xfer.inside, &xfer.insideCount, XFER_INSIDE, twin, id, a->lockRectSet ? a->lockRect.left : 0, a->lockRectSet ? a->lockRect.top : 0, 0, FALSE);
+			XferAdd(xfer.inside, &xfer.insideCount, XFER_INSIDE, twin, id, a->lockRectSet ? a->lockRect.left : 0, a->lockRectSet ? a->lockRect.top : 0, 0, ViaUnlock);
 			return;
 		}
 		if (!xfer.valid || twin->arrive.xferSeq == xfer.seq)
@@ -4023,16 +4711,657 @@ namespace Twin
 
 		const Arrival* a = &twin->arrive;
 		BOOL during = a->lockSeq != xfer.seq;
+		const CHAR* via = during ? "unlock, decoded while locked" : "unlock, decoded before the lock";
+		if (XferLarge(twin, id, via))
+			return;
 		POINT at[2] = { { a->lockRectSet ? a->lockRect.left : 0, a->lockRectSet ? a->lockRect.top : 0 }, { 0, 0 } };
-		XferTry(twin, id, at, at[0].x || at[0].y ? 2 : 1, during ? "unlock, decoded while locked" : "unlock, decoded before the lock", during ? &xfer.byDuring : &xfer.byBefore, TRUE, NULL);
+		XferTry(twin, id, at, at[0].x || at[0].y ? 2 : 1, via, during ? &xfer.byDuring : &xfer.byBefore, TRUE, FALSE, NULL);
 	}
 
 	VOID LogTransfers()
 	{
-		DebugLog("twin seed transfer since start: decodes %u (named %u, snapshot failed %u) | locks %u unlocks %u (untwinned %u, memory twins %u, inside a decode %u) | tries %u: no decode %u, already taken %u, decoded there %u, stale %u, does not fit %u",
-			xfer.decodes, xfer.named, xfer.snapshotFailed, xfer.locks, xfer.unlocks, xfer.unlocksUntwinned, xfer.unlocksMemory, xfer.unlocksInside, xfer.tries, xfer.noDecode, xfer.consumed, xfer.direct, xfer.stale, xfer.noFit);
-		DebugLog("twin seed transfer done: unlock with the decode during the lock %u, before the lock %u | inside the decode call %u | hooked write %u (watched %u) | surface created before the decode %u (watched %u) | guard failed %u surfaces (partial at the end %u)",
-			xfer.byDuring, xfer.byBefore, xfer.byInside, xfer.byWrite, xfer.watches, xfer.byCreated, xfer.createdWatches, xfer.guardFails, xfer.partialExpired);
+		DebugLog("twin seed transfer since start: decodes %u (named %u, snapshot failed %u; BlitObject format byte 0: %u, 1: %u, other %u, no StoreDraw source %u) | locks %u unlocks %u (untwinned %u, memory twins %u, inside a decode %u) | tries %u: no decode %u, already taken %u, decoded there %u, stale %u, does not fit %u",
+			xfer.decodes, xfer.named, xfer.snapshotFailed, xfer.formatBytes[0], xfer.formatBytes[1], xfer.formatBytes[2], xfer.formatBytes[3],
+			xfer.locks, xfer.unlocks, xfer.unlocksUntwinned, xfer.unlocksMemory, xfer.unlocksInside, xfer.tries, xfer.noDecode, xfer.consumed, xfer.direct, xfer.stale, xfer.noFit);
+		DebugLog("twin seed transfer done: unlock with the decode during the lock %u, before the lock %u | inside the decode call %u | hooked write %u (watched %u) | surface created before the decode %u (watched %u) | first write trapped %u (watched %u, late %u) | indexed blit from the decode %u | rejected %u surfaces (blank %u, partial at the end %u, mostly matching but not a fresh surface %u), unlocks of much larger surfaces %u",
+			xfer.byDuring, xfer.byBefore, xfer.byInside, xfer.byWrite, xfer.watches, xfer.byCreated, xfer.createdWatches, xfer.byTrap, xfer.trapWatches, xfer.trapLate, xfer.byIndexed,
+			xfer.guardFails, xfer.blank, xfer.partialExpired, xfer.weakTolerant, xfer.unlockLarge);
+		DebugLog("twin seed transfer guard since start: exact rgb32 %u bgr32 %u 565 %u indices %u palette %u | tolerant 565 %u indices %u palette %u | indexed blits %u: from the decode %u (part of it %u, no surface twin %u), into the decode %u, other sources %u, dropped inside a decode %u",
+			xfer.exact[GuardRgb], xfer.exact[GuardBgr], xfer.exact[Guard565], xfer.exact[GuardIndexed], xfer.exact[GuardPalette], xfer.tolerant[Guard565], xfer.tolerant[GuardIndexed], xfer.tolerant[GuardPalette],
+			xfer.indexed, xfer.indexedFromDecode, xfer.indexedPartial, xfer.indexedNoTwin, xfer.indexedIntoDecode, xfer.indexedOther, xfer.indexedInsideDropped);
+	}
+#pragma endregion
+
+#pragma region Trap
+	BOOL TrapWanted()
+	{
+		if (!trap.chosen)
+		{
+			trap.chosen = TRUE;
+			trap.wanted = Config::Get("Twin", "WriteTrap", 1) != 0;
+		}
+		return trap.wanted;
+	}
+
+	VOID RenderBegin()
+	{
+		++trap.renderDepth;
+	}
+
+	VOID RenderEnd()
+	{
+		if (trap.renderDepth)
+			--trap.renderDepth;
+	}
+
+	BOOL TrapSelf(DWORD address)
+	{
+		return address - trap.selfLo < trap.selfHi - trap.selfLo;
+	}
+
+	BOOL TrapExe(DWORD address)
+	{
+		return address - trap.exeLo < trap.exeHi - trap.exeLo;
+	}
+
+	// a stack value is only taken for a return address when it follows a call; saved registers often point into the modules' data
+	BOOL TrapReturn(DWORD address)
+	{
+		BOOL self = TrapSelf(address);
+		if (!self && !TrapExe(address))
+			return FALSE;
+		if (address - 6 < (self ? trap.selfLo : trap.exeLo))
+			return FALSE;
+		const BYTE* code = (const BYTE*)address;
+		return code[-5] == 0xE8 || code[-6] == 0xFF || code[-3] == 0xFF || code[-2] == 0xFF;
+	}
+
+	// first in the vectored chain, so before any frame handler and the crash filter; only a write into a trapped surface page is handled, every other exception goes on to them.
+	// It may run on any thread: no allocation, no lock, no logging, only VirtualProtect and the preallocated ring
+	LONG __stdcall TrapHandler(EXCEPTION_POINTERS* info)
+	{
+		const EXCEPTION_RECORD* record = info->ExceptionRecord;
+		if (!trap.on || record->ExceptionCode != EXCEPTION_ACCESS_VIOLATION || record->NumberParameters < 2 || record->ExceptionInformation[0] != 1)
+			return EXCEPTION_CONTINUE_SEARCH;
+
+		DWORD addr = (DWORD)record->ExceptionInformation[1];
+		DWORD id = TWIN_NONE;
+		const BYTE* start = NULL;
+		for (DWORD i = 0; i < TWIN_MAX; ++i)
+		{
+			const BYTE* s = trap.ranges[i].start;
+			if (s && addr - (DWORD)s < trap.ranges[i].bytes)
+			{
+				id = i;
+				start = s;
+				break;
+			}
+		}
+		if (id == TWIN_NONE)
+			return EXCEPTION_CONTINUE_SEARCH;
+
+		DWORD old = 0;
+		if (!VirtualProtect((VOID*)(addr & ~(TRAP_PAGE - 1)), TRAP_PAGE, PAGE_READWRITE, &old))
+			return EXCEPTION_CONTINUE_SEARCH;
+
+		DWORD tid = GetCurrentThreadId();
+		if (old != PAGE_READONLY)
+		{
+			// another thread opened the page first; a write that keeps faulting on an open page is a real crash
+			InterlockedIncrement(&trap.retried);
+			DWORD slot = tid & 63;
+			if (trap.retry[slot].tid == tid && trap.retry[slot].addr == addr)
+			{
+				if (InterlockedIncrement(&trap.retry[slot].count) > TRAP_RETRIES)
+					return EXCEPTION_CONTINUE_SEARCH;
+			}
+			else
+			{
+				trap.retry[slot].tid = tid;
+				trap.retry[slot].addr = addr;
+				trap.retry[slot].count = 1;
+			}
+			return EXCEPTION_CONTINUE_EXECUTION;
+		}
+
+		InterlockedIncrement(&trap.faults);
+		InterlockedIncrement(&trap.ranges[id].faults);
+
+		const CONTEXT* context = info->ContextRecord;
+		DWORD eip = context->Eip;
+		const NT_TIB* tib = (const NT_TIB*)__readfsdword(0x18);
+		DWORD low = context->Esp, high = (DWORD)tib->StackBase;
+		BOOL stack = low >= (DWORD)tib->StackLimit && low < high && !(low & 3);
+		DWORD caller = 0;
+		for (DWORD i = 0; stack && i < TRAP_STACK_SCAN && low + i * sizeof(DWORD) + sizeof(DWORD) <= high; ++i)
+		{
+			DWORD value = ((const DWORD*)low)[i];
+			if (TrapReturn(value))
+			{
+				caller = value;
+				break;
+			}
+		}
+
+		// the wrapper writing its own surfaces: its own code, or a CRT copy it called
+		if (TrapSelf(eip) || (!TrapExe(eip) && TrapSelf(caller)))
+		{
+			InterlockedIncrement(&trap.own);
+			InterlockedIncrement(&trap.ranges[id].own);
+			return EXCEPTION_CONTINUE_EXECUTION;
+		}
+
+		InterlockedIncrement(&trap.foreign);
+		LONG slot = InterlockedIncrement(&trap.head) - 1;
+		if ((DWORD)slot - trap.tail >= TRAP_RING)
+		{
+			InterlockedIncrement(&trap.dropped);
+			return EXCEPTION_CONTINUE_EXECUTION;
+		}
+
+		TrapEvent* e = &trap.ring[(DWORD)slot % TRAP_RING];
+		e->eip = eip;
+		e->addr = addr;
+		e->caller = caller;
+		e->id = id;
+		e->start = start;
+		DWORD flags = 0;
+		if (tid != trap.gameThread)
+			flags |= TrapOtherThread;
+		else
+		{
+			if (xfer.depth)
+				flags |= TrapDecode;
+			if (trap.renderDepth)
+				flags |= TrapRender;
+		}
+		for (DWORD k = 0; k < 4; ++k)
+			e->ret[k] = 0;
+		DWORD frame = context->Ebp;
+		for (DWORD k = 0; stack && k < 4; ++k)
+		{
+			if (frame < low || frame + 2 * sizeof(DWORD) > high || (frame & 3))
+				break;
+			const DWORD* f = (const DWORD*)frame;
+			e->ret[k] = f[1];
+			if (TrapSelf(f[1]) && !(flags & (TrapDecode | TrapRender | TrapOtherThread)))
+				flags |= TrapHooked;
+			if (f[0] <= frame)
+				break;
+			frame = f[0];
+		}
+		e->flags = flags;
+		e->seq = xfer.seq;
+		e->frameNo = game.frameNo;
+		InterlockedExchange(&e->ready, slot + 1);
+		return EXCEPTION_CONTINUE_EXECUTION;
+	}
+
+	// the code of the module, so that pointers into its data never pass for code addresses
+	VOID TrapModule(HMODULE module, DWORD* low, DWORD* high)
+	{
+		*low = *high = 0;
+		if (!module)
+			return;
+		const IMAGE_DOS_HEADER* dos = (const IMAGE_DOS_HEADER*)module;
+		const IMAGE_NT_HEADERS* nt = (const IMAGE_NT_HEADERS*)((const BYTE*)module + dos->e_lfanew);
+		const IMAGE_OPTIONAL_HEADER* header = &nt->OptionalHeader;
+		if (header->SizeOfCode && header->BaseOfCode + header->SizeOfCode <= header->SizeOfImage)
+		{
+			*low = (DWORD)module + header->BaseOfCode;
+			*high = *low + header->SizeOfCode;
+		}
+		else
+		{
+			*low = (DWORD)module;
+			*high = *low + header->SizeOfImage;
+		}
+	}
+
+	BOOL TrapInit()
+	{
+		if (trap.initialized)
+			return trap.on;
+		trap.initialized = TRUE;
+		if (!TrapWanted())
+		{
+			DebugLog("twin trap off (Twin.WriteTrap=0)");
+			return FALSE;
+		}
+
+		TrapModule(hDllModule, &trap.selfLo, &trap.selfHi);
+		TrapModule(GetModuleHandle(NULL), &trap.exeLo, &trap.exeHi);
+		trap.gameThread = GetCurrentThreadId();
+		trap.windowTick = GetTickCount();
+		trap.on = TRUE;
+		if (!AddVectoredExceptionHandler(1, TrapHandler))
+		{
+			trap.on = FALSE;
+			DebugLog("twin trap off: the vectored exception handler could not be added");
+			return FALSE;
+		}
+		DebugLog("twin trap on (Twin.WriteTrap=1): surface pages stay read-only until the game's first write; wrapper %08X-%08X, game %08X-%08X | re-armed every %u to %u ms, at most %u pages a second, %u faults in all",
+			trap.selfLo, trap.selfHi, trap.exeLo, trap.exeHi, TRAP_REARM_MS, TRAP_REARM_MAX_MS, TRAP_PAGES_SECOND, TRAP_TOTAL);
+		return TRUE;
+	}
+
+	VOID TrapSetBits(TrapRange* r, DWORD first, DWORD last)
+	{
+		for (DWORD p = first; p <= last; ++p)
+		{
+			DWORD bit = 1u << (p & 31);
+			if (!(r->bits[p >> 5] & bit))
+			{
+				r->bits[p >> 5] |= bit;
+				++r->armedBits;
+			}
+		}
+	}
+
+	BOOL TrapProtect(TrapRange* r, DWORD first, DWORD last)
+	{
+		DWORD old;
+		if (!VirtualProtect((VOID*)(r->start + first * TRAP_PAGE), (last - first + 1) * TRAP_PAGE, PAGE_READONLY, &old))
+		{
+			++trap.armFails;
+			return FALSE;
+		}
+		TrapSetBits(r, first, last);
+		trap.windowPages += last - first + 1;
+		return TRUE;
+	}
+
+	BOOL TrapArm(TrapRange* r, DWORD now)
+	{
+		if (!TrapProtect(r, 0, r->pages - 1))
+			return FALSE;
+		r->lastArm = now;
+		InterlockedExchange(&r->faults, 0);
+		InterlockedExchange(&r->own, 0);
+		r->foreignSinceArm = 0;
+		return TRUE;
+	}
+
+	VOID TrapAttach(Record* twin, DWORD id)
+	{
+		if (!twin->owner->isPaged || twin->memory || ((DWORD)twin->base & (TRAP_PAGE - 1)))
+		{
+			++trap.notPaged;
+			return;
+		}
+		if (!TrapInit() || trap.faults >= TRAP_TOTAL)
+			return;
+
+		TrapRange* r = &trap.ranges[id];
+		DWORD pages = ((DWORD)twin->pitch * twin->height * sizeof(DWORD) + TRAP_PAGE - 1) / TRAP_PAGE;
+		DWORD words = (pages + 31) / 32;
+		if (!pages)
+			return;
+		if (words > r->bitWords)
+		{
+			if (r->bits)
+				MemoryFree(r->bits);
+			r->bits = (DWORD*)MemoryAlloc(words * sizeof(DWORD));
+			r->bitWords = r->bits ? words : 0;
+			if (!r->bits)
+				return;
+		}
+		MemoryZero(r->bits, r->bitWords * sizeof(DWORD));
+		r->armedBits = 0;
+		r->pages = pages;
+		r->bytes = pages * TRAP_PAGE;
+		r->interval = TRAP_REARM_MS;
+		r->fresh = TRUE;
+		r->quickArms = 0;
+		r->queued = FALSE;
+		r->reFirst = MAXDWORD;
+		r->reLast = 0;
+		r->start = twin->base;
+		++trap.attached;
+		if (TrapArm(r, GetTickCount()))
+			++trap.createArms;
+	}
+
+	VOID TrapDetach(DWORD id)
+	{
+		TrapRange* r = &trap.ranges[id];
+		const BYTE* start = r->start;
+		if (!start)
+			return;
+		r->start = NULL;
+		DWORD old;
+		VirtualProtect((VOID*)start, r->bytes, PAGE_READWRITE, &old);
+		r->armedBits = 0;
+		r->pages = 0;
+	}
+
+	// a write of ours is about to happen there: those pages open, so it costs one call instead of a fault per page
+	VOID TrapOpen(Record* twin, const RECT* rect)
+	{
+		DWORD id = DWORD(twin - game.twins);
+		if (id >= TWIN_MAX)
+			return;
+		TrapRange* r = &trap.ranges[id];
+		if (!r->armedBits || r->start != twin->base)
+			return;
+
+		LONG top = max(rect->top, 0L), bottom = min(rect->bottom, twin->height);
+		LONG left = max(rect->left, 0L), right = min(rect->right, twin->width);
+		if (top >= bottom || left >= right)
+			return;
+		DWORD first = DWORD(top * twin->pitch + left) * sizeof(DWORD) / TRAP_PAGE;
+		DWORD last = (DWORD((bottom - 1) * twin->pitch + right) * sizeof(DWORD) - 1) / TRAP_PAGE;
+		if (last >= r->pages)
+			last = r->pages - 1;
+
+		DWORD cleared = 0;
+		for (DWORD p = first; p <= last; ++p)
+		{
+			DWORD bit = 1u << (p & 31);
+			if (r->bits[p >> 5] & bit)
+			{
+				r->bits[p >> 5] &= ~bit;
+				++cleared;
+			}
+		}
+		if (!cleared)
+			return;
+
+		DWORD old;
+		VirtualProtect((VOID*)(r->start + first * TRAP_PAGE), (last - first + 1) * TRAP_PAGE, PAGE_READWRITE, &old);
+		r->armedBits -= min(cleared, r->armedBits);
+		++trap.opens;
+		trap.openPages += cleared;
+
+		// a fresh surface is armed again right after our write, so the game's first write still traps
+		if (r->fresh && r->quickArms < TRAP_QUICK)
+		{
+			r->reFirst = min(r->reFirst, first);
+			r->reLast = max(r->reLast, last);
+			if (!r->queued && trap.reopenCount < TRAP_REOPEN)
+			{
+				r->queued = TRUE;
+				trap.reopen[trap.reopenCount++] = id;
+			}
+		}
+	}
+
+	// at the next twin call that drains, so after the hooked write that opened the pages has finished
+	VOID TrapReopen()
+	{
+		DWORD count = trap.reopenCount;
+		trap.reopenCount = 0;
+		for (DWORD i = 0; i < count; ++i)
+		{
+			TrapRange* r = &trap.ranges[trap.reopen[i]];
+			r->queued = FALSE;
+			DWORD first = r->reFirst, last = r->reLast;
+			r->reFirst = MAXDWORD;
+			r->reLast = 0;
+			if (!r->start || !r->fresh || first > last || last >= r->pages || trap.faults >= TRAP_TOTAL || trap.windowPages >= TRAP_PAGES_SECOND)
+				continue;
+			if (TrapProtect(r, first, last))
+			{
+				++r->quickArms;
+				++trap.quickArms;
+			}
+		}
+	}
+
+	VOID TrapRearm(DWORD now)
+	{
+		if (!trap.on)
+			return;
+		if (now - trap.windowTick >= 1000)
+		{
+			trap.windowTick = now;
+			trap.windowPages = 0;
+		}
+		if (trap.faults >= TRAP_TOTAL)
+		{
+			if (!trap.spentLogged)
+			{
+				trap.spentLogged = TRUE;
+				DebugLog("twin trap budget of %u faults spent: no more arming (writers %u)", TRAP_TOTAL, trap.writerCount);
+			}
+			return;
+		}
+
+		DWORD top = game.top;
+		for (DWORD n = 0; n < top; ++n)
+		{
+			DWORD id = (trap.cursor + n) % top;
+			TrapRange* r = &trap.ranges[id];
+			if (!r->start || (r->armedBits >= r->pages && !r->faults) || now - r->lastArm < r->interval)
+				continue;
+			if (r->pages > TRAP_PAGES_SECOND)
+			{
+				++trap.tooBig;
+				continue;
+			}
+			if (trap.windowPages + r->pages > TRAP_PAGES_SECOND)
+			{
+				++trap.budgetSkips;
+				trap.cursor = id;
+				return;
+			}
+			// a surface only we write backs off; one the game writes stays at the base rate
+			r->interval = r->foreignSinceArm ? TRAP_REARM_MS : min(r->interval * 2, (DWORD)TRAP_REARM_MAX_MS);
+			if (TrapArm(r, now))
+				++trap.rearms;
+		}
+		trap.cursor = 0;
+	}
+
+	VOID TrapName(DWORD address, CHAR* text)
+	{
+		if (!address)
+		{
+			StrCopy(text, "-");
+			return;
+		}
+		CHAR name[24];
+		DWORD base = CrashModule(address, name, sizeof(name));
+		StrPrint(text, "%08X %s+%X", address, name, address - base);
+	}
+
+	// the first write into a fresh surface during or right after a decode is where that decode's pixels went
+	VOID TrapProvenance(Record* twin, DWORD id, const TrapEvent* e, LONG x, LONG y)
+	{
+		if (twin->memory || !SeedMode())
+			return;
+		if (e->flags & TrapDecode)
+		{
+			if (xfer.depth)
+			{
+				XferAdd(xfer.inside, &xfer.insideCount, XFER_INSIDE, twin, id, x, y, 0, ViaTrap);
+				++xfer.trapWatches;
+				return;
+			}
+			// the decode call it happened in has returned; what that call decoded is the latest decode
+			if (e->seq + 1 != xfer.seq)
+			{
+				++xfer.trapLate;
+				return;
+			}
+		}
+		else if (e->seq != xfer.seq)
+		{
+			++xfer.trapLate;
+			return;
+		}
+		if (!xfer.valid || game.frameNo - xfer.frameNo > XFER_UNBOUND_FRAMES || twin->arrive.xferSeq == xfer.seq)
+		{
+			++xfer.trapLate;
+			return;
+		}
+
+		BOOL sized = twin->height == xfer.height && (twin->width == xfer.width || twin->width == xfer.width + 1);
+		XferAdd(xfer.watch, &xfer.watchCount, XFER_WATCH, twin, id, sized ? 0 : x, sized ? 0 : y, xfer.seq, ViaTrap);
+		++xfer.trapWatches;
+	}
+
+	VOID TrapRecord(const TrapEvent* e)
+	{
+		Record* twin = e->id < TWIN_MAX ? &game.twins[e->id] : NULL;
+		if (twin && (!twin->owner || twin->base != e->start))
+		{
+			++trap.stale;
+			twin = NULL;
+		}
+		LONG x = 0, y = 0;
+		DWORD page = 0;
+		if (twin)
+		{
+			DWORD offset = e->addr - (DWORD)twin->base;
+			DWORD row = (DWORD)twin->pitch * sizeof(DWORD);
+			y = min(LONG(offset / row), twin->height - 1);
+			x = LONG(offset % row / sizeof(DWORD));
+			page = offset / TRAP_PAGE;
+		}
+		TrapRange* r = twin ? &trap.ranges[e->id] : NULL;
+		BOOL fresh = r && r->fresh && !(e->flags & TrapOtherThread);
+
+		TrapWriter* w = NULL;
+		for (DWORD i = 0; i < trap.writerCount && !w; ++i)
+			if (trap.writers[i].eip == e->eip)
+				w = &trap.writers[i];
+		BOOL added = FALSE;
+		if (!w)
+		{
+			if (trap.writerCount < TRAP_WRITERS)
+			{
+				w = &trap.writers[trap.writerCount++];
+				MemoryZero(w, sizeof(TrapWriter));
+				w->eip = e->eip;
+				w->caller = e->caller;
+				MemoryCopy(w->ret, e->ret, sizeof(w->ret));
+				w->sampleId = TWIN_NONE;
+				CHAR name[24];
+				w->moduleOffset = e->eip - CrashModule(e->eip, name, sizeof(name));
+				MemoryCopy(w->module, name, sizeof(w->module));
+				w->module[sizeof(w->module) - 1] = 0;
+				added = TRUE;
+			}
+			else
+				++trap.writersFull;
+		}
+		if (w)
+		{
+			++w->count;
+			if (twin)
+			{
+				BOOL known = FALSE;
+				for (DWORD i = 0; i < min(w->twinCount, (DWORD)4) && !known; ++i)
+					known = w->twins[i] == e->id;
+				if (!known)
+				{
+					if (w->twinCount < 4)
+						w->twins[w->twinCount] = e->id;
+					++w->twinCount;
+				}
+				if (w->sampleId == TWIN_NONE)
+				{
+					w->sampleId = e->id;
+					w->sampleW = twin->width;
+					w->sampleH = twin->height;
+					w->sampleX = x;
+					w->sampleY = y;
+				}
+			}
+			if (e->flags & TrapDecode)
+				++w->decode;
+			if (e->flags & TrapRender)
+				++w->render;
+			if (e->flags & TrapHooked)
+				++w->hooked;
+			if (e->flags & TrapOtherThread)
+				++w->other;
+			if (fresh)
+				++w->fresh;
+		}
+
+		if (added)
+		{
+			CHAR eip[48], caller[48], ret[4][48];
+			TrapName(e->eip, eip);
+			TrapName(e->caller, caller);
+			for (DWORD k = 0; k < 4; ++k)
+				TrapName(e->ret[k], ret[k]);
+			const CHAR* where = (e->flags & TrapOtherThread) ? "another thread" : (e->flags & TrapDecode) ? "inside a decode (StoreDraw)" : (e->flags & TrapRender) ? "inside Render" :
+				(e->flags & TrapHooked) ? "under a hooked op" : "outside decode, Render and hooked ops";
+			DebugLog("twin trap writer #%u new: eip %s | caller %s | ret %s < %s < %s < %s | twin %u %dx%d at %d,%d (page %u)%s | %s | frame %u, latest decode #%u %.32s %dx%d %u frames before",
+				trap.writerCount, eip, caller, ret[0], ret[1], ret[2], ret[3], twin ? e->id : TWIN_NONE, twin ? twin->width : 0, twin ? twin->height : 0, x, y, page,
+				fresh ? ", first write into the fresh surface" : "", where, e->frameNo, e->seq, xfer.seq == e->seq ? xfer.name : "-", xfer.seq == e->seq ? xfer.width : 0,
+				xfer.seq == e->seq ? xfer.height : 0, e->frameNo - xfer.frameNo);
+		}
+
+		if (!twin)
+			return;
+		++twin->arrive.trapWrites;
+		twin->arrive.trapEip = e->eip;
+		++r->foreignSinceArm;
+		if (fresh)
+		{
+			r->fresh = FALSE;
+			TrapProvenance(twin, e->id, e, x, y);
+		}
+	}
+
+	VOID TrapDrain()
+	{
+		if (trap.draining)
+			return;
+		trap.draining = TRUE;
+		DWORD head = (DWORD)trap.head;
+		while (trap.tail != head)
+		{
+			DWORD slot = trap.tail;
+			TrapEvent* e = &trap.ring[slot % TRAP_RING];
+			if (e->ready == (LONG)(slot + 1))
+				TrapRecord(e);
+			else
+				++trap.lost;
+			trap.tail = slot + 1;
+		}
+		trap.draining = FALSE;
+	}
+
+	VOID TrapLog()
+	{
+		if (!trap.initialized)
+			return;
+		DebugLog("twin trap since start: %s | twins attached %u (not page-aligned %u) | armed at create %u, re-armed at present %u, after our own write %u (skipped for the page budget %u, too big %u, failed %u) | opened by our announced writes %u (%u pages) | faults %u: wrapper's own %u, game %u (ring dropped %u, lost %u, stale %u, retried %u) | writers %u (table full %u) | pages armed this second %u of %u",
+			trap.on ? (trap.faults >= TRAP_TOTAL ? "budget spent" : "on") : "off", trap.attached, trap.notPaged, trap.createArms, trap.rearms, trap.quickArms, trap.budgetSkips, trap.tooBig, trap.armFails,
+			trap.opens, trap.openPages, trap.faults, trap.own, trap.foreign, trap.dropped, trap.lost, trap.stale, trap.retried, trap.writerCount, trap.writersFull, trap.windowPages, TRAP_PAGES_SECOND);
+
+		DWORD top[TRAP_TOP];
+		DWORD found = 0;
+		for (DWORD i = 0; i < trap.writerCount; ++i)
+		{
+			DWORD slot = found < TRAP_TOP ? found++ : TRAP_TOP;
+			while (slot && trap.writers[top[slot - 1]].count < trap.writers[i].count)
+			{
+				if (slot < TRAP_TOP)
+					top[slot] = top[slot - 1];
+				--slot;
+			}
+			if (slot < TRAP_TOP)
+				top[slot] = i;
+		}
+		for (DWORD line = 0; line * 4 < found; ++line)
+		{
+			CHAR text[4 * 240 + 1];
+			CHAR* ptr = text;
+			*ptr = 0;
+			for (DWORD k = line * 4; k < found && k < line * 4 + 4; ++k)
+			{
+				const TrapWriter* w = &trap.writers[top[k]];
+				ptr += StrPrint(ptr, " [%u] %08X %.20s+%X n %u tw %u (#%d %dx%d at %d,%d) dec %u ren %u hk %u thr %u fresh %u;", k + 1, w->eip, w->module, w->moduleOffset, w->count, w->twinCount,
+					w->sampleId == TWIN_NONE ? -1 : (INT)w->sampleId, w->sampleW, w->sampleH, w->sampleX, w->sampleY, w->decode, w->render, w->hooked, w->other, w->fresh);
+			}
+			DebugLog("twin trap top writers (rank eip module+offset, n pages opened, tw twins (sample twin size at x,y), inside decode/Render/hooked op/other thread, first writes into fresh surfaces):%s", text);
+		}
 	}
 #pragma endregion
 
@@ -4126,6 +5455,7 @@ namespace Twin
 		}
 
 		LogTransfers();
+		TrapLog();
 		for (DWORD line = 0; line * 3 < found && line * 3 < ARRIVAL_TOP; ++line)
 		{
 			CHAR text[3 * 240 + 1];
@@ -4135,11 +5465,11 @@ namespace Twin
 			{
 				const Record* twin = &game.twins[top[k]];
 				const Arrival* a = &twin->arrive;
-				ptr += StrPrint(ptr, " [%u] %u %dx%d up %u/%u s%u wr %u fi %u in %u/%u/%u px %u lk %u/%u %08X<%08X x%u f%u;",
+				ptr += StrPrint(ptr, " [%u] %u %dx%d up %u/%u s%u wr %u fi %u in %u/%u/%u px %u lk %u/%u %08X<%08X x%u f%u tr %u %08X;",
 					k + 1, top[k], twin->width, twin->height, a->uploads, a->uploadPx, a->seedUploads, a->writes, a->fills, a->in4K, a->in1x, a->inUntwinned, a->pixelIn,
-					a->locks, a->unlocks, a->lockCaller, a->lockOuter, a->transfers, a->guardFails);
+					a->locks, a->unlocks, a->lockCaller, a->lockOuter, a->transfers, a->guardFails, a->trapWrites, a->trapEip);
 			}
-			DebugLog("twin arrival top 1x-only (up n/px, s seed ups, wr hooked writes, fi fills, in 4K/1x/untwinned, px pixel ops, lk lock/unlock caller<outer, x transfers, f guard fails):%s", text);
+			DebugLog("twin arrival top 1x-only (up n/px, s seed ups, wr hooked writes, fi fills, in 4K/1x/untwinned, px pixel ops, lk lock/unlock caller<outer, x transfers, f guard fails, tr trapped game writes and the last writer):%s", text);
 		}
 
 		for (DWORD i = 0; i < game.top; ++i)
@@ -4179,7 +5509,10 @@ namespace Twin
 		DWORD id;
 		Record* twin = Find(buffer, &id);
 		if (twin)
+		{
 			XferWatchCreated(twin, id);
+			TrapAttach(twin, id);
+		}
 	}
 
 	VOID CreateTwin(StateBuffer* buffer, LONG width, LONG height)
@@ -5290,6 +6623,7 @@ namespace Twin
 		}
 
 		XferResolve(TRUE);
+		TrapRearm(now);
 		if (seeds.active)
 			SeedPoll();
 

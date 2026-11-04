@@ -129,6 +129,7 @@ extern CHAR snapshotName[];
 
 void DebugLog(const char* format, ...);
 VOID CrashArm();
+DWORD CrashModule(DWORD address, CHAR* name, DWORD size);
 
 VOID LoadKernel32();
 VOID LoadShcore();

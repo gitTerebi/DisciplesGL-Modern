@@ -328,7 +328,7 @@ VOID OpenDrawSurface::CreateBuffer(DWORD width, DWORD height, DWORD bpp, VOID* b
 			if (bpp == sizeof(BYTE) && this->type == SurfacePrimary || bpp == sizeof(WORD) && config.bpp32Hooked)
 				bpp = sizeof(DWORD);
 
-			this->indexBuffer = new StateBuffer(width * height * bpp);
+			this->indexBuffer = config.bpp32Hooked && Twin::TrapWanted() ? new StateBuffer(width * height * bpp, TRUE) : new StateBuffer(width * height * bpp);
 		}
 
 		if (this->type == SurfacePrimary)

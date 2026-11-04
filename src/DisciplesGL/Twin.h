@@ -63,6 +63,13 @@ namespace Twin
 	VOID DecodeEnd();
 	VOID OnLock(StateBuffer* buffer, const RECT* rect, DWORD caller, DWORD outer);
 	VOID OnUnlock(StateBuffer* buffer);
+	// the decode's BlitObject as the game passed it: data, raw pitch field, format byte (0 = 8-bit indices) and clip rect
+	VOID DecodeSource(const VOID* data, LONG pitchField, BYTE trueColor, const RECT* rect);
+	VOID OnIndexedBlit(const BYTE* src, LONG srcPitch, const DWORD* palette, const DWORD* dst, LONG dstPitch, LONG width, LONG height);
+	VOID RenderBegin();
+	VOID RenderEnd();
+	// first-write trap: surface pages are read-only until the first write, which names the code that writes it ([Twin] WriteTrap)
+	BOOL TrapWanted();
 
 	// render thread
 	BOOL Prepare();

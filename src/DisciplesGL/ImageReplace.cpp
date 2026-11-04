@@ -3525,6 +3525,8 @@ namespace ImageReplace
 		s->dims[0] = rect[2] - rect[0];
 		s->dims[1] = rect[3] - rect[1];
 		LONG pitch = *(const LONG*)(desc + 0x18) >> 1;
+		// the range assumes 32 bpp; the transfer guard reads the decode the way its format byte and pitch field allow, 8-bit indices included
+		Twin::DecodeSource(data, *(const LONG*)(desc + 0x18), desc[0], (const RECT*)rect);
 
 		if (!s->entry)
 		{
@@ -3783,7 +3785,9 @@ namespace ImageReplace
 		}
 
 		++art.depth;
+		Twin::RenderBegin();
 		((VOID(__thiscall*)(VOID*, VOID*, const POINT*, const POINT*, const POINT*, const RECT*))sub_Render)(thisObj, renderer, start, offset, size, area);
+		Twin::RenderEnd();
 		--art.depth;
 
 		DWORD tick = GetTickCount();

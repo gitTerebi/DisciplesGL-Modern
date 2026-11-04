@@ -2025,6 +2025,9 @@ namespace Hooks
 		LONG width = rect->right - rect->left;
 		LONG height = rect->bottom - rect->top;
 		Twin::OnWrite(lpDst, dstPitch, width, height);
+		const BYTE* firstSrc = lpSrc;
+		const DWORD* firstDst = lpDst;
+		LONG rows = height;
 
 		if (config.renderer == RendererGDI)
 		{
@@ -2070,6 +2073,9 @@ namespace Hooks
 				lpDst += dstPitch;
 			} while (--height);
 		}
+
+		// the store decodes indexed art; this is where its pixels can reach a surface, so the decode's seed can follow them
+		Twin::OnIndexedBlit(firstSrc, srcPitch, palette, firstDst, dstPitch, width, rows);
 	}
 
 	DWORD __stdcall Pixel_ConvertPixel_565(BYTE red, BYTE green, BYTE blue)

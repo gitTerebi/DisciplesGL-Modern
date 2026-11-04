@@ -29,10 +29,12 @@
 class StateBuffer : public Allocation {
 public:
 	BYTE isAllocated;
+	BYTE isPaged;
 	VOID* data;
 
 	StateBuffer();
 	StateBuffer(DWORD);
+	StateBuffer(DWORD, BOOL);
 	StateBuffer(VOID*);
 	virtual ~StateBuffer();
 };
