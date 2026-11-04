@@ -3913,6 +3913,7 @@ namespace Hooks
 		if (!flag)
 			return;
 
+		Twin::OnMemory(dstData, dstPitch, width, bottom);
 		TwinFace(dstData, dstPitch, srcData, srcPitch, top, bottom, width, isMirror, flag, minIdx, pixData_1, pixData_2, mskData, mskPitch);
 		srcData += top * srcPitch;
 		dstData += top * dstPitch + (isMirror ? width - 1 : 0);
@@ -3990,6 +3991,7 @@ namespace Hooks
 		if (!flag)
 			return;
 
+		Twin::OnMemory(dstData, dstPitch, width, bottom);
 		TwinFace(dstData, dstPitch, srcData, srcPitch, top, bottom, width, isMirror, flag, minIdx, pixData_1, pixData_2, mskData, mskPitch);
 		srcData += top * srcPitch;
 		dstData += top * dstPitch + (isMirror ? width - 1 : 0);

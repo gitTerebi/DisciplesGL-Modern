@@ -522,7 +522,10 @@ namespace TurnOrder
 			FillTurnRect(surface + y * pitch, 0, 0, 0, width - 1, 0, key, bpp);
 
 		if (isTrueColor)
+		{
+			Twin::OnMemory(surface, pitch / (LONG)bpp, width, height);
 			Twin::OnWrite(surface, pitch / (LONG)bpp, width, height);
+		}
 
 		DWORD now = timeGetTime();
 		BOOL moving = FALSE;
