@@ -1,492 +1,795 @@
-12:28:03.965 DllMain attach
-12:28:03.979 Config loaded exe version major=07D3000A minor=00170001 renderer=0 mode=800x600
-12:28:03.979 Hooks::Load begin exe version major=07D3000A minor=00170001
-12:28:03.994 LoadV2 version major=07D3000A minor=00170001 check=0056339D
-12:28:04.043 image replace loaded
-12:28:04.044 Hooks loaded
-12:28:04.062 Mods loaded
-12:28:04.102 RenderStart begin renderer=0 windowed=1 mode=800x600x16
-12:28:04.108 image pack loaded: 12445 animations, 115348 frames in 47 ms
-12:28:04.216 RenderStart end gl=04060000 renderer=0
-12:28:04.216 twin scale N=4 screen 2560x1440 mode 800x600 tile check on
-12:28:04.216 twin display config borders allowed 0 active 0 type 0 | background allowed 0 enabled 0 | interpolation 0 upscaling 0 x0 | zoomed 0 renderer 0 gl 04060000
-12:28:04.217 twin create 0 800x600 buffer 03B50850 data 7F6A0050 at frame 0
-12:28:04.217 twin create 1 800x600 buffer 03B50880 data 7F4C0050 at frame 0
-12:28:04.218 twin create 2 800x600 buffer 03B508B0 data 7F2E0050 at frame 0
-12:28:04.218 twin create 3 800x600 buffer 03B508E0 data 7EB60050 at frame 0
-12:28:04.219 twin create 4 1152x1152 buffer 02D55240 data 7E310040 at frame 0
-12:28:04.267 BinkOpen G:\games\Disciples 2\Video\SF.bik replaced with blank ok
-12:28:04.267 twin create 5 800x600 buffer 02D57570 data 7D490040 at frame 0
-12:28:04.268 twin first present buffer 03B508E0 isBack 0 isZoomed 0 borders 0 size 800x600
-12:28:04.268 TextReplace diag glyphs=0 skipped=0 copies=0 carried=0 occluded=0 dropped=0 pixelCopies=0 rows=0 presents=1 presentGlyphs=0 maskedFrames=0 drawn=0 noAtlas=0
-12:28:04.268 TextReplace diag2 cleanPresents=0 emptyDirty=1 renders=0 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=0
-12:28:04.274 twin GL ready
-12:28:04.288 twin show viewport 800x600 twin 3200x2400 frame 800x600 ratio 4.000 x 4.000 box minify
-12:28:04.305 twin show viewport 1756x1317 twin 3200x2400 frame 800x600 ratio 1.822 x 1.822 box minify
-12:28:05.259 twin destroy 5 800x600 buffer 02D57570 at frame 232
-12:28:05.261 twin create 5 800x600 buffer 02D57470 data 7D2C0040 at frame 232
-12:28:05.307 image GL ready, mipmaps on
-12:28:05.308 twin destroy 5 800x600 buffer 02D57470 at frame 235
-12:28:05.412 twin create 5 24x54 buffer 0CF787B0 data 0B8A3C10 at frame 236
-12:28:05.413 twin destroy 5 24x54 buffer 0CF787B0 at frame 237
-12:28:05.414 image art name=_CUDEFAUL frame=3276 place=581,351,605,405 clip=581,351,800,600 flipped=0 parts=1 first=581,351,0,0,24,54
-12:28:05.414 twin create 5 688x1014 buffer 0CF77E50 data 7CA40040 at frame 237
-12:28:05.415 twin create 6 748x896 buffer 0CF77E60 data 7C500040 at frame 237
-12:28:05.415 twin create 7 800x664 buffer 0CF77E70 data 7B190040 at frame 237
-12:28:05.416 twin create 8 800x600 buffer 0CF77E80 data 7ADA0040 at frame 237
-12:28:05.416 twin create 9 200x20 buffer 0CF77E90 data 0CF04E90 at frame 237
-12:28:05.416 twin create 10 200x20 buffer 0CF77EA0 data 23F1C170 at frame 237
-12:28:05.416 twin create 11 100x20 buffer 0CF77EB0 data 23F163A0 at frame 237
-12:28:05.416 twin create 12 100x20 buffer 0CF77EC0 data 0B8A3110 at frame 237
-12:28:05.416 twin create 13 100x20 buffer 0CF77ED0 data 0C3000C0 at frame 237
-12:28:05.416 twin create 14 24x54 buffer 0CF77EE0 data 0BE60778 at frame 237
-12:28:05.416 twin create 15 64x20 buffer 0CF77EF0 data 0CF9C518 at frame 237
-12:28:05.416 twin create 16 64x20 buffer 0CF77F00 data 0CF93660 at frame 237
-12:28:05.416 twin create 17 36x20 buffer 0CF77F10 data 23F13910 at frame 237
-12:28:05.441 TextReplace font 02CE8BB0 'Menu': charset 0 score 1000/1000 offset 0,0
-12:28:05.441 TextReplace font 02CE8BB0 name 'Menu' calibrated in 853 us
-12:28:05.441 TextReplace offcarry blit src 02DA0180 1152x1152 glyphs 12 rect 0,0,200,20 -> dst 02DA61C0 200x20 at 0,0 now 12 (+12) first ch 83 alpha 255
-12:28:05.441 TextReplace offcarry blit src 02DA0180 1152x1152 glyphs 8 rect 0,0,200,20 -> dst 02DA6210 200x20 at 0,0 now 8 (+8) first ch 84 alpha 255
-12:28:05.441 TextReplace offcarry blit src 02DA0180 1152x1152 glyphs 7 rect 0,0,100,20 -> dst 02DA6260 100x20 at 0,0 now 7 (+7) first ch 67 alpha 255
-12:28:05.441 TextReplace offcarry blit src 02DA0180 1152x1152 glyphs 11 rect 0,0,100,20 -> dst 02DA62B0 100x20 at 0,0 now 11 (+11) first ch 77 alpha 255
-12:28:05.441 TextReplace offcarry blit src 02DA0180 1152x1152 glyphs 7 rect 0,0,100,20 -> dst 02DA6300 100x20 at 0,0 now 7 (+7) first ch 79 alpha 255
-12:28:05.441 TextReplace offcarry blit src 02DA0180 1152x1152 glyphs 5 rect 0,0,64,20 -> dst 02DA63A0 64x20 at 0,0 now 5 (+5) first ch 73 alpha 255
-12:28:05.441 TextReplace offcarry blit src 02DA0180 1152x1152 glyphs 4 rect 0,0,64,20 -> dst 02DA63F0 64x20 at 0,0 now 4 (+4) first ch 81 alpha 255
-12:28:05.442 TextReplace font 02CEA028 'Normal': charset 0 score 998/1000 offset 0,0
-12:28:05.442 TextReplace font 02CEA028 name 'Normal' calibrated in 663 us
-12:28:05.442 TextReplace offcarry blit src 02DA0180 1152x1152 glyphs 6 rect 0,0,36,20 -> dst 02DA6440 36x20 at 0,0 now 6 (+6) first ch 118 alpha 255
-12:28:05.443 twin art frame=3276 src=0CF77EE0 sheet=0,0 dst=03B508B0 581,351 24x54 canvas=0,0 of 24x54 keyed at frame 237
-12:28:05.443 image art name=_CUDEFAUL frame=3276 place=581,351,605,405 clip=581,351,800,600 flipped=0 parts=1 first=581,351,0,0,24,54
-12:28:05.444 twin art frame=3276 src=0CF77EE0 sheet=0,0 dst=03B50850 581,351 24x54 canvas=0,0 of 24x54 keyed at frame 238
-12:28:05.444 image art name=_CUDEFAUL frame=3276 place=581,351,605,405 clip=581,351,800,600 flipped=0 parts=1 first=581,351,0,0,24,54
-12:28:05.444 image art name=_CUDEFAUL frame=3276 place=581,351,605,405 clip=581,351,800,600 flipped=0 parts=1 first=581,351,0,0,24,54
-12:28:05.444 image art name=_CUDEFAUL frame=3276 place=581,351,605,405 clip=581,351,800,600 flipped=0 parts=1 first=581,351,0,0,24,54
-12:28:05.444 image art name=_CUDEFAUL frame=3276 place=581,351,605,405 clip=581,351,800,600 flipped=0 parts=1 first=581,351,0,0,24,54
-12:28:05.444 image art name=_CUDEFAUL frame=3276 place=581,351,605,405 clip=581,351,800,600 flipped=0 parts=1 first=581,351,0,0,24,54
-12:28:05.444 image art name=_CUDEFAUL frame=3276 place=581,351,605,405 clip=581,351,800,600 flipped=0 parts=1 first=581,351,0,0,24,54
-12:28:05.444 image art name=_CUDEFAUL frame=3276 place=581,351,605,405 clip=581,351,800,600 flipped=0 parts=1 first=581,351,0,0,24,54
-12:28:05.444 image art name=_CUDEFAUL frame=3276 place=581,351,605,405 clip=581,351,800,600 flipped=0 parts=1 first=581,351,0,0,24,54
-12:28:05.444 image art name=_CUDEFAUL frame=3276 place=581,351,605,405 clip=581,351,800,600 flipped=0 parts=1 first=581,351,0,0,24,54
-12:28:05.444 image art name=_CUDEFAUL frame=3276 place=581,351,605,405 clip=581,351,800,600 flipped=0 parts=1 first=581,351,0,0,24,54
-12:28:05.444 image art name=_CUDEFAUL frame=3276 place=581,351,605,405 clip=581,351,800,600 flipped=0 parts=1 first=581,351,0,0,24,54
-12:28:05.444 image art name=_CUDEFAUL frame=3276 place=581,351,605,405 clip=581,351,800,600 flipped=0 parts=1 first=581,351,0,0,24,54
-12:28:05.445 image art name=_CUDEFAUL frame=3276 place=581,351,605,405 clip=581,351,800,600 flipped=0 parts=1 first=581,351,0,0,24,54
-12:28:05.445 image art name=_CUDEFAUL frame=3276 place=581,351,605,405 clip=581,351,800,600 flipped=0 parts=1 first=581,351,0,0,24,54
-12:28:05.445 image art name=_CUDEFAUL frame=3276 place=581,351,605,405 clip=581,351,800,600 flipped=0 parts=1 first=581,351,0,0,24,54
-12:28:05.445 image art name=_CUDEFAUL frame=3276 place=581,351,605,405 clip=581,351,800,600 flipped=0 parts=1 first=581,351,0,0,24,54
-12:28:05.445 image art name=_CUDEFAUL frame=3276 place=581,351,605,405 clip=581,351,800,600 flipped=0 parts=1 first=581,351,0,0,24,54
-12:28:05.445 image art name=_CUDEFAUL frame=3276 place=581,351,605,405 clip=581,351,800,600 flipped=0 parts=1 first=581,351,0,0,24,54
-12:28:05.445 image art name=_CUDEFAUL frame=3276 place=581,351,605,405 clip=581,351,800,600 flipped=0 parts=1 first=581,351,0,0,24,54
-12:28:05.445 image art name=_CUDEFAUL frame=3276 place=581,351,605,405 clip=581,351,800,600 flipped=0 parts=1 first=581,351,0,0,24,54
-12:28:05.445 image art name=_CUDEFAUL frame=3276 place=581,351,605,405 clip=581,351,800,600 flipped=0 parts=1 first=581,351,0,0,24,54
-12:28:05.445 image art name=_CUDEFAUL frame=3276 place=581,351,605,405 clip=581,351,800,600 flipped=0 parts=1 first=581,351,0,0,24,54
-12:28:05.445 image art name=_CUDEFAUL frame=3276 place=581,351,605,405 clip=581,351,800,600 flipped=0 parts=1 first=581,351,0,0,24,54
-12:28:05.445 image art name=_CUDEFAUL frame=3276 place=581,351,605,405 clip=581,351,800,600 flipped=0 parts=1 first=581,351,0,0,24,54
-12:28:05.446 image art name=_CUDEFAUL frame=3276 place=581,351,605,405 clip=581,351,800,600 flipped=0 parts=1 first=581,351,0,0,24,54
-12:28:05.446 image art name=_CUDEFAUL frame=3276 place=581,351,605,405 clip=581,351,800,600 flipped=0 parts=1 first=581,351,0,0,24,54
-12:28:05.446 image art name=_CUDEFAUL frame=3276 place=581,351,605,405 clip=581,351,800,600 flipped=0 parts=1 first=581,351,0,0,24,54
-12:28:05.446 image art name=_CUDEFAUL frame=3276 place=581,351,605,405 clip=581,351,800,600 flipped=0 parts=1 first=581,351,0,0,24,54
-12:28:05.446 image art name=_CUDEFAUL frame=3276 place=581,351,605,405 clip=581,351,800,600 flipped=0 parts=1 first=581,351,0,0,24,54
-12:28:05.446 image art name=_CUDEFAUL frame=3276 place=581,351,605,405 clip=581,351,800,600 flipped=0 parts=1 first=581,351,0,0,24,54
-12:28:05.447 twin unmatched frame=3276 dst=581,351 sheet=0,0 24x54 at frame 239
-12:28:05.447 twin art frame=3276 src=0CF77EE0 sheet=0,0 dst=03B50880 581,351 24x54 canvas=0,0 of 24x54 keyed at frame 239
-12:28:05.456 twin check twin 2 800x600 N 4 bad 0 of 1900 non-art tiles, px 0 | art tiles 0 (differ from 1x 0) worst none
-12:28:05.514 twin shot written twin-1x.png 800x600
-12:28:05.569 twin shot written twin-screen.png 1600x1200
-12:28:05.570 twin shot written twin-sheet.png 96x216
-12:28:05.592 twin unmatched frame=3276 dst=581,351 sheet=0,0 24x54 at frame 240
-12:28:05.592 twin unmatched frame=1867 dst=0,0 sheet=0,0 800x600 at frame 240
-12:28:05.592 twin art frame=1867 src=0CF77E80 sheet=0,0 dst=03B508E0 0,0 800x600 canvas=0,0 of 800x600 keyed at frame 240
-12:28:05.592 twin art frame=3276 src=0CF77EE0 sheet=0,0 dst=03B508E0 581,351 24x54 canvas=0,0 of 24x54 keyed at frame 240
-12:28:05.598 twin unmatched frame=1867 dst=0,0 sheet=0,0 800x600 at frame 241
-12:28:05.598 twin unmatched frame=2789 dst=538,299 sheet=320,600 32x32 at frame 241
-12:28:05.598 twin art frame=1867 src=0CF77E80 sheet=0,0 dst=03B508B0 0,0 800x600 canvas=0,0 of 800x600 keyed at frame 241
-12:28:05.598 twin art frame=115171 src=0CF77E60 sheet=187,112 dst=03B508B0 73,321 187x112 canvas=0,0 of 187x112 keyed at frame 241
-12:28:05.598 twin art frame=115231 src=0CF77E50 sheet=172,169 dst=03B508B0 628,431 172x169 canvas=0,0 of 172x169 keyed at frame 241
-12:28:05.598 twin rejected place frame=2789 sheet=320,600 32x32 dst=538,299 canvas=40,-20 of 266x21 at frame 241
-12:28:05.602 twin art frame=1867 src=0CF77E80 sheet=0,0 dst=03B50850 0,0 800x600 canvas=0,0 of 800x600 keyed at frame 242
-12:28:05.603 twin art frame=115171 src=0CF77E60 sheet=187,112 dst=03B50850 73,321 187x112 canvas=0,0 of 187x112 keyed at frame 242
-12:28:05.603 twin art frame=115231 src=0CF77E50 sheet=172,169 dst=03B50850 628,431 172x169 canvas=0,0 of 172x169 keyed at frame 242
-12:28:05.603 twin rejected place frame=2789 sheet=320,600 32x32 dst=538,299 canvas=40,-20 of 266x21 at frame 242
-12:28:05.608 twin art frame=1867 src=0CF77E80 sheet=0,0 dst=03B50880 0,0 800x600 canvas=0,0 of 800x600 keyed at frame 243
-12:28:05.608 twin art frame=115171 src=0CF77E60 sheet=187,112 dst=03B50880 73,321 187x112 canvas=0,0 of 187x112 keyed at frame 243
-12:28:05.608 twin art frame=115231 src=0CF77E50 sheet=172,169 dst=03B50880 628,431 172x169 canvas=0,0 of 172x169 keyed at frame 243
-12:28:05.608 twin rejected place frame=2789 sheet=320,600 32x32 dst=538,299 canvas=40,-20 of 266x21 at frame 243
-12:28:05.613 twin art frame=1867 src=0CF77E80 sheet=0,0 dst=03B508E0 0,0 800x600 canvas=0,0 of 800x600 keyed at frame 244
-12:28:05.614 twin art frame=115171 src=0CF77E60 sheet=187,112 dst=03B508E0 73,321 187x112 canvas=0,0 of 187x112 keyed at frame 244
-12:28:05.614 twin art frame=115231 src=0CF77E50 sheet=172,169 dst=03B508E0 628,431 172x169 canvas=0,0 of 172x169 keyed at frame 244
-12:28:05.614 twin rejected place frame=2789 sheet=320,600 32x32 dst=538,299 canvas=40,-20 of 266x21 at frame 244
-12:28:05.618 twin art frame=1867 src=0CF77E80 sheet=0,0 dst=03B508B0 0,0 800x600 canvas=0,0 of 800x600 keyed at frame 245
-12:28:05.618 twin art frame=115171 src=0CF77E60 sheet=187,112 dst=03B508B0 73,321 187x112 canvas=0,0 of 187x112 keyed at frame 245
-12:28:05.618 twin art frame=115231 src=0CF77E50 sheet=172,169 dst=03B508B0 628,431 172x169 canvas=0,0 of 172x169 keyed at frame 245
-12:28:05.618 twin rejected place frame=2789 sheet=320,600 32x32 dst=538,299 canvas=40,-20 of 266x21 at frame 245
-12:28:05.624 twin art frame=1867 src=0CF77E80 sheet=0,0 dst=03B50850 0,0 800x600 canvas=0,0 of 800x600 keyed at frame 246
-12:28:05.624 twin art frame=115171 src=0CF77E60 sheet=187,112 dst=03B50850 73,321 187x112 canvas=0,0 of 187x112 keyed at frame 246
-12:28:05.624 twin art frame=115231 src=0CF77E50 sheet=172,169 dst=03B50850 628,431 172x169 canvas=0,0 of 172x169 keyed at frame 246
-12:28:05.624 twin rejected place frame=2789 sheet=320,600 32x32 dst=538,299 canvas=40,-20 of 266x21 at frame 246
-12:28:05.629 twin art frame=1867 src=0CF77E80 sheet=0,0 dst=03B50880 0,0 800x600 canvas=0,0 of 800x600 keyed at frame 247
-12:28:05.629 twin art frame=115171 src=0CF77E60 sheet=187,112 dst=03B50880 73,321 187x112 canvas=0,0 of 187x112 keyed at frame 247
-12:28:05.629 twin art frame=115231 src=0CF77E50 sheet=172,169 dst=03B50880 628,431 172x169 canvas=0,0 of 172x169 keyed at frame 247
-12:28:05.629 twin rejected place frame=2789 sheet=320,600 32x32 dst=538,299 canvas=40,-20 of 266x21 at frame 247
-12:28:05.634 twin art frame=1867 src=0CF77E80 sheet=0,0 dst=03B508E0 0,0 800x600 canvas=0,0 of 800x600 keyed at frame 248
-12:28:05.634 twin art frame=115171 src=0CF77E60 sheet=187,112 dst=03B508E0 73,321 187x112 canvas=0,0 of 187x112 keyed at frame 248
-12:28:05.634 twin art frame=115231 src=0CF77E50 sheet=172,169 dst=03B508E0 628,431 172x169 canvas=0,0 of 172x169 keyed at frame 248
-12:28:05.634 twin rejected place frame=2789 sheet=320,600 32x32 dst=538,299 canvas=40,-20 of 266x21 at frame 248
-12:28:05.638 twin art frame=1867 src=0CF77E80 sheet=0,0 dst=03B508B0 0,0 800x600 canvas=0,0 of 800x600 keyed at frame 249
-12:28:05.638 twin art frame=115171 src=0CF77E60 sheet=187,112 dst=03B508B0 73,321 187x112 canvas=0,0 of 187x112 keyed at frame 249
-12:28:05.638 twin art frame=115231 src=0CF77E50 sheet=172,169 dst=03B508B0 628,431 172x169 canvas=0,0 of 172x169 keyed at frame 249
-12:28:05.638 twin rejected place frame=2789 sheet=320,600 32x32 dst=538,299 canvas=40,-20 of 266x21 at frame 249
-12:28:05.642 twin rejected place frame=2789 sheet=320,600 32x32 dst=538,299 canvas=40,-20 of 266x21 at frame 250
-12:28:05.642 twin rejected place frame=2789 sheet=320,600 32x32 dst=570,299 canvas=72,-20 of 266x21 at frame 250
-12:28:05.642 twin rejected place frame=2789 sheet=320,600 32x32 dst=602,299 canvas=104,-20 of 266x21 at frame 250
-12:28:05.642 twin rejected place frame=2789 sheet=320,600 32x32 dst=634,299 canvas=136,-20 of 266x21 at frame 250
-12:28:05.647 twin rejected place frame=2789 sheet=320,600 32x32 dst=538,299 canvas=40,-20 of 266x21 at frame 251
-12:28:05.647 twin rejected place frame=2789 sheet=320,600 32x32 dst=570,299 canvas=72,-20 of 266x21 at frame 251
-12:28:05.647 twin rejected place frame=2789 sheet=320,600 32x32 dst=602,299 canvas=104,-20 of 266x21 at frame 251
-12:28:05.651 twin unmatched frame=1867 dst=0,0 sheet=0,0 800x600 at frame 252
-12:28:05.654 twin unmatched frame=1867 dst=0,0 sheet=0,0 800x600 at frame 253
-12:28:05.654 twin unmatched frame=115172 dst=73,321 sheet=0,224 187x112 at frame 253
-12:28:05.654 twin unmatched frame=115232 dst=628,431 sheet=0,338 172x169 at frame 253
-12:28:05.654 twin unmatched frame=2789 dst=538,299 sheet=320,600 32x32 at frame 253
-12:28:05.658 twin unmatched frame=1867 dst=0,0 sheet=0,0 800x600 at frame 254
-12:28:05.658 twin unmatched frame=115172 dst=73,321 sheet=0,224 187x112 at frame 254
-12:28:05.658 twin unmatched frame=115232 dst=628,431 sheet=0,338 172x169 at frame 254
-12:28:05.658 twin unmatched frame=2789 dst=538,299 sheet=320,600 32x32 at frame 254
-12:28:05.662 twin unmatched frame=1867 dst=0,0 sheet=0,0 800x600 at frame 255
-12:28:05.662 twin unmatched frame=115172 dst=73,321 sheet=0,224 187x112 at frame 255
-12:28:05.668 Continue game G:\games\Disciples 2\SaveGame\BattleSave.sg
-12:28:05.700 twin destroy 8 800x600 buffer 0CF77E80 at frame 256
-12:28:05.700 twin destroy 6 748x896 buffer 0CF77E60 at frame 256
-12:28:05.701 twin destroy 5 688x1014 buffer 0CF77E50 at frame 256
-12:28:05.701 twin destroy 7 800x664 buffer 0CF77E70 at frame 256
-12:28:05.701 twin destroy 11 100x20 buffer 0CF77EB0 at frame 256
-12:28:05.701 twin destroy 15 64x20 buffer 0CF77EF0 at frame 256
-12:28:05.701 twin destroy 12 100x20 buffer 0CF77EC0 at frame 256
-12:28:05.701 twin destroy 13 100x20 buffer 0CF77ED0 at frame 256
-12:28:05.701 twin destroy 16 64x20 buffer 0CF77F00 at frame 256
-12:28:05.701 twin destroy 9 200x20 buffer 0CF77E90 at frame 256
-12:28:05.701 twin destroy 10 200x20 buffer 0CF77EA0 at frame 256
-12:28:05.701 twin destroy 17 36x20 buffer 0CF77F10 at frame 256
-12:28:05.701 twin destroy 14 24x54 buffer 0CF77EE0 at frame 256
-12:28:05.730 twin create 5 244x232 buffer 0CF77790 data 241A0040 at frame 257
-12:28:05.730 twin create 6 300x70 buffer 0CF77650 data 24220040 at frame 257
-12:28:05.731 TextReplace font 02CE93E0 'vlarge': charset 0 score 995/1000 offset 0,0
-12:28:05.731 TextReplace font 02CE93E0 name 'vlarge' calibrated in 1333 us
-12:28:05.731 TextReplace offcarry blit src 02DA0180 1152x1152 glyphs 10 rect 0,0,300,70 -> dst 02DA81F0 300x70 at 0,0 now 10 (+10) first ch 80 alpha 255
-12:28:06.113 twin destroy 5 244x232 buffer 0CF77790 at frame 341
-12:28:06.113 twin destroy 6 300x70 buffer 0CF77650 at frame 341
-12:28:06.114 twin create 5 800x600 buffer 0CA5DFE0 data 7CA60040 at frame 341
-12:28:06.114 twin create 6 440x586 buffer 0CA5DFF0 data 7C780040 at frame 341
-12:28:06.114 twin create 7 640x360 buffer 0CA5E000 data 7B6C0040 at frame 341
-12:28:06.114 twin create 8 24x54 buffer 0CA5E010 data 24BBA508 at frame 341
-12:28:06.119 TextReplace font 02CE97F8 'large': charset 0 score 993/1000 offset 0,0
-12:28:06.119 TextReplace font 02CE97F8 name 'large' calibrated in 826 us
-12:28:06.121 TextReplace font 02CE8FC8 'medbold': charset 0 score 1000/1000 offset 0,0
-12:28:06.121 TextReplace font 02CE8FC8 name 'medbold' calibrated in 606 us
-12:28:06.122 TextReplace offcarry blit src 02DA0180 1152x1152 glyphs 861 rect 0,0,440,586 -> dst 02DA81F0 440x586 at 0,0 now 861 (+861) first ch 84 alpha 255
-12:28:06.258 TextReplace diag glyphs=1117 skipped=931 copies=377 carried=3697 occluded=0 dropped=16 pixelCopies=0 rows=0 presents=373 presentGlyphs=2744 maskedFrames=0 drawn=2722 noAtlas=0
-12:28:06.258 TextReplace diag2 cleanPresents=0 emptyDirty=237 renders=373 slotMiss=0 slotEmpty=238 atlas=0 in 0 us calibrate 4281 us lockCleared=8
-12:28:06.411 twin destroy 5 800x600 buffer 0CA5DFE0 at frame 411
-12:28:06.411 twin destroy 6 440x586 buffer 0CA5DFF0 at frame 411
-12:28:06.411 twin destroy 7 640x360 buffer 0CA5E000 at frame 411
-12:28:06.414 twin destroy 8 24x54 buffer 0CA5E010 at frame 411
-12:28:06.416 twin create 5 128x128 buffer 0CA5E500 data 241D0040 at frame 411
-12:28:06.417 twin create 6 512x512 buffer 0CA5E490 data 7D560040 at frame 411
-12:28:06.417 twin create 7 128x128 buffer 0CA5E4B0 data 24A50040 at frame 411
-12:28:06.417 twin create 8 128x128 buffer 0CA5E330 data 24CF0040 at frame 411
-12:28:06.417 twin create 9 128x128 buffer 0CA5E600 data 24D30040 at frame 411
-12:28:06.417 twin create 10 128x128 buffer 0CA5E590 data 24E70040 at frame 411
-12:28:06.417 twin create 11 128x128 buffer 0CA5E580 data 24EC0040 at frame 411
-12:28:06.417 twin create 12 128x128 buffer 0CA5E5F0 data 24F00040 at frame 411
-12:28:06.417 twin create 13 128x128 buffer 0CA5E570 data 24FA0040 at frame 411
-12:28:06.417 twin create 14 128x128 buffer 0CA5E5E0 data 24FE0040 at frame 411
-12:28:06.417 twin create 15 128x128 buffer 0CA5E5D0 data 25020040 at frame 411
-12:28:06.418 twin create 16 128x128 buffer 0CA5E5C0 data 25060040 at frame 411
-12:28:06.418 twin create 17 128x128 buffer 0CA5E5B0 data 250A0040 at frame 411
-12:28:06.418 twin create 18 128x128 buffer 0CA5E5A0 data 250E0040 at frame 411
-12:28:06.418 twin create 19 128x128 buffer 0CA5E610 data 25120040 at frame 411
-12:28:06.442 TextReplace offcarry blit src 02DA0180 1152x1152 glyphs 1 rect 0,0,40,25 -> dst 02DACF70 40x25 at 0,0 now 1 (+1) first ch 48 alpha 255
-12:28:06.442 TextReplace offcarry blit src 02DA0180 1152x1152 glyphs 4 rect 0,0,40,25 -> dst 02DACF20 40x25 at 0,0 now 4 (+4) first ch 49 alpha 255
-12:28:06.443 TextReplace offcarry blit src 02DA0180 1152x1152 glyphs 3 rect 0,0,40,25 -> dst 02DACED0 40x25 at 0,0 now 3 (+3) first ch 54 alpha 255
-12:28:06.443 TextReplace offcarry blit src 02DA0180 1152x1152 glyphs 1 rect 0,0,40,25 -> dst 02DACE80 40x25 at 0,0 now 1 (+1) first ch 48 alpha 255
-12:28:06.443 TextReplace offcarry blit src 02DA0180 1152x1152 glyphs 1 rect 0,0,40,25 -> dst 02DACE30 40x25 at 0,0 now 1 (+1) first ch 48 alpha 255
-12:28:06.451 TextReplace offcarry blit src 02DA0180 1152x1152 glyphs 2 rect 0,0,36,20 -> dst 02DACA70 36x20 at 0,0 now 2 (+2) first ch 49 alpha 255
-12:28:06.458 TextReplace offcarry blit src 02DA0180 1152x1152 glyphs 2 rect 0,0,36,20 -> dst 02DACC00 36x20 at 0,0 now 2 (+2) first ch 49 alpha 255
-12:28:06.461 TextReplace offcarry blit src 02DA0180 1152x1152 glyphs 25 rect 0,0,206,165 -> dst 02DAC7A0 206x165 at 0,0 now 25 (+25) first ch 82 alpha 255
-12:28:06.814 image ground art chunk=0 data=7E310040 size=128x128 ops=39
-12:28:06.815 image ground art chunk=0 data=7E310040 size=128x128 ops=39
-12:28:06.815 image ground art chunk=0 data=7E310040 size=128x128 ops=42
-12:28:06.815 image ground art chunk=0 data=7E310040 size=128x128 ops=49
-12:28:06.815 image ground art chunk=0 data=7E310040 size=128x128 ops=39
-12:28:06.815 image ground art chunk=0 data=7E310040 size=128x128 ops=46
-12:28:06.815 image ground art chunk=0 data=7E310040 size=128x128 ops=51
-12:28:06.815 image ground art chunk=0 data=7E310040 size=128x128 ops=48
-12:28:06.815 image ground art chunk=0 data=7E310040 size=128x128 ops=48
-12:28:06.815 image ground art chunk=0 data=7E310040 size=128x128 ops=56
-12:28:06.815 image ground art chunk=0 data=7E310040 size=128x128 ops=57
-12:28:06.816 image ground art chunk=0 data=7E310040 size=128x128 ops=43
-12:28:06.816 image ground art chunk=0 data=7E310040 size=128x128 ops=31
-12:28:06.816 image ground art chunk=0 data=7E310040 size=128x128 ops=42
-12:28:06.816 image ground art chunk=0 data=7E310040 size=128x128 ops=45
-12:28:06.816 image ground art chunk=0 data=7E310040 size=128x128 ops=45
-12:28:06.822 TextReplace offcarry blit src 02DA0180 1152x1152 glyphs 6 rect 0,0,138,18 -> dst 02DA8880 138x18 at 0,0 now 6 (+6) first ch 72 alpha 255
-12:28:06.822 TextReplace offcarry blit src 02DA0180 1152x1152 glyphs 10 rect 0,0,74,83 -> dst 02DA88D0 74x83 at 0,0 now 10 (+10) first ch 77 alpha 255
-12:28:08.258 TextReplace diag glyphs=62 skipped=55 copies=29575 carried=11729 occluded=826 dropped=12 pixelCopies=3958 rows=0 presents=450 presentGlyphs=11668 maskedFrames=411 drawn=11662 noAtlas=0
-12:28:08.258 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=450 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=8
-12:28:08.452 TextReplace offcarry blit src 02DA0180 1152x1152 glyphs 1 rect 0,0,32,64 -> dst 02DA8BA0 32x64 at 0,0 now 1 (+1) first ch 49 alpha 255
-12:28:08.717 TextReplace offcarry blit src 02DA0180 1152x1152 glyphs 22 rect 0,0,132,17 -> dst 02DA8BF0 132x17 at 0,0 now 22 (+22) first ch 83 alpha 255
-12:28:09.065 TextReplace offcarry blit src 02DA0180 1152x1152 glyphs 1 rect 0,0,32,64 -> dst 02DA87E0 32x64 at 0,0 now 1 (+1) first ch 49 alpha 255
-12:28:09.067 TextReplace offcarry blit src 02DA0180 1152x1152 glyphs 6 rect 0,0,138,18 -> dst 02DA8D80 138x18 at 0,0 now 6 (+6) first ch 72 alpha 255
-12:28:09.067 TextReplace offcarry blit src 02DA0180 1152x1152 glyphs 9 rect 0,0,74,83 -> dst 02DA8D30 74x83 at 0,0 now 9 (+9) first ch 77 alpha 255
-12:28:09.255 twin stats 5000ms frames 1060 copy 146412 keyed 124303 fill 1178 upload 405 px 13019657 writes 272035 unknown 0 | replays 1058 draws 987 calls 158173 queuedMax 2 replay avg 0.336 max 123.105 ms | twins 136 422.0MB N 4 resets 0
-12:28:09.255 twin tiles check on verify avg 0.220 max 0.550 ms/frame | repaired tiles 0 rects 0 px 0 | top none
-12:28:09.255 twin art expected 643885 dup 4483590 matched 248526 draws 256100 px 470909275 notready 0 rejected place 2464 aspect 0 unmatched 395359 overflow 0 | replayed 255388 calls 119648 fallbacks 0
-12:28:09.255 twin pixel ops keyed 0 average 6548 add 573 sub 0 empty 0 copy 2 blend 0 keyedcopy 0 tint 0 | fill rects 118 (merged 0) tint rects 0 blend rows 0 (merged 0) lighter 1 | art 0 untwinned src 10652 self 0 fallbacks 0 | replayed 7101 calls 4794
-12:28:09.255 twin art cache hits 10038 misses 934 cached draws 10038 | ground arts 60 replayed 60 fallbacks 0 no twin 0
-12:28:09.255 twin show shown 1055 (opaque 1055, over background 0) hidden: 1x toggle 0, invalid 0 (no twin at present 0, twin gone 0), other 0 | show gpu avg 53 us max 66 us (4 samples)
-12:28:09.255 twin gpu check 3813ms ago twin 2 bad 0 of 1900 non-art tiles, px 0 | art tiles 0 (differ from 1x 0)
-12:28:10.191 TextReplace offcarry blit src 02DA0180 1152x1152 glyphs 5 rect 0,0,70,17 -> dst 02DA92D0 70x17 at 0,0 now 5 (+5) first ch 54 alpha 255
-12:28:10.191 TextReplace offcarry blit src 02DA0180 1152x1152 glyphs 5 rect 0,0,70,17 -> dst 02DA9370 70x17 at 0,0 now 5 (+5) first ch 54 alpha 255
-12:28:10.191 TextReplace offcarry blit src 02DA0180 1152x1152 glyphs 5 rect 0,0,70,17 -> dst 02DA9410 70x17 at 0,0 now 5 (+5) first ch 54 alpha 255
-12:28:10.222 Turn art loaded
-12:28:10.223 TextReplace font 02CE9C10 'medium': charset 0 score 999/1000 offset 0,0
-12:28:10.223 TextReplace font 02CE9C10 name 'medium' calibrated in 769 us
-12:28:10.224 TextReplace font 02CEA440 'small': charset 0 score 1000/1000 offset 0,0
-12:28:10.224 TextReplace font 02CEA440 name 'small' calibrated in 536 us
-12:28:10.225 TextReplace offcarry blit src 02DA0180 1152x1152 glyphs 39 rect 0,0,444,69 -> dst 02DA97D0 444x69 at 0,0 now 39 (+39) first ch 49 alpha 255
-12:28:10.225 TextReplace offcarry blit src 02DA0180 1152x1152 glyphs 16 rect 0,0,116,41 -> dst 02DA9870 116x41 at 0,0 now 16 (+16) first ch 72 alpha 255
-12:28:10.225 TextReplace offcarry blit src 02DA0180 1152x1152 glyphs 12 rect 0,0,116,41 -> dst 02DA9910 116x41 at 0,0 now 12 (+12) first ch 84 alpha 255
-12:28:10.225 TextReplace offcarry blit src 02DA0180 1152x1152 glyphs 5 rect 0,0,70,17 -> dst 02DA99B0 70x17 at 0,0 now 5 (+5) first ch 53 alpha 255
-12:28:10.225 TextReplace offcarry blit src 02DA0180 1152x1152 glyphs 7 rect 0,0,70,17 -> dst 02DA9A50 70x17 at 0,0 now 7 (+7) first ch 49 alpha 255
-12:28:10.226 TextReplace offcarry blit src 02DA0180 1152x1152 glyphs 39 rect 0,0,444,69 -> dst 02DA97D0 444x69 at 0,0 now 39 (+39) first ch 49 alpha 255
-12:28:10.227 TextReplace offcarry blit src 02DA0180 1152x1152 glyphs 39 rect 0,0,444,69 -> dst 02DA97D0 444x69 at 0,0 now 39 (+39) first ch 49 alpha 255
-12:28:10.227 TextReplace offcarry blit src 02DA0180 1152x1152 glyphs 39 rect 0,0,444,69 -> dst 02DA97D0 444x69 at 0,0 now 39 (+39) first ch 49 alpha 255
-12:28:10.227 TextReplace offcarry blit src 02DA0180 1152x1152 glyphs 39 rect 0,0,444,69 -> dst 02DA97D0 444x69 at 0,0 now 39 (+39) first ch 49 alpha 255
-12:28:10.227 TextReplace offcarry blit src 02DA0180 1152x1152 glyphs 39 rect 0,0,444,69 -> dst 02DA97D0 444x69 at 0,0 now 39 (+39) first ch 49 alpha 255
-12:28:10.227 TextReplace offcarry blit src 02DA0180 1152x1152 glyphs 39 rect 0,0,444,69 -> dst 02DA97D0 444x69 at 0,0 now 39 (+39) first ch 49 alpha 255
-12:28:10.228 TextReplace offcarry blit src 02DA0180 1152x1152 glyphs 39 rect 0,0,444,69 -> dst 02DA97D0 444x69 at 0,0 now 39 (+39) first ch 49 alpha 255
-12:28:10.228 TextReplace offcarry blit src 02DA0180 1152x1152 glyphs 39 rect 0,0,444,69 -> dst 02DA97D0 444x69 at 0,0 now 39 (+39) first ch 49 alpha 255
-12:28:10.229 TextReplace offcarry blit src 02DA0180 1152x1152 glyphs 39 rect 0,0,444,69 -> dst 02DA97D0 444x69 at 0,0 now 39 (+39) first ch 49 alpha 255
-12:28:10.229 TextReplace offcarry blit src 02DA0180 1152x1152 glyphs 39 rect 0,0,444,69 -> dst 02DA97D0 444x69 at 0,0 now 39 (+39) first ch 49 alpha 255
-12:28:10.229 TextReplace offcarry blit src 02DA0180 1152x1152 glyphs 39 rect 0,0,444,69 -> dst 02DA97D0 444x69 at 0,0 now 39 (+39) first ch 49 alpha 255
-12:28:10.230 TextReplace offcarry blit src 02DA0180 1152x1152 glyphs 39 rect 0,0,444,69 -> dst 02DA97D0 444x69 at 0,0 now 39 (+39) first ch 49 alpha 255
-12:28:10.230 TextReplace offcarry blit src 02DA0180 1152x1152 glyphs 39 rect 0,0,444,69 -> dst 02DA97D0 444x69 at 0,0 now 39 (+39) first ch 49 alpha 255
-12:28:10.230 TextReplace offcarry blit src 02DA0180 1152x1152 glyphs 39 rect 0,0,444,69 -> dst 02DA97D0 444x69 at 0,0 now 39 (+39) first ch 49 alpha 255
-12:28:10.231 TextReplace offcarry blit src 02DA0180 1152x1152 glyphs 39 rect 0,0,444,69 -> dst 02DA97D0 444x69 at 0,0 now 39 (+39) first ch 49 alpha 255
-12:28:10.231 TextReplace offcarry blit src 02DA0180 1152x1152 glyphs 39 rect 0,0,444,69 -> dst 02DA97D0 444x69 at 0,0 now 39 (+39) first ch 49 alpha 255
-12:28:10.231 TextReplace offcarry blit src 02DA0180 1152x1152 glyphs 39 rect 0,0,444,69 -> dst 02DA97D0 444x69 at 0,0 now 39 (+39) first ch 49 alpha 255
-12:28:10.231 TextReplace offcarry blit src 02DA0180 1152x1152 glyphs 39 rect 0,0,444,69 -> dst 02DA97D0 444x69 at 0,0 now 39 (+39) first ch 49 alpha 255
-12:28:10.231 TextReplace offcarry blit src 02DA0180 1152x1152 glyphs 39 rect 0,0,444,69 -> dst 02DA97D0 444x69 at 0,0 now 39 (+39) first ch 49 alpha 255
-12:28:10.232 TextReplace offcarry blit src 02DA0180 1152x1152 glyphs 39 rect 0,0,444,69 -> dst 02DA97D0 444x69 at 0,0 now 39 (+39) first ch 49 alpha 255
-12:28:10.232 TextReplace offcarry blit src 02DA0180 1152x1152 glyphs 39 rect 0,0,444,69 -> dst 02DA97D0 444x69 at 0,0 now 39 (+39) first ch 49 alpha 255
-12:28:10.232 TextReplace offcarry blit src 02DA0180 1152x1152 glyphs 39 rect 0,0,444,69 -> dst 02DA97D0 444x69 at 0,0 now 39 (+39) first ch 49 alpha 255
-12:28:10.233 TextReplace offcarry blit src 02DA0180 1152x1152 glyphs 39 rect 0,0,444,69 -> dst 02DA97D0 444x69 at 0,0 now 39 (+39) first ch 49 alpha 255
-12:28:10.233 TextReplace offcarry blit src 02DA0180 1152x1152 glyphs 39 rect 0,0,444,69 -> dst 02DA97D0 444x69 at 0,0 now 39 (+39) first ch 49 alpha 255
-12:28:10.233 TextReplace offcarry blit src 02DA0180 1152x1152 glyphs 39 rect 0,0,444,69 -> dst 02DA97D0 444x69 at 0,0 now 39 (+39) first ch 49 alpha 255
-12:28:10.233 TextReplace offcarry blit src 02DA0180 1152x1152 glyphs 39 rect 0,0,444,69 -> dst 02DA97D0 444x69 at 0,0 now 39 (+39) first ch 49 alpha 255
-12:28:10.234 TextReplace offcarry blit src 02DA0180 1152x1152 glyphs 39 rect 0,0,444,69 -> dst 02DA97D0 444x69 at 0,0 now 39 (+39) first ch 49 alpha 255
-12:28:10.234 TextReplace offcarry blit src 02DA0180 1152x1152 glyphs 39 rect 0,0,444,69 -> dst 02DA97D0 444x69 at 0,0 now 39 (+39) first ch 49 alpha 255
-12:28:10.234 TextReplace offcarry blit src 02DA0180 1152x1152 glyphs 39 rect 0,0,444,69 -> dst 02DA97D0 444x69 at 0,0 now 39 (+39) first ch 49 alpha 255
-12:28:10.234 TextReplace offcarry blit src 02DA0180 1152x1152 glyphs 39 rect 0,0,444,69 -> dst 02DA97D0 444x69 at 0,0 now 39 (+39) first ch 49 alpha 255
-12:28:10.234 TextReplace offcarry blit src 02DA0180 1152x1152 glyphs 39 rect 0,0,444,69 -> dst 02DA97D0 444x69 at 0,0 now 39 (+39) first ch 49 alpha 255
-12:28:10.234 TextReplace offcarry blit src 02DA0180 1152x1152 glyphs 39 rect 0,0,444,69 -> dst 02DA97D0 444x69 at 0,0 now 39 (+39) first ch 49 alpha 255
-12:28:10.235 TextReplace offcarry blit src 02DA0180 1152x1152 glyphs 39 rect 0,0,444,69 -> dst 02DA97D0 444x69 at 0,0 now 39 (+39) first ch 49 alpha 255
-12:28:10.235 TextReplace offcarry blit src 02DA0180 1152x1152 glyphs 39 rect 0,0,444,69 -> dst 02DA97D0 444x69 at 0,0 now 39 (+39) first ch 49 alpha 255
-12:28:10.235 TextReplace offcarry blit src 02DA0180 1152x1152 glyphs 39 rect 0,0,444,69 -> dst 02DA97D0 444x69 at 0,0 now 39 (+39) first ch 49 alpha 255
-12:28:10.235 TextReplace offcarry blit src 02DA0180 1152x1152 glyphs 39 rect 0,0,444,69 -> dst 02DA97D0 444x69 at 0,0 now 39 (+39) first ch 49 alpha 255
-12:28:10.236 TextReplace offcarry blit src 02DA0180 1152x1152 glyphs 39 rect 0,0,444,69 -> dst 02DA97D0 444x69 at 0,0 now 39 (+39) first ch 49 alpha 255
-12:28:10.236 TextReplace offcarry blit src 02DA0180 1152x1152 glyphs 39 rect 0,0,444,69 -> dst 02DA97D0 444x69 at 0,0 now 39 (+39) first ch 49 alpha 255
-12:28:10.236 TextReplace offcarry blit src 02DA0180 1152x1152 glyphs 39 rect 0,0,444,69 -> dst 02DA97D0 444x69 at 0,0 now 39 (+39) first ch 49 alpha 255
-12:28:10.236 TextReplace offcarry blit src 02DA0180 1152x1152 glyphs 39 rect 0,0,444,69 -> dst 02DA97D0 444x69 at 0,0 now 39 (+39) first ch 49 alpha 255
-12:28:10.236 TextReplace offcarry blit src 02DA0180 1152x1152 glyphs 39 rect 0,0,444,69 -> dst 02DA97D0 444x69 at 0,0 now 39 (+39) first ch 49 alpha 255
-12:28:10.237 TextReplace offcarry blit src 02DA0180 1152x1152 glyphs 39 rect 0,0,444,69 -> dst 02DA97D0 444x69 at 0,0 now 39 (+39) first ch 49 alpha 255
-12:28:10.237 TextReplace offcarry blit src 02DA0180 1152x1152 glyphs 39 rect 0,0,444,69 -> dst 02DA97D0 444x69 at 0,0 now 39 (+39) first ch 49 alpha 255
-12:28:10.238 TextReplace offcarry blit src 02DA0180 1152x1152 glyphs 39 rect 0,0,444,69 -> dst 02DA97D0 444x69 at 0,0 now 39 (+39) first ch 49 alpha 255
-12:28:10.238 TextReplace offcarry blit src 02DA0180 1152x1152 glyphs 39 rect 0,0,444,69 -> dst 02DA97D0 444x69 at 0,0 now 39 (+39) first ch 49 alpha 255
-12:28:10.238 TextReplace offcarry blit src 02DA0180 1152x1152 glyphs 39 rect 0,0,444,69 -> dst 02DA97D0 444x69 at 0,0 now 39 (+39) first ch 49 alpha 255
-12:28:10.239 TextReplace offcarry blit src 02DA0180 1152x1152 glyphs 39 rect 0,0,444,69 -> dst 02DA97D0 444x69 at 0,0 now 39 (+39) first ch 49 alpha 255
-12:28:10.258 TextReplace diag glyphs=6809 skipped=6802 copies=160253 carried=27732 occluded=921 dropped=6668 pixelCopies=5126 rows=0 presents=460 presentGlyphs=20868 maskedFrames=453 drawn=20823 noAtlas=0
-12:28:10.258 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=461 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 1305 us lockCleared=178
-12:28:10.453 twin check twin 0 800x600 N 4 bad 0 of 1363 non-art tiles, px 0 | art tiles 537 (differ from 1x 429) worst none
-12:28:10.579 twin repair buf=02D55240 0,0 70x16 at frame 1356 (copy source, twin 4 1152x1152)
-12:28:10.579 twin repair buf=02D55240 0,16 70x16 at frame 1356 (copy source, twin 4 1152x1152)
-12:28:10.579 twin repair buf=02D55240 0,32 70x16 at frame 1356 (copy source, twin 4 1152x1152)
-12:28:10.579 twin repair buf=02D55240 0,48 70x16 at frame 1356 (copy source, twin 4 1152x1152)
-12:28:10.672 twin repair buf=02D55240 0,0 70x16 at frame 1377 (copy source, twin 4 1152x1152)
-12:28:10.672 twin repair buf=02D55240 0,16 70x16 at frame 1377 (copy source, twin 4 1152x1152)
-12:28:10.672 twin repair buf=02D55240 0,32 70x16 at frame 1377 (copy source, twin 4 1152x1152)
-12:28:10.672 twin repair buf=02D55240 0,48 70x16 at frame 1377 (copy source, twin 4 1152x1152)
-12:28:11.044 twin repair buf=02D55240 0,0 70x16 at frame 1465 (copy source, twin 4 1152x1152)
-12:28:11.044 twin repair buf=02D55240 0,16 70x16 at frame 1465 (copy source, twin 4 1152x1152)
-12:28:11.044 twin repair buf=02D55240 0,32 70x16 at frame 1465 (copy source, twin 4 1152x1152)
-12:28:11.044 twin repair buf=02D55240 0,48 70x16 at frame 1465 (copy source, twin 4 1152x1152)
-12:28:11.136 twin repair buf=02D55240 0,0 70x16 at frame 1486 (copy source, twin 4 1152x1152)
-12:28:11.136 twin repair buf=02D55240 0,16 70x16 at frame 1486 (copy source, twin 4 1152x1152)
-12:28:11.136 twin repair buf=02D55240 0,32 70x16 at frame 1486 (copy source, twin 4 1152x1152)
-12:28:11.136 twin repair buf=02D55240 0,48 70x16 at frame 1486 (copy source, twin 4 1152x1152)
-12:28:12.259 TextReplace diag glyphs=336607 skipped=336589 copies=47384 carried=384314 occluded=3131 dropped=332621 pixelCopies=8953 rows=0 presents=467 presentGlyphs=51462 maskedFrames=286 drawn=51570 noAtlas=0
-12:28:12.259 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=468 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=9891
-12:28:14.257 TextReplace diag glyphs=37 skipped=33 copies=184031 carried=25979 occluded=1017 dropped=42 pixelCopies=5185 rows=0 presents=469 presentGlyphs=25896 maskedFrames=412 drawn=26034 noAtlas=0
-12:28:14.257 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=470 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=2
-12:28:14.257 twin stats 5000ms frames 1164 copy 139635 keyed 106057 fill 1234 upload 10185 px 312474562 writes 79070 unknown 0 | replays 1165 draws 1054 calls 183964 queuedMax 2 replay avg 0.330 max 4.641 ms | twins 138 423.6MB N 4 resets 0
-12:28:14.258 twin tiles check on verify avg 0.263 max 0.495 ms/frame | repaired tiles 90 rects 18 px 20160 | top buf=02D55240 1152x1152 tiles 90 px 20160
-12:28:14.258 twin art expected 609869 dup 5717527 matched 252465 draws 253913 px 489291536 notready 0 rejected place 1466 aspect 0 unmatched 357404 overflow 0 | replayed 254259 calls 115066 fallbacks 0
-12:28:14.258 twin pixel ops keyed 0 average 16675 add 969 sub 0 empty 0 copy 38 blend 5 keyedcopy 0 tint 0 | fill rects 70 (merged 0) tint rects 12 blend rows 0 (merged 0) lighter 3 | art 0 untwinned src 43 self 0 fallbacks 0 | replayed 17652 calls 7741
-12:28:14.258 twin art cache hits 2914 misses 415 cached draws 2914 | ground arts 0 replayed 0 fallbacks 0 no twin 0
-12:28:14.258 twin show shown 1165 (opaque 1165, over background 0) hidden: 1x toggle 0, invalid 0 (no twin at present 0, twin gone 0), other 0 | show gpu avg 55 us max 68 us (4 samples)
-12:28:14.258 twin gpu check 3813ms ago twin 0 bad 0 of 1363 non-art tiles, px 0 | art tiles 537 (differ from 1x 429)
-12:28:15.446 twin create 5 800x600 buffer 0CF17000 data 7CD20040 at frame 2481
-12:28:15.458 twin check twin 2 800x600 N 4 bad 0 of 1894 non-art tiles, px 0 | art tiles 6 (differ from 1x 5) worst none
-12:28:15.779 twin destroy 5 800x600 buffer 0CF17000 at frame 2560
-12:28:16.257 TextReplace diag glyphs=1106 skipped=915 copies=87574 carried=13923 occluded=467 dropped=46 pixelCopies=2988 rows=0 presents=439 presentGlyphs=13049 maskedFrames=186 drawn=13090 noAtlas=0
-12:28:16.257 TextReplace diag2 cleanPresents=0 emptyDirty=1 renders=439 slotMiss=0 slotEmpty=1 atlas=0 in 0 us calibrate 0 us lockCleared=7
-12:28:18.257 TextReplace diag glyphs=58 skipped=53 copies=34087 carried=17325 occluded=476 dropped=41 pixelCopies=4693 rows=0 presents=475 presentGlyphs=17226 maskedFrames=0 drawn=17198 noAtlas=0
-12:28:18.257 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=476 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=2
-12:28:19.257 twin stats 5000ms frames 1145 copy 228922 keyed 198049 fill 1290 upload 2837 px 85165884 writes 410592 unknown 0 | replays 1144 draws 1051 calls 216603 queuedMax 2 replay avg 0.294 max 17.725 ms | twins 129 485.9MB N 4 resets 0
-12:28:19.258 twin tiles check on verify avg 0.266 max 0.501 ms/frame | repaired tiles 0 rects 0 px 0 | top none
-12:28:19.258 twin art expected 778347 dup 5100020 matched 317035 draws 329884 px 648699940 notready 0 rejected place 404 aspect 0 unmatched 461312 overflow 0 | replayed 330250 calls 158388 fallbacks 0
-12:28:19.258 twin pixel ops keyed 0 average 11437 add 2055 sub 0 empty 0 copy 7 blend 0 keyedcopy 0 tint 0 | fill rects 145 (merged 0) tint rects 0 blend rows 0 (merged 0) lighter 3 | art 0 untwinned src 10371 self 0 fallbacks 0 | replayed 13504 calls 8071
-12:28:19.258 twin art cache hits 13253 misses 601 cached draws 13253 | ground arts 114 replayed 114 fallbacks 0 no twin 0
-12:28:19.258 twin show shown 1145 (opaque 1145, over background 0) hidden: 1x toggle 0, invalid 0 (no twin at present 0, twin gone 0), other 0 | show gpu avg 136 us max 295 us (5 samples)
-12:28:19.258 twin gpu check 3797ms ago twin 2 bad 0 of 1894 non-art tiles, px 0 | art tiles 6 (differ from 1x 5)
-12:28:20.256 TextReplace diag glyphs=153429 skipped=153423 copies=37119 carried=186470 occluded=2115 dropped=153403 pixelCopies=6764 rows=0 presents=437 presentGlyphs=32961 maskedFrames=137 drawn=32967 noAtlas=0
-12:28:20.256 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=438 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=4967
-12:28:20.453 twin check twin 0 800x600 N 4 bad 0 of 1389 non-art tiles, px 0 | art tiles 511 (differ from 1x 402) worst none
-12:28:20.704 twin repair buf=02D55240 0,0 70x16 at frame 3679 (copy source, twin 4 1152x1152)
-12:28:20.704 twin repair buf=02D55240 0,16 70x16 at frame 3679 (copy source, twin 4 1152x1152)
-12:28:20.704 twin repair buf=02D55240 0,32 70x16 at frame 3679 (copy source, twin 4 1152x1152)
-12:28:20.704 twin repair buf=02D55240 0,48 70x16 at frame 3679 (copy source, twin 4 1152x1152)
-12:28:20.774 twin repair buf=02D55240 0,0 70x16 at frame 3695 (copy source, twin 4 1152x1152)
-12:28:20.774 twin repair buf=02D55240 0,16 70x16 at frame 3695 (copy source, twin 4 1152x1152)
-12:28:20.774 twin repair buf=02D55240 0,32 70x16 at frame 3695 (copy source, twin 4 1152x1152)
-12:28:20.774 twin repair buf=02D55240 0,48 70x16 at frame 3695 (copy source, twin 4 1152x1152)
-12:28:20.779 twin repair buf=02D55240 0,0 70x16 at frame 3697 (copy source, twin 4 1152x1152)
-12:28:20.779 twin repair buf=02D55240 0,16 70x16 at frame 3697 (copy source, twin 4 1152x1152)
-12:28:20.779 twin repair buf=02D55240 0,32 70x16 at frame 3697 (copy source, twin 4 1152x1152)
-12:28:20.779 twin repair buf=02D55240 0,48 70x16 at frame 3697 (copy source, twin 4 1152x1152)
-12:28:20.817 twin repair buf=02D55240 0,0 70x16 at frame 3706 (copy source, twin 4 1152x1152)
-12:28:20.817 twin repair buf=02D55240 0,16 70x16 at frame 3706 (copy source, twin 4 1152x1152)
-12:28:20.817 twin repair buf=02D55240 0,32 70x16 at frame 3706 (copy source, twin 4 1152x1152)
-12:28:20.817 twin repair buf=02D55240 0,48 70x16 at frame 3706 (copy source, twin 4 1152x1152)
-12:28:22.255 TextReplace diag glyphs=168234 skipped=168226 copies=39393 carried=205174 occluded=1577 dropped=168180 pixelCopies=6143 rows=0 presents=468 presentGlyphs=36864 maskedFrames=243 drawn=36953 noAtlas=0
-12:28:22.255 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=469 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=9873
-12:28:24.260 TextReplace diag glyphs=0 skipped=0 copies=28239 carried=39591 occluded=3055 dropped=0 pixelCopies=7409 rows=0 presents=476 presentGlyphs=39508 maskedFrames=477 drawn=39591 noAtlas=0
-12:28:24.260 twin stats 5000ms frames 1154 copy 25646 keyed 11542 fill 1184 upload 12467 px 385028631 writes 12422 unknown 0 | replays 1155 draws 973 calls 57619 queuedMax 2 replay avg 0.273 max 6.417 ms | twins 132 490.8MB N 4 resets 0
-12:28:24.260 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=477 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=0
-12:28:24.260 twin tiles check on verify avg 0.205 max 0.547 ms/frame | repaired tiles 100 rects 20 px 22400 | top buf=02D55240 1152x1152 tiles 100 px 22400
-12:28:24.260 twin art expected 120566 dup 9293579 matched 47193 draws 44885 px 170743143 notready 0 rejected place 2308 aspect 0 unmatched 73373 overflow 0 | replayed 44852 calls 14052 fallbacks 0
-12:28:24.260 twin pixel ops keyed 0 average 16562 add 28078 sub 0 empty 0 copy 25 blend 7 keyedcopy 0 tint 0 | fill rects 30 (merged 0) tint rects 10 blend rows 0 (merged 0) lighter 5 | art 0 untwinned src 32 self 0 fallbacks 0 | replayed 44624 calls 3288
-12:28:24.260 twin art cache hits 0 misses 15 cached draws 0 | ground arts 0 replayed 0 fallbacks 0 no twin 0
-12:28:24.260 twin show shown 1153 (opaque 1153, over background 0) hidden: 1x toggle 0, invalid 0 (no twin at present 0, twin gone 0), other 0 | show gpu avg 46 us max 57 us (4 samples)
-12:28:24.260 twin gpu check 3813ms ago twin 0 bad 0 of 1389 non-art tiles, px 0 | art tiles 511 (differ from 1x 402)
-12:28:25.348 twin art tint magenta
-12:28:25.449 twin check twin 3 800x600 N 4 bad 0 of 1362 non-art tiles, px 0 | art tiles 538 (differ from 1x 417) worst none
-12:28:26.259 TextReplace diag glyphs=0 skipped=0 copies=28272 carried=39508 occluded=2856 dropped=0 pixelCopies=7396 rows=0 presents=475 presentGlyphs=39425 maskedFrames=476 drawn=39508 noAtlas=0
-12:28:26.259 twin art tint off
-12:28:26.259 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=476 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=0
-12:28:26.498 twin art tint magenta
-12:28:27.091 twin art tint off
-12:28:27.452 twin art tint magenta
-12:28:28.091 twin art tint off
-12:28:28.259 TextReplace diag glyphs=0 skipped=0 copies=27995 carried=34316 occluded=2856 dropped=0 pixelCopies=7423 rows=0 presents=475 presentGlyphs=34255 maskedFrames=476 drawn=34360 noAtlas=0
-12:28:28.259 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=476 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=0
-12:28:28.565 twin art tint magenta
-12:28:29.259 twin stats 5000ms frames 1190 copy 12616 keyed 11426 fill 1190 upload 0 px 0 writes 0 unknown 0 | replays 1189 draws 1044 calls 30298 queuedMax 2 replay avg 0.051 max 0.843 ms | twins 131 490.6MB N 4 resets 0
-12:28:29.259 twin tiles check on verify avg 0.164 max 0.363 ms/frame | repaired tiles 0 rects 0 px 0 | top none
-12:28:29.259 twin art expected 106812 dup 12312555 matched 43748 draws 41368 px 174879611 notready 0 rejected place 2380 aspect 0 unmatched 63064 overflow 0 | replayed 41365 calls 13090 fallbacks 0
-12:28:29.259 twin pixel ops keyed 0 average 18530 add 0 sub 0 empty 0 copy 0 blend 0 keyedcopy 0 tint 0 | fill rects 0 (merged 0) tint rects 0 blend rows 0 (merged 0) lighter 0 | art 0 untwinned src 0 self 0 fallbacks 0 | replayed 18531 calls 2380
-12:28:29.259 twin art cache hits 0 misses 0 cached draws 0 | ground arts 0 replayed 0 fallbacks 0 no twin 0
-12:28:29.259 twin show shown 1191 (opaque 1191, over background 0) hidden: 1x toggle 0, invalid 0 (no twin at present 0, twin gone 0), other 0 | show gpu avg 100 us max 295 us (5 samples)
-12:28:29.259 twin gpu check 3813ms ago twin 3 bad 0 of 1362 non-art tiles, px 0 | art tiles 538 (differ from 1x 417)
-12:28:29.611 twin art tint off
-12:28:30.057 twin art tint magenta
-12:28:30.258 TextReplace diag glyphs=0 skipped=0 copies=27727 carried=29036 occluded=2856 dropped=0 pixelCopies=7412 rows=0 presents=475 presentGlyphs=28975 maskedFrames=476 drawn=29036 noAtlas=0
-12:28:30.258 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=476 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=0
-12:28:30.448 twin check twin 0 800x600 N 4 bad 0 of 1362 non-art tiles, px 0 | art tiles 538 (differ from 1x 417) worst none
-12:28:30.712 twin art tint off
-12:28:31.178 twin art tint magenta
-12:28:31.846 twin art tint off
-12:28:32.257 TextReplace diag glyphs=0 skipped=0 copies=27736 carried=29036 occluded=2856 dropped=0 pixelCopies=7400 rows=0 presents=475 presentGlyphs=28975 maskedFrames=476 drawn=29036 noAtlas=0
-12:28:32.258 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=476 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=0
-12:28:34.257 TextReplace diag glyphs=315 skipped=289 copies=26279 carried=72275 occluded=5271 dropped=16 pixelCopies=4819 rows=0 presents=474 presentGlyphs=71682 maskedFrames=475 drawn=71500 noAtlas=0
-12:28:34.257 twin stats 5000ms frames 1189 copy 14690 keyed 13490 fill 1197 upload 29 px 529475 writes 29 unknown 0 | replays 1189 draws 1060 calls 31200 queuedMax 2 replay avg 0.052 max 2.270 ms | twins 142 530.5MB N 4 resets 0
-12:28:34.257 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=475 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=7
-12:28:34.257 twin tiles check on verify avg 0.163 max 0.379 ms/frame | repaired tiles 0 rects 0 px 0 | top none
-12:28:34.257 twin art expected 107972 dup 12309893 matched 42549 draws 40171 px 228149102 notready 0 rejected place 2378 aspect 0 unmatched 65423 overflow 0 | replayed 40149 calls 13029 fallbacks 0
-12:28:34.257 twin pixel ops keyed 0 average 15923 add 0 sub 0 empty 0 copy 0 blend 0 keyedcopy 0 tint 0 | fill rects 8 (merged 0) tint rects 0 blend rows 0 (merged 0) lighter 0 | art 0 untwinned src 0 self 0 fallbacks 0 | replayed 15936 calls 2201
-12:28:34.257 twin art cache hits 0 misses 354 cached draws 0 | ground arts 0 replayed 0 fallbacks 0 no twin 0
-12:28:34.257 twin show shown 1188 (opaque 1188, over background 0) hidden: 1x toggle 0, invalid 0 (no twin at present 0, twin gone 0), other 0 | show gpu avg 47 us max 60 us (4 samples)
-12:28:34.257 twin gpu check 3813ms ago twin 0 bad 0 of 1362 non-art tiles, px 0 | art tiles 538 (differ from 1x 417)
-12:28:35.451 twin check twin 3 800x600 N 4 bad 0 of 471 non-art tiles, px 0 | art tiles 1429 (differ from 1x 1408) worst none
-12:28:36.258 TextReplace diag glyphs=315 skipped=289 copies=24415 carried=122819 occluded=7650 dropped=6 pixelCopies=1805 rows=0 presents=475 presentGlyphs=122530 maskedFrames=476 drawn=122834 noAtlas=0
-12:28:36.258 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=476 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=7
-12:28:38.258 TextReplace diag glyphs=0 skipped=0 copies=27545 carried=35400 occluded=3434 dropped=6 pixelCopies=7068 rows=0 presents=476 presentGlyphs=35354 maskedFrames=476 drawn=35597 noAtlas=0
-12:28:38.258 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=476 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=0
-12:28:39.259 twin stats 5000ms frames 1190 copy 46770 keyed 41894 fill 1202 upload 56 px 969325 writes 44 unknown 0 | replays 1190 draws 1062 calls 56855 queuedMax 2 replay avg 0.084 max 5.074 ms | twins 119 402.6MB N 4 resets 0
-12:28:39.260 twin tiles check on verify avg 0.177 max 0.513 ms/frame | repaired tiles 50 rects 10 px 11200 | top buf=02D55240 1152x1152 tiles 50 px 11200
-12:28:39.260 twin art expected 197060 dup 11596754 matched 77691 draws 75430 px 368364225 notready 0 rejected place 2262 aspect 0 unmatched 119369 overflow 0 | replayed 75147 calls 31589 fallbacks 0
-12:28:39.260 twin pixel ops keyed 0 average 11966 add 406 sub 0 empty 0 copy 2 blend 0 keyedcopy 0 tint 0 | fill rects 12 (merged 0) tint rects 2 blend rows 0 (merged 0) lighter 2 | art 0 untwinned src 2 self 0 fallbacks 0 | replayed 12359 calls 2914
-12:28:39.260 twin art cache hits 1 misses 825 cached draws 1 | ground arts 0 replayed 0 fallbacks 0 no twin 0
-12:28:39.260 twin show shown 1191 (opaque 1191, over background 0) hidden: 1x toggle 0, invalid 0 (no twin at present 0, twin gone 0), other 0 | show gpu avg 56 us max 60 us (5 samples)
-12:28:39.260 twin gpu check 3813ms ago twin 3 bad 0 of 471 non-art tiles, px 0 | art tiles 1429 (differ from 1x 1408)
-12:28:40.255 TextReplace diag glyphs=34 skipped=30 copies=32343 carried=15854 occluded=1196 dropped=9 pixelCopies=5323 rows=0 presents=474 presentGlyphs=15816 maskedFrames=122 drawn=15914 noAtlas=0
-12:28:40.255 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=475 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=3
-12:28:40.450 twin check twin 2 800x600 N 4 bad 0 of 117 non-art tiles, px 0 | art tiles 1783 (differ from 1x 1482) worst none
-12:28:42.258 TextReplace diag glyphs=19 skipped=17 copies=146858 carried=11730 occluded=474 dropped=0 pixelCopies=4747 rows=0 presents=473 presentGlyphs=11687 maskedFrames=0 drawn=11710 noAtlas=0
-12:28:42.258 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=474 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=3
-12:28:42.482 Autosave copy turn=1 scenario=The Necromancer's Spirit file=G:\games\Disciples 2\SaveGame\The Necromancer's Spirit T0001.sg
-12:28:44.255 TextReplace diag glyphs=235 skipped=208 copies=61816 carried=30633 occluded=711 dropped=31 pixelCopies=4322 rows=0 presents=475 presentGlyphs=30403 maskedFrames=234 drawn=30381 noAtlas=0
-12:28:44.255 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=475 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=19
-12:28:44.258 twin stats 5000ms frames 1186 copy 322287 keyed 287422 fill 1325 upload 200 px 4402172 writes 378746 unknown 0 | replays 1187 draws 1139 calls 266339 queuedMax 2 replay avg 0.269 max 3.732 ms | twins 131 413.1MB N 4 resets 0
-12:28:44.258 twin tiles check on verify avg 0.297 max 0.510 ms/frame | repaired tiles 100 rects 20 px 22400 | top buf=02D55240 1152x1152 tiles 100 px 22400
-12:28:44.258 twin art expected 1013978 dup 4837877 matched 401363 draws 404255 px 751587434 notready 0 rejected place 3810 aspect 0 unmatched 612615 overflow 0 | replayed 404202 calls 201362 fallbacks 0
-12:28:44.258 twin pixel ops keyed 0 average 11305 add 409 sub 0 empty 0 copy 7 blend 0 keyedcopy 0 tint 0 | fill rects 139 (merged 0) tint rects 4 blend rows 0 (merged 0) lighter 0 | art 0 untwinned src 14272 self 0 fallbacks 0 | replayed 11717 calls 8897
-12:28:44.258 twin art cache hits 6702 misses 4944 cached draws 6702 | ground arts 207 replayed 207 fallbacks 0 no twin 0
-12:28:44.258 twin show shown 1186 (opaque 1186, over background 0) hidden: 1x toggle 0, invalid 0 (no twin at present 0, twin gone 0), other 0 | show gpu avg 53 us max 65 us (5 samples)
-12:28:44.258 twin gpu check 3813ms ago twin 2 bad 0 of 117 non-art tiles, px 0 | art tiles 1783 (differ from 1x 1482)
-12:28:45.450 twin check twin 3 800x600 N 4 bad 0 of 37 non-art tiles, px 0 | art tiles 1863 (differ from 1x 1264) worst none
-12:28:46.256 TextReplace diag glyphs=276 skipped=271 copies=34634 carried=27321 occluded=718 dropped=15 pixelCopies=6008 rows=0 presents=476 presentGlyphs=27031 maskedFrames=244 drawn=27012 noAtlas=0
-12:28:46.256 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=476 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=82
-12:28:48.259 TextReplace diag glyphs=223555 skipped=223545 copies=40541 carried=275839 occluded=1777 dropped=223477 pixelCopies=8037 rows=0 presents=457 presentGlyphs=52233 maskedFrames=134 drawn=52172 noAtlas=0
-12:28:48.259 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=457 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=5718
-12:28:49.258 twin stats 5000ms frames 1168 copy 229948 keyed 202106 fill 1390 upload 8674 px 267547530 writes 411858 unknown 0 | replays 1168 draws 1088 calls 191600 queuedMax 2 replay avg 0.349 max 4.419 ms | twins 157 528.2MB N 4 resets 0
-12:28:49.258 twin tiles check on verify avg 0.280 max 0.512 ms/frame | repaired tiles 100 rects 20 px 22400 | top buf=02D55240 1152x1152 tiles 100 px 22400
-12:28:49.258 twin art expected 626565 dup 5112666 matched 238261 draws 237951 px 507225234 notready 0 rejected place 1163 aspect 0 unmatched 388304 overflow 0 | replayed 238299 calls 123086 fallbacks 0
-12:28:49.258 twin pixel ops keyed 0 average 19132 add 46193 sub 0 empty 0 copy 29 blend 2 keyedcopy 0 tint 0 | fill rects 222 (merged 0) tint rects 8 blend rows 0 (merged 0) lighter 6 | art 0 untwinned src 5835 self 0 fallbacks 0 | replayed 65028 calls 7953
-12:28:49.259 twin art cache hits 853 misses 799 cached draws 853 | ground arts 115 replayed 115 fallbacks 0 no twin 0
-12:28:49.259 twin show shown 1168 (opaque 1168, over background 0) hidden: 1x toggle 0, invalid 0 (no twin at present 0, twin gone 0), other 0 | show gpu avg 48 us max 60 us (4 samples)
-12:28:49.259 twin gpu check 3813ms ago twin 3 bad 0 of 37 non-art tiles, px 0 | art tiles 1863 (differ from 1x 1264)
-12:28:50.263 TextReplace diag glyphs=177274 skipped=177266 copies=40536 carried=226402 occluded=1025 dropped=172063 pixelCopies=8265 rows=0 presents=469 presentGlyphs=54401 maskedFrames=85 drawn=54410 noAtlas=0
-12:28:50.263 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=469 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=5844
-12:28:50.449 twin check twin 0 800x600 N 4 bad 0 of 1384 non-art tiles, px 0 | art tiles 516 (differ from 1x 408) worst none
-12:28:52.255 TextReplace diag glyphs=203051 skipped=203045 copies=41292 carried=248608 occluded=774 dropped=198129 pixelCopies=7485 rows=0 presents=467 presentGlyphs=50326 maskedFrames=90 drawn=50341 noAtlas=0
-12:28:52.255 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=467 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=7418
-12:28:54.259 TextReplace diag glyphs=159097 skipped=159091 copies=39653 carried=198855 occluded=652 dropped=159059 pixelCopies=7007 rows=0 presents=462 presentGlyphs=39781 maskedFrames=91 drawn=39798 noAtlas=0
-12:28:54.259 twin stats 5000ms frames 1163 copy 32959 keyed 12768 fill 1230 upload 17782 px 550959975 writes 17652 unknown 0 | replays 1162 draws 1031 calls 73706 queuedMax 2 replay avg 0.354 max 3.738 ms | twins 164 609.9MB N 4 resets 0
-12:28:54.259 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=462 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=7116
-12:28:54.259 twin tiles check on verify avg 0.233 max 0.512 ms/frame | repaired tiles 345 rects 69 px 77280 | top buf=02D55240 1152x1152 tiles 345 px 77280
-12:28:54.259 twin art expected 161304 dup 6269849 matched 54518 draws 52192 px 175090512 notready 0 rejected place 2326 aspect 0 unmatched 106786 overflow 0 | replayed 52156 calls 16271 fallbacks 0
-12:28:54.259 twin pixel ops keyed 0 average 17670 add 133540 sub 0 empty 0 copy 61 blend 13 keyedcopy 0 tint 0 | fill rects 67 (merged 0) tint rects 37 blend rows 0 (merged 0) lighter 10 | art 0 untwinned src 74 self 0 fallbacks 0 | replayed 151503 calls 4577
-12:28:54.259 twin art cache hits 0 misses 0 cached draws 0 | ground arts 0 replayed 0 fallbacks 0 no twin 0
-12:28:54.259 twin show shown 1162 (opaque 1162, over background 0) hidden: 1x toggle 0, invalid 0 (no twin at present 0, twin gone 0), other 0 | show gpu avg 60 us max 86 us (5 samples)
-12:28:54.259 twin gpu check 3813ms ago twin 0 bad 0 of 1384 non-art tiles, px 0 | art tiles 516 (differ from 1x 408)
-12:28:55.468 twin check twin 1 800x600 N 4 bad 0 of 1364 non-art tiles, px 0 | art tiles 536 (differ from 1x 419) worst none
-12:28:56.256 TextReplace diag glyphs=136069 skipped=136063 copies=38048 carried=165044 occluded=617 dropped=132625 pixelCopies=5030 rows=0 presents=467 presentGlyphs=32330 maskedFrames=98 drawn=32448 noAtlas=0
-12:28:56.256 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=468 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=7821
-12:28:58.255 TextReplace diag glyphs=47443 skipped=47441 copies=32202 carried=73979 occluded=2380 dropped=47390 pixelCopies=7401 rows=0 presents=476 presentGlyphs=26536 maskedFrames=476 drawn=26534 noAtlas=0
-12:28:58.255 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=476 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=3392
-12:28:59.255 twin stats 5000ms frames 1182 copy 25760 keyed 12458 fill 1214 upload 11259 px 346479160 writes 11224 unknown 0 | replays 1182 draws 1006 calls 57040 queuedMax 2 replay avg 0.246 max 7.849 ms | twins 158 528.8MB N 4 resets 0
-12:28:59.255 twin tiles check on verify avg 0.207 max 0.506 ms/frame | repaired tiles 40 rects 8 px 8960 | top buf=02D55240 1152x1152 tiles 40 px 8960
-12:28:59.255 twin art expected 122869 dup 9246285 matched 48644 draws 46280 px 194693529 notready 0 rejected place 2364 aspect 0 unmatched 74225 overflow 0 | replayed 46325 calls 15200 fallbacks 0
-12:28:59.255 twin pixel ops keyed 0 average 14187 add 27692 sub 0 empty 0 copy 27 blend 12 keyedcopy 0 tint 0 | fill rects 32 (merged 0) tint rects 14 blend rows 0 (merged 0) lighter 3 | art 0 untwinned src 39 self 0 fallbacks 0 | replayed 41888 calls 3109
-12:28:59.255 twin art cache hits 0 misses 228 cached draws 0 | ground arts 0 replayed 0 fallbacks 0 no twin 0
-12:28:59.255 twin show shown 1183 (opaque 1183, over background 0) hidden: 1x toggle 0, invalid 0 (no twin at present 0, twin gone 0), other 0 | show gpu avg 96 us max 243 us (4 samples)
-12:28:59.255 twin gpu check 3797ms ago twin 1 bad 0 of 1364 non-art tiles, px 0 | art tiles 536 (differ from 1x 419)
-12:29:00.259 TextReplace diag glyphs=45 skipped=38 copies=25802 carried=43206 occluded=2796 dropped=14 pixelCopies=3428 rows=0 presents=476 presentGlyphs=43074 maskedFrames=477 drawn=43092 noAtlas=0
-12:29:00.259 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=477 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=1
-12:29:00.466 twin check twin 2 800x600 N 4 bad 0 of 1071 non-art tiles, px 0 | art tiles 829 (differ from 1x 714) worst none
-12:29:00.495 twin GL released
-12:29:00.541 twin destroy 1 800x600 buffer 03B50880 at frame 13079
-12:29:00.542 twin destroy 0 800x600 buffer 03B50850 at frame 13079
-12:29:00.542 twin destroy 2 800x600 buffer 03B508B0 at frame 13079
-12:29:00.542 twin destroy 3 800x600 buffer 03B508E0 at frame 13079
+12:36:59.806 DllMain attach
+12:36:59.819 Config loaded exe version major=07D3000A minor=00170001 renderer=0 mode=800x600
+12:36:59.819 Hooks::Load begin exe version major=07D3000A minor=00170001
+12:36:59.835 LoadV2 version major=07D3000A minor=00170001 check=0056339D
+12:36:59.884 image replace loaded
+12:36:59.884 Hooks loaded
+12:36:59.904 Mods loaded
+12:36:59.944 RenderStart begin renderer=0 windowed=1 mode=800x600x16
+12:36:59.949 image pack loaded: 12445 animations, 115348 frames in 47 ms
+12:37:00.060 RenderStart end gl=04060000 renderer=0
+12:37:00.061 twin index none at start
+12:37:00.061 twin scale N=4 screen 2560x1440 mode 800x600 tile check on
+12:37:00.061 twin display config borders allowed 0 active 0 type 0 | background allowed 0 enabled 0 | interpolation 0 upscaling 0 x0 | zoomed 0 renderer 0 gl 04060000
+12:37:00.062 twin create 0 800x600 buffer 03520850 data 7F6A0050 at frame 0
+12:37:00.062 twin create 1 800x600 buffer 03520880 data 7F4C0050 at frame 0
+12:37:00.063 twin create 2 800x600 buffer 035208B0 data 7F2E0050 at frame 0
+12:37:00.063 twin create 3 800x600 buffer 035208E0 data 7EB60050 at frame 0
+12:37:00.064 twin create 4 1152x1152 buffer 02C55240 data 7E310040 at frame 0
+12:37:00.113 BinkOpen G:\games\Disciples 2\Video\SF.bik replaced with blank ok
+12:37:00.113 twin create 5 800x600 buffer 02C57570 data 7D490040 at frame 0
+12:37:00.116 twin first present buffer 035208E0 isBack 0 isZoomed 0 borders 0 size 800x600
+12:37:00.116 TextReplace diag glyphs=0 skipped=0 copies=0 carried=0 occluded=0 dropped=0 pixelCopies=0 rows=0 presents=1 presentGlyphs=0 maskedFrames=0 drawn=0 noAtlas=0
+12:37:00.116 TextReplace diag2 cleanPresents=0 emptyDirty=1 renders=0 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=0
+12:37:00.122 twin GL ready
+12:37:00.138 twin show viewport 800x600 twin 3200x2400 frame 800x600 ratio 4.000 x 4.000 box minify
+12:37:00.155 twin show viewport 1756x1317 twin 3200x2400 frame 800x600 ratio 1.822 x 1.822 box minify
+12:37:01.101 twin destroy 5 800x600 buffer 02C57570 at frame 230
+12:37:01.103 twin create 5 800x600 buffer 02C57470 data 7D2C0040 at frame 230
+12:37:01.137 image GL ready, mipmaps on
+12:37:01.151 image art name=LOADING_GLSD frame=3266 place=0,0,800,600 clip=0,0,800,600 flipped=0 parts=1 first=0,0,0,0,800,600
+12:37:01.152 twin learned frame=3266 block 800x600 at 0,0 of 800x600 from an expectation (src 02C57470 sheet=0,0)
+12:37:01.152 twin art cached frame=3266 src=02C57470 sheet=0,0 dst=035208B0 0,0 800x600 canvas=0,0 of 800x600 keyed at frame 233
+12:37:01.153 twin index saved 1 entries
+12:37:01.154 image art name=LOADING_GLSD frame=3266 place=0,0,800,600 clip=0,0,800,600 flipped=0 parts=1 first=0,0,0,0,800,600
+12:37:01.154 twin art cached frame=3266 src=02C57470 sheet=0,0 dst=03520850 0,0 800x600 canvas=0,0 of 800x600 keyed at frame 234
+12:37:01.155 twin destroy 5 800x600 buffer 02C57470 at frame 234
+12:37:01.155 twin check twin 2 800x600 N 4 bad 0 of 0 non-art tiles, px 0 | art tiles 1900 (differ from 1x 1900) worst none
+12:37:01.257 twin create 5 24x54 buffer 0D0387B0 data 0B460040 at frame 235
+12:37:01.258 twin destroy 5 24x54 buffer 0D0387B0 at frame 236
+12:37:01.258 image art name=_CUDEFAUL frame=3276 place=454,410,478,464 clip=454,410,775,600 flipped=0 parts=1 first=454,410,0,0,24,54
+12:37:01.259 twin create 5 688x1014 buffer 0D037E50 data 7C5F0040 at frame 236
+12:37:01.260 twin create 6 748x896 buffer 0D037E70 data 7C0B0040 at frame 236
+12:37:01.260 twin create 7 800x664 buffer 0D037E60 data 7BC10040 at frame 236
+12:37:01.260 twin create 8 800x600 buffer 0D037E80 data 78A90040 at frame 236
+12:37:01.261 twin create 9 200x20 buffer 0D037E90 data 0D0535E8 at frame 236
+12:37:01.261 twin create 10 200x20 buffer 0D037EA0 data 0CFC1008 at frame 236
+12:37:01.261 twin create 11 100x20 buffer 0D037EB0 data 0CFE9220 at frame 236
+12:37:01.261 twin create 12 100x20 buffer 0D037EC0 data 0CFE5390 at frame 236
+12:37:01.261 twin create 13 100x20 buffer 0D037ED0 data 0CFE1500 at frame 236
+12:37:01.261 twin create 14 24x54 buffer 0D037EE0 data 23FBEBB0 at frame 236
+12:37:01.261 twin create 15 64x20 buffer 0D037EF0 data 23FBC360 at frame 236
+12:37:01.261 twin create 16 64x20 buffer 0D037F00 data 23FB9B50 at frame 236
+12:37:01.261 twin create 17 36x20 buffer 0D037F10 data 23FB7C00 at frame 236
+12:37:01.295 TextReplace font 02BE8BB0 'Menu': charset 0 score 1000/1000 offset 0,0
+12:37:01.295 TextReplace font 02BE8BB0 name 'Menu' calibrated in 722 us
+12:37:01.296 TextReplace offcarry blit src 02CA0180 1152x1152 glyphs 12 rect 0,0,200,20 -> dst 02CA61C0 200x20 at 0,0 now 12 (+12) first ch 83 alpha 255
+12:37:01.296 TextReplace offcarry blit src 02CA0180 1152x1152 glyphs 8 rect 0,0,200,20 -> dst 02CA6210 200x20 at 0,0 now 8 (+8) first ch 84 alpha 255
+12:37:01.296 TextReplace offcarry blit src 02CA0180 1152x1152 glyphs 7 rect 0,0,100,20 -> dst 02CA6260 100x20 at 0,0 now 7 (+7) first ch 67 alpha 255
+12:37:01.296 TextReplace offcarry blit src 02CA0180 1152x1152 glyphs 11 rect 0,0,100,20 -> dst 02CA62B0 100x20 at 0,0 now 11 (+11) first ch 77 alpha 255
+12:37:01.296 TextReplace offcarry blit src 02CA0180 1152x1152 glyphs 7 rect 0,0,100,20 -> dst 02CA6300 100x20 at 0,0 now 7 (+7) first ch 79 alpha 255
+12:37:01.296 TextReplace offcarry blit src 02CA0180 1152x1152 glyphs 5 rect 0,0,64,20 -> dst 02CA63A0 64x20 at 0,0 now 5 (+5) first ch 73 alpha 255
+12:37:01.296 TextReplace offcarry blit src 02CA0180 1152x1152 glyphs 4 rect 0,0,64,20 -> dst 02CA63F0 64x20 at 0,0 now 4 (+4) first ch 81 alpha 255
+12:37:01.297 TextReplace font 02BEA028 'Normal': charset 0 score 998/1000 offset 0,0
+12:37:01.297 TextReplace font 02BEA028 name 'Normal' calibrated in 598 us
+12:37:01.297 TextReplace offcarry blit src 02CA0180 1152x1152 glyphs 6 rect 0,0,36,20 -> dst 02CA6440 36x20 at 0,0 now 6 (+6) first ch 118 alpha 255
+12:37:01.298 twin learned frame=3276 block 24x54 at 0,0 of 24x54 from an expectation (src 0D037EE0 sheet=0,0)
+12:37:01.298 twin art frame=3276 src=0D037EE0 sheet=0,0 dst=035208E0 454,410 24x54 canvas=0,0 of 24x54 keyed at frame 236
+12:37:01.298 image art name=_CUDEFAUL frame=3276 place=456,412,480,466 clip=456,412,777,600 flipped=0 parts=1 first=456,412,0,0,24,54
+12:37:01.298 twin art cached frame=3276 src=0D037EE0 sheet=0,0 dst=035208B0 456,412 24x54 canvas=0,0 of 24x54 keyed at frame 237
+12:37:01.299 image art name=_CUDEFAUL frame=3276 place=456,412,480,466 clip=456,412,777,600 flipped=0 parts=1 first=456,412,0,0,24,54
+12:37:01.299 image art name=_CUDEFAUL frame=3276 place=456,412,480,466 clip=456,412,777,600 flipped=0 parts=1 first=456,412,0,0,24,54
+12:37:01.299 image art name=_CUDEFAUL frame=3276 place=456,412,480,466 clip=456,412,777,600 flipped=0 parts=1 first=456,412,0,0,24,54
+12:37:01.299 image art name=_CUDEFAUL frame=3276 place=456,412,480,466 clip=456,412,777,600 flipped=0 parts=1 first=456,412,0,0,24,54
+12:37:01.299 image art name=_CUDEFAUL frame=3276 place=456,412,480,466 clip=456,412,777,600 flipped=0 parts=1 first=456,412,0,0,24,54
+12:37:01.299 image art name=_CUDEFAUL frame=3276 place=456,412,480,466 clip=456,412,777,600 flipped=0 parts=1 first=456,412,0,0,24,54
+12:37:01.299 image art name=_CUDEFAUL frame=3276 place=456,412,480,466 clip=456,412,777,600 flipped=0 parts=1 first=456,412,0,0,24,54
+12:37:01.299 image art name=_CUDEFAUL frame=3276 place=456,412,480,466 clip=456,412,777,600 flipped=0 parts=1 first=456,412,0,0,24,54
+12:37:01.299 image art name=_CUDEFAUL frame=3276 place=456,412,480,466 clip=456,412,777,600 flipped=0 parts=1 first=456,412,0,0,24,54
+12:37:01.300 image art name=_CUDEFAUL frame=3276 place=456,412,480,466 clip=456,412,777,600 flipped=0 parts=1 first=456,412,0,0,24,54
+12:37:01.300 twin art cached frame=3276 src=0D037EE0 sheet=0,0 dst=03520850 456,412 24x54 canvas=0,0 of 24x54 keyed at frame 238
+12:37:01.300 image art name=_CUDEFAUL frame=3276 place=456,412,480,466 clip=456,412,777,600 flipped=0 parts=1 first=456,412,0,0,24,54
+12:37:01.300 image art name=_CUDEFAUL frame=3276 place=456,412,480,466 clip=456,412,777,600 flipped=0 parts=1 first=456,412,0,0,24,54
+12:37:01.300 image art name=_CUDEFAUL frame=3276 place=456,412,480,466 clip=456,412,777,600 flipped=0 parts=1 first=456,412,0,0,24,54
+12:37:01.301 image art name=_CUDEFAUL frame=3276 place=457,412,481,466 clip=457,412,778,600 flipped=0 parts=1 first=457,412,0,0,24,54
+12:37:01.301 image art name=_CUDEFAUL frame=3276 place=457,412,481,466 clip=457,412,778,600 flipped=0 parts=1 first=457,412,0,0,24,54
+12:37:01.301 image art name=_CUDEFAUL frame=3276 place=457,412,481,466 clip=457,412,778,600 flipped=0 parts=1 first=457,412,0,0,24,54
+12:37:01.301 image art name=_CUDEFAUL frame=3276 place=457,412,481,466 clip=457,412,778,600 flipped=0 parts=1 first=457,412,0,0,24,54
+12:37:01.301 image art name=_CUDEFAUL frame=3276 place=457,412,481,466 clip=457,412,778,600 flipped=0 parts=1 first=457,412,0,0,24,54
+12:37:01.301 image art name=_CUDEFAUL frame=3276 place=457,412,481,466 clip=457,412,778,600 flipped=0 parts=1 first=457,412,0,0,24,54
+12:37:01.301 image art name=_CUDEFAUL frame=3276 place=457,412,481,466 clip=457,412,778,600 flipped=0 parts=1 first=457,412,0,0,24,54
+12:37:01.301 image art name=_CUDEFAUL frame=3276 place=457,412,481,466 clip=457,412,778,600 flipped=0 parts=1 first=457,412,0,0,24,54
+12:37:01.301 image art name=_CUDEFAUL frame=3276 place=457,412,481,466 clip=457,412,778,600 flipped=0 parts=1 first=457,412,0,0,24,54
+12:37:01.301 image art name=_CUDEFAUL frame=3276 place=457,412,481,466 clip=457,412,778,600 flipped=0 parts=1 first=457,412,0,0,24,54
+12:37:01.302 image art name=_CUDEFAUL frame=3276 place=457,412,481,466 clip=457,412,778,600 flipped=0 parts=1 first=457,412,0,0,24,54
+12:37:01.302 image art name=_CUDEFAUL frame=3276 place=457,412,481,466 clip=457,412,778,600 flipped=0 parts=1 first=457,412,0,0,24,54
+12:37:01.302 image art name=_CUDEFAUL frame=3276 place=457,412,481,466 clip=457,412,778,600 flipped=0 parts=1 first=457,412,0,0,24,54
+12:37:01.302 image art name=_CUDEFAUL frame=3276 place=457,412,481,466 clip=457,412,778,600 flipped=0 parts=1 first=457,412,0,0,24,54
+12:37:01.302 image art name=_CUDEFAUL frame=3276 place=457,412,481,466 clip=457,412,778,600 flipped=0 parts=1 first=457,412,0,0,24,54
+12:37:01.330 twin learned frame=1867 block 800x600 at 0,0 of 800x600 from an expectation (src 0D037E80 sheet=0,0)
+12:37:01.330 twin art cached frame=1867 src=0D037E80 sheet=0,0 dst=03520880 0,0 800x600 canvas=0,0 of 800x600 keyed at frame 239
+12:37:01.330 twin art cached frame=3276 src=0D037EE0 sheet=0,0 dst=03520880 466,410 24x54 canvas=0,0 of 24x54 keyed at frame 239
+12:37:01.335 twin art cached frame=1867 src=0D037E80 sheet=0,0 dst=035208E0 0,0 800x600 canvas=0,0 of 800x600 keyed at frame 240
+12:37:01.335 twin learned frame=115169 block 187x112 at 0,0 of 187x112 from an expectation (src 0D037E70 sheet=0,112)
+12:37:01.335 twin art cached frame=115169 src=0D037E70 sheet=0,112 dst=035208E0 73,321 187x112 canvas=0,0 of 187x112 keyed at frame 240
+12:37:01.335 twin learned frame=115229 block 172x169 at 0,0 of 172x169 from an expectation (src 0D037E50 sheet=0,169)
+12:37:01.335 twin art cached frame=115229 src=0D037E50 sheet=0,169 dst=035208E0 628,431 172x169 canvas=0,0 of 172x169 keyed at frame 240
+12:37:01.336 twin art cached frame=3276 src=0D037EE0 sheet=0,0 dst=035208E0 469,410 24x54 canvas=0,0 of 24x54 keyed at frame 240
+12:37:01.340 twin art cached frame=1867 src=0D037E80 sheet=0,0 dst=035208B0 0,0 800x600 canvas=0,0 of 800x600 keyed at frame 241
+12:37:01.340 twin art cached frame=115169 src=0D037E70 sheet=0,112 dst=035208B0 73,321 187x112 canvas=0,0 of 187x112 keyed at frame 241
+12:37:01.340 twin art cached frame=115229 src=0D037E50 sheet=0,169 dst=035208B0 628,431 172x169 canvas=0,0 of 172x169 keyed at frame 241
+12:37:01.340 twin art cached frame=3276 src=0D037EE0 sheet=0,0 dst=035208B0 471,409 24x54 canvas=0,0 of 24x54 keyed at frame 241
+12:37:01.344 twin art cached frame=1867 src=0D037E80 sheet=0,0 dst=03520850 0,0 800x600 canvas=0,0 of 800x600 keyed at frame 242
+12:37:01.344 twin art cached frame=115169 src=0D037E70 sheet=0,112 dst=03520850 73,321 187x112 canvas=0,0 of 187x112 keyed at frame 242
+12:37:01.345 twin art cached frame=115229 src=0D037E50 sheet=0,169 dst=03520850 628,431 172x169 canvas=0,0 of 172x169 keyed at frame 242
+12:37:01.345 twin art cached frame=3276 src=0D037EE0 sheet=0,0 dst=03520850 474,409 24x54 canvas=0,0 of 24x54 keyed at frame 242
+12:37:01.349 twin art cached frame=1867 src=0D037E80 sheet=0,0 dst=03520880 0,0 800x600 canvas=0,0 of 800x600 keyed at frame 243
+12:37:01.349 twin art cached frame=115169 src=0D037E70 sheet=0,112 dst=03520880 73,321 187x112 canvas=0,0 of 187x112 keyed at frame 243
+12:37:01.349 twin art cached frame=115229 src=0D037E50 sheet=0,169 dst=03520880 628,431 172x169 canvas=0,0 of 172x169 keyed at frame 243
+12:37:01.349 twin art cached frame=3276 src=0D037EE0 sheet=0,0 dst=03520880 476,409 24x54 canvas=0,0 of 24x54 keyed at frame 243
+12:37:01.353 twin art cached frame=1867 src=0D037E80 sheet=0,0 dst=035208E0 0,0 800x600 canvas=0,0 of 800x600 keyed at frame 244
+12:37:01.353 twin art cached frame=115169 src=0D037E70 sheet=0,112 dst=035208E0 73,321 187x112 canvas=0,0 of 187x112 keyed at frame 244
+12:37:01.353 twin art cached frame=115229 src=0D037E50 sheet=0,169 dst=035208E0 628,431 172x169 canvas=0,0 of 172x169 keyed at frame 244
+12:37:01.353 twin learn rejected place frame=2792 sheet=128,600 64x59 dst=474,361 canvas=-24,-19 of 266x21 at frame 244
+12:37:01.357 twin art cached frame=1867 src=0D037E80 sheet=0,0 dst=035208B0 0,0 800x600 canvas=0,0 of 800x600 keyed at frame 245
+12:37:01.357 twin art cached frame=115169 src=0D037E70 sheet=0,112 dst=035208B0 73,321 187x112 canvas=0,0 of 187x112 keyed at frame 245
+12:37:01.357 twin art cached frame=115229 src=0D037E50 sheet=0,169 dst=035208B0 628,431 172x169 canvas=0,0 of 172x169 keyed at frame 245
+12:37:01.357 twin learn rejected place frame=2792 sheet=128,600 64x59 dst=474,361 canvas=-24,-19 of 266x21 at frame 245
+12:37:01.362 twin art cached frame=1867 src=0D037E80 sheet=0,0 dst=03520850 0,0 800x600 canvas=0,0 of 800x600 keyed at frame 246
+12:37:01.362 twin art cached frame=115169 src=0D037E70 sheet=0,112 dst=03520850 73,321 187x112 canvas=0,0 of 187x112 keyed at frame 246
+12:37:01.362 twin art cached frame=115229 src=0D037E50 sheet=0,169 dst=03520850 628,431 172x169 canvas=0,0 of 172x169 keyed at frame 246
+12:37:01.362 twin learn rejected place frame=2792 sheet=128,600 64x59 dst=474,361 canvas=-24,-19 of 266x21 at frame 246
+12:37:01.365 twin learned frame=115170 block 187x112 at 0,0 of 187x112 from an expectation (src 0D037E70 sheet=187,0)
+12:37:01.365 twin learned frame=115230 block 172x169 at 0,0 of 172x169 from an expectation (src 0D037E50 sheet=172,0)
+12:37:01.366 twin learn rejected place frame=2792 sheet=128,600 64x59 dst=474,361 canvas=-24,-19 of 266x21 at frame 247
+12:37:01.366 twin learn rejected place frame=2792 sheet=192,600 64x59 dst=730,361 canvas=232,-19 of 266x21 at frame 247
+12:37:01.370 twin learn rejected place frame=2792 sheet=128,600 64x59 dst=474,361 canvas=-24,-19 of 266x21 at frame 248
+12:37:01.370 twin learn rejected place frame=2792 sheet=192,600 64x59 dst=730,361 canvas=232,-19 of 266x21 at frame 248
+12:37:01.374 twin learn rejected place frame=2792 sheet=128,600 64x59 dst=474,361 canvas=-24,-19 of 266x21 at frame 249
+12:37:01.374 twin learn rejected place frame=2792 sheet=192,600 64x59 dst=730,361 canvas=232,-19 of 266x21 at frame 249
+12:37:01.378 twin learn rejected place frame=2792 sheet=128,600 64x59 dst=474,361 canvas=-24,-19 of 266x21 at frame 250
+12:37:01.378 twin learn rejected place frame=2792 sheet=192,600 64x59 dst=730,361 canvas=232,-19 of 266x21 at frame 250
+12:37:01.383 twin learn rejected place frame=2792 sheet=128,600 64x59 dst=474,361 canvas=-24,-19 of 266x21 at frame 251
+12:37:01.383 twin learn rejected place frame=2792 sheet=192,600 64x59 dst=730,361 canvas=232,-19 of 266x21 at frame 251
+12:37:01.386 twin learn rejected place frame=2792 sheet=128,600 64x59 dst=474,361 canvas=-24,-19 of 266x21 at frame 252
+12:37:01.386 twin learn rejected place frame=2792 sheet=192,600 64x59 dst=730,361 canvas=232,-19 of 266x21 at frame 252
+12:37:01.391 twin learn rejected place frame=2792 sheet=128,600 64x59 dst=474,361 canvas=-24,-19 of 266x21 at frame 253
+12:37:01.432 twin learned frame=115171 block 187x112 at 0,0 of 187x112 from an expectation (src 0D037E70 sheet=187,112)
+12:37:01.432 twin learned frame=115231 block 172x169 at 0,0 of 172x169 from an expectation (src 0D037E50 sheet=172,169)
+12:37:01.499 twin learned frame=115172 block 187x112 at 0,0 of 187x112 from an expectation (src 0D037E70 sheet=0,224)
+12:37:01.499 twin learned frame=115232 block 172x169 at 0,0 of 172x169 from an expectation (src 0D037E50 sheet=0,338)
+12:37:01.562 twin learned frame=115173 block 187x112 at 0,0 of 187x112 from an expectation (src 0D037E70 sheet=187,224)
+12:37:01.562 twin learned frame=115233 block 172x169 at 0,0 of 172x169 from an expectation (src 0D037E50 sheet=172,338)
+12:37:01.630 twin learned frame=115174 block 187x112 at 0,0 of 187x112 from an expectation (src 0D037E70 sheet=0,336)
+12:37:01.630 twin learned frame=115234 block 172x169 at 0,0 of 172x169 from an expectation (src 0D037E50 sheet=344,0)
+12:37:01.697 twin learned frame=115175 block 187x112 at 0,0 of 187x112 from an expectation (src 0D037E70 sheet=187,336)
+12:37:01.697 twin learned frame=115235 block 172x169 at 0,0 of 172x169 from an expectation (src 0D037E50 sheet=344,169)
+12:37:01.761 twin learned frame=115176 block 187x112 at 0,0 of 187x112 from an expectation (src 0D037E70 sheet=374,0)
+12:37:01.761 twin learned frame=115236 block 172x169 at 0,0 of 172x169 from an expectation (src 0D037E50 sheet=344,338)
+12:37:01.827 twin learned frame=115177 block 187x112 at 0,0 of 187x112 from an expectation (src 0D037E70 sheet=374,112)
+12:37:01.827 twin learned frame=115237 block 172x169 at 0,0 of 172x169 from an expectation (src 0D037E50 sheet=0,507)
+12:37:01.894 twin learned frame=115178 block 187x112 at 0,0 of 187x112 from an expectation (src 0D037E70 sheet=374,224)
+12:37:01.894 twin learned frame=115238 block 172x169 at 0,0 of 172x169 from an expectation (src 0D037E50 sheet=172,507)
+12:37:01.961 twin learned frame=115179 block 187x112 at 0,0 of 187x112 from an expectation (src 0D037E70 sheet=374,336)
+12:37:01.962 twin learned frame=115239 block 172x169 at 0,0 of 172x169 from an expectation (src 0D037E50 sheet=344,507)
+12:37:02.025 twin learned frame=115180 block 187x112 at 0,0 of 187x112 from an expectation (src 0D037E70 sheet=0,448)
+12:37:02.025 twin learned frame=115240 block 172x169 at 0,0 of 172x169 from an expectation (src 0D037E50 sheet=516,0)
+12:37:02.092 twin learned frame=115181 block 187x112 at 0,0 of 187x112 from an expectation (src 0D037E70 sheet=187,448)
+12:37:02.092 twin learned frame=115241 block 172x169 at 0,0 of 172x169 from an expectation (src 0D037E50 sheet=516,169)
+12:37:02.117 TextReplace diag glyphs=61 skipped=60 copies=1720 carried=11460 occluded=0 dropped=0 pixelCopies=0 rows=0 presents=424 presentGlyphs=11340 maskedFrames=0 drawn=11280 noAtlas=0
+12:37:02.117 TextReplace diag2 cleanPresents=0 emptyDirty=235 renders=424 slotMiss=0 slotEmpty=236 atlas=0 in 0 us calibrate 1320 us lockCleared=7
+12:37:02.159 twin learned frame=115182 block 187x112 at 0,0 of 187x112 from an expectation (src 0D037E70 sheet=374,448)
+12:37:02.159 twin learned frame=115242 block 172x169 at 0,0 of 172x169 from an expectation (src 0D037E50 sheet=516,338)
+12:37:02.226 twin learned frame=115183 block 187x112 at 0,0 of 187x112 from an expectation (src 0D037E70 sheet=0,560)
+12:37:02.817 twin create 18 344x507 buffer 0D039270 data 7D5C0040 at frame 592
+12:37:04.117 TextReplace diag glyphs=0 skipped=0 copies=4285 carried=28560 occluded=0 dropped=6 pixelCopies=0 rows=0 presents=475 presentGlyphs=28500 maskedFrames=0 drawn=28560 noAtlas=0
+12:37:04.117 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=476 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=0
+12:37:04.711 Continue game G:\games\Disciples 2\SaveGame\BattleSave.sg
+12:37:04.741 twin destroy 8 800x600 buffer 0D037E80 at frame 1043
+12:37:04.742 twin destroy 6 748x896 buffer 0D037E70 at frame 1043
+12:37:04.742 twin destroy 5 688x1014 buffer 0D037E50 at frame 1043
+12:37:04.742 twin destroy 18 344x507 buffer 0D039270 at frame 1043
+12:37:04.743 twin destroy 7 800x664 buffer 0D037E60 at frame 1043
+12:37:04.743 twin destroy 11 100x20 buffer 0D037EB0 at frame 1043
+12:37:04.743 twin destroy 15 64x20 buffer 0D037EF0 at frame 1043
+12:37:04.743 twin destroy 12 100x20 buffer 0D037EC0 at frame 1043
+12:37:04.743 twin destroy 13 100x20 buffer 0D037ED0 at frame 1043
+12:37:04.743 twin destroy 16 64x20 buffer 0D037F00 at frame 1043
+12:37:04.743 twin destroy 9 200x20 buffer 0D037E90 at frame 1043
+12:37:04.743 twin destroy 10 200x20 buffer 0D037EA0 at frame 1043
+12:37:04.743 twin destroy 17 36x20 buffer 0D037F10 at frame 1043
+12:37:04.743 twin destroy 14 24x54 buffer 0D037EE0 at frame 1043
+12:37:04.772 twin create 5 244x232 buffer 0D037750 data 24280040 at frame 1044
+12:37:04.772 twin create 6 300x70 buffer 0D0375E0 data 24300040 at frame 1044
+12:37:04.774 TextReplace font 02BE93E0 'vlarge': charset 0 score 995/1000 offset 0,0
+12:37:04.774 TextReplace font 02BE93E0 name 'vlarge' calibrated in 1585 us
+12:37:04.774 TextReplace offcarry blit src 02CA0180 1152x1152 glyphs 10 rect 0,0,300,70 -> dst 02CA88D0 300x70 at 0,0 now 10 (+10) first ch 80 alpha 255
+12:37:05.116 twin stats 5000ms frames 1127 copy 130438 keyed 130189 fill 1136 upload 31 px 7813185 writes 12 unknown 0 | replays 1126 draws 988 calls 13063 queuedMax 2 replay avg 0.029 max 14.871 ms | twins 7 202.9MB N 4 resets 0
+12:37:05.116 twin tiles check on verify avg 0.114 max 0.431 ms/frame | repaired tiles 0 rects 0 px 0 | top none
+12:37:05.116 twin art draws 3301 px 428530634 notready 0 | region hits 3231 hash lookups 119201 hits 0 misses 119131 learned expect 70 source 2 conflicts 0 rejected 210 | index 72 entries | expectations 127169 (dup 25070060, used 280, overflow 0) | replayed 3300 calls 3300 fallbacks 0
+12:37:05.116 twin memory twins 0 (0.0 MB, created 0, evicted 0)
+12:37:05.116 twin pixel ops keyed 0 average 0 add 0 sub 0 empty 0 copy 0 blend 0 keyedcopy 0 tint 0 | fill rects 9 (merged 0) tint rects 0 blend rows 0 (merged 0) lighter 0 | art 0 untwinned src 0 self 0 fallbacks 0 | replayed 0 calls 0
+12:37:05.116 twin ground arts 0 replayed 0 fallbacks 0 no twin 0
+12:37:05.116 twin show shown 1124 (opaque 1124, over background 0) hidden: 1x toggle 0, invalid 0 (no twin at present 0, twin gone 0), other 0 | show gpu avg 86 us max 168 us (4 samples)
+12:37:05.116 twin gpu check 3969ms ago twin 2 bad 0 of 0 non-art tiles, px 0 | art tiles 1900 (differ from 1x 1900)
+12:37:05.165 twin destroy 5 244x232 buffer 0D037750 at frame 1128
+12:37:05.165 twin destroy 6 300x70 buffer 0D0375E0 at frame 1128
+12:37:05.165 twin create 5 800x600 buffer 0CB1E590 data 7C6C0040 at frame 1128
+12:37:05.165 twin create 6 440x586 buffer 0CB1E5A0 data 7D450040 at frame 1128
+12:37:05.166 twin create 7 640x360 buffer 0CB1E5B0 data 7CA80040 at frame 1128
+12:37:05.166 twin create 8 24x54 buffer 0CB1E5C0 data 25E4A350 at frame 1128
+12:37:05.171 TextReplace font 02BE97F8 'large': charset 0 score 993/1000 offset 0,0
+12:37:05.171 TextReplace font 02BE97F8 name 'large' calibrated in 834 us
+12:37:05.173 TextReplace font 02BE8FC8 'medbold': charset 0 score 1000/1000 offset 0,0
+12:37:05.173 TextReplace font 02BE8FC8 name 'medbold' calibrated in 617 us
+12:37:05.173 TextReplace offcarry blit src 02CA0180 1152x1152 glyphs 861 rect 0,0,440,586 -> dst 02CA88D0 440x586 at 0,0 now 861 (+861) first ch 84 alpha 255
+12:37:05.702 twin destroy 5 800x600 buffer 0CB1E590 at frame 1254
+12:37:05.702 twin destroy 6 440x586 buffer 0CB1E5A0 at frame 1254
+12:37:05.702 twin destroy 7 640x360 buffer 0CB1E5B0 at frame 1254
+12:37:05.705 twin destroy 8 24x54 buffer 0CB1E5C0 at frame 1254
+12:37:05.710 twin create 5 128x128 buffer 0CB1EAB0 data 242C0040 at frame 1254
+12:37:05.710 twin create 6 128x128 buffer 0CB1EA40 data 25CC0040 at frame 1254
+12:37:05.710 twin create 7 128x128 buffer 0CB1EA60 data 25F80040 at frame 1254
+12:37:05.710 twin create 8 128x128 buffer 0CB1E8E0 data 25FC0040 at frame 1254
+12:37:05.710 twin create 9 128x128 buffer 0CB1EBB0 data 26000040 at frame 1254
+12:37:05.711 twin create 10 128x128 buffer 0CB1EB40 data 26040040 at frame 1254
+12:37:05.711 twin create 11 128x128 buffer 0CB1EB30 data 26080040 at frame 1254
+12:37:05.711 twin create 12 512x512 buffer 0CB1EB20 data 7CB80040 at frame 1254
+12:37:05.711 twin create 13 128x128 buffer 0CB1EBA0 data 260E0040 at frame 1254
+12:37:05.711 twin create 14 128x128 buffer 0CB1EB90 data 26120040 at frame 1254
+12:37:05.711 twin create 15 128x128 buffer 0CB1EB80 data 26170040 at frame 1254
+12:37:05.711 twin create 16 128x128 buffer 0CB1EB70 data 261D0040 at frame 1254
+12:37:05.711 twin create 17 128x128 buffer 0CB1EB60 data 26250040 at frame 1254
+12:37:05.747 TextReplace offcarry blit src 02CA0180 1152x1152 glyphs 1 rect 0,0,40,25 -> dst 02CA8BA0 40x25 at 0,0 now 1 (+1) first ch 48 alpha 255
+12:37:05.747 TextReplace offcarry blit src 02CA0180 1152x1152 glyphs 3 rect 0,0,40,25 -> dst 02CA8BF0 40x25 at 0,0 now 3 (+3) first ch 52 alpha 255
+12:37:05.747 TextReplace offcarry blit src 02CA0180 1152x1152 glyphs 2 rect 0,0,40,25 -> dst 02CA8C40 40x25 at 0,0 now 2 (+2) first ch 53 alpha 255
+12:37:05.747 TextReplace offcarry blit src 02CA0180 1152x1152 glyphs 1 rect 0,0,40,25 -> dst 02CA8C90 40x25 at 0,0 now 1 (+1) first ch 48 alpha 255
+12:37:05.747 TextReplace offcarry blit src 02CA0180 1152x1152 glyphs 1 rect 0,0,40,25 -> dst 02CA8CE0 40x25 at 0,0 now 1 (+1) first ch 48 alpha 255
+12:37:05.759 TextReplace offcarry blit src 02CA0180 1152x1152 glyphs 1 rect 0,0,36,20 -> dst 02CA90F0 36x20 at 0,0 now 1 (+1) first ch 50 alpha 255
+12:37:05.767 TextReplace offcarry blit src 02CA0180 1152x1152 glyphs 1 rect 0,0,36,20 -> dst 02CA8F10 36x20 at 0,0 now 1 (+1) first ch 50 alpha 255
+12:37:05.770 TextReplace offcarry blit src 02CA0180 1152x1152 glyphs 24 rect 0,0,206,165 -> dst 02CA93C0 206x165 at 0,0 now 24 (+24) first ch 82 alpha 255
+12:37:06.117 TextReplace diag glyphs=1095 skipped=905 copies=7049 carried=14400 occluded=73 dropped=11 pixelCopies=811 rows=0 presents=425 presentGlyphs=13486 maskedFrames=0 drawn=13597 noAtlas=0
+12:37:06.117 TextReplace diag2 cleanPresents=0 emptyDirty=2 renders=426 slotMiss=0 slotEmpty=2 atlas=0 in 0 us calibrate 3036 us lockCleared=7
+12:37:06.151 twin check twin 0 800x600 N 4 bad 0 of 147 non-art tiles, px 0 | art tiles 1753 (differ from 1x 1482) worst none
+12:37:06.429 image ground art chunk=0 data=7E310040 size=128x128 ops=39
+12:37:06.429 image ground art chunk=0 data=7E310040 size=128x128 ops=39
+12:37:06.429 image ground art chunk=0 data=7E310040 size=128x128 ops=38
+12:37:06.429 image ground art chunk=0 data=7E310040 size=128x128 ops=39
+12:37:06.429 image ground art chunk=0 data=7E310040 size=128x128 ops=35
+12:37:06.429 image ground art chunk=0 data=7E310040 size=128x128 ops=39
+12:37:06.430 image ground art chunk=0 data=7E310040 size=128x128 ops=34
+12:37:06.430 image ground art chunk=0 data=7E310040 size=128x128 ops=39
+12:37:06.430 image ground art chunk=0 data=7E310040 size=128x128 ops=31
+12:37:06.434 twin memory twin 130 base=2729A2F8 pitch 70 70x85 frame 186
+12:37:06.434 TextReplace offcarry blit src 02CA0180 1152x1152 glyphs 6 rect 0,0,138,18 -> dst 02CA97D0 138x18 at 0,0 now 6 (+6) first ch 72 alpha 255
+12:37:06.434 TextReplace offcarry blit src 02CA0180 1152x1152 glyphs 10 rect 0,0,74,83 -> dst 02CA9820 74x83 at 0,0 now 10 (+10) first ch 77 alpha 255
+12:37:07.533 image ground art chunk=0 data=7E310040 size=128x128 ops=49
+12:37:07.533 image ground art chunk=0 data=7E310040 size=128x128 ops=42
+12:37:07.533 image ground art chunk=0 data=7E310040 size=128x128 ops=43
+12:37:07.533 image ground art chunk=0 data=7E310040 size=128x128 ops=42
+12:37:08.115 TextReplace diag glyphs=18 skipped=16 copies=33543 carried=10657 occluded=473 dropped=10 pixelCopies=5388 rows=0 presents=472 presentGlyphs=10616 maskedFrames=0 drawn=10609 noAtlas=0
+12:37:08.115 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=473 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=2
+12:37:08.495 TextReplace offcarry blit src 02CA0180 1152x1152 glyphs 1 rect 0,0,32,64 -> dst 02CA9A50 32x64 at 0,0 now 1 (+1) first ch 49 alpha 255
+12:37:08.976 image ground art chunk=0 data=7E310040 size=128x128 ops=39
+12:37:08.976 image ground art chunk=0 data=7E310040 size=128x128 ops=39
+12:37:08.976 image ground art chunk=0 data=7E310040 size=128x128 ops=39
+12:37:10.010 TextReplace offcarry blit src 02CA0180 1152x1152 glyphs 1 rect 0,0,32,64 -> dst 02CA9730 32x64 at 0,0 now 1 (+1) first ch 50 alpha 255
+12:37:10.010 TextReplace offcarry blit src 02CA0180 1152x1152 glyphs 1 rect 0,0,32,64 -> dst 02CA9A50 32x64 at 0,0 now 1 (+1) first ch 49 alpha 255
+12:37:10.115 TextReplace diag glyphs=3 skipped=3 copies=163327 carried=12314 occluded=517 dropped=2 pixelCopies=4858 rows=0 presents=475 presentGlyphs=12284 maskedFrames=39 drawn=12307 noAtlas=0
+12:37:10.116 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=476 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=1
+12:37:10.116 twin stats 5000ms frames 1150 copy 305157 keyed 272133 fill 1185 upload 484 px 13928280 writes 6062 unknown 0 | replays 1149 draws 1057 calls 328311 queuedMax 2 replay avg 0.333 max 23.055 ms | twins 142 427.2MB N 4 resets 0
+12:37:10.116 twin tiles check on verify avg 0.290 max 0.692 ms/frame | repaired tiles 0 rects 0 px 0 | top none
+12:37:10.116 twin art draws 351648 px 759298856 notready 1 | region hits 349633 hash lookups 40549 hits 899 misses 38533 learned expect 1117 source 24 conflicts 0 rejected 0 | index 1212 entries | expectations 651165 (dup 6377036, used 1117, overflow 0) | replayed 350959 calls 229112 fallbacks 0
+12:37:10.116 twin memory twins 1 (0.3 MB, created 1, evicted 0)
+12:37:10.116 twin pixel ops keyed 0 average 11057 add 2365 sub 0 empty 0 copy 1 blend 0 keyedcopy 0 tint 0 | fill rects 35 (merged 0) tint rects 0 blend rows 0 (merged 0) lighter 2 | art 0 untwinned src 3849 self 0 fallbacks 0 | replayed 13399 calls 8282
+12:37:10.116 twin ground arts 19 replayed 19 fallbacks 0 no twin 0
+12:37:10.116 twin show shown 1149 (opaque 1149, over background 0) hidden: 1x toggle 0, invalid 0 (no twin at present 0, twin gone 0), other 0 | show gpu avg 132 us max 401 us (4 samples)
+12:37:10.116 twin gpu check 3969ms ago twin 0 bad 0 of 147 non-art tiles, px 0 | art tiles 1753 (differ from 1x 1482)
+12:37:10.382 TextReplace offcarry blit src 02CA0180 1152x1152 glyphs 22 rect 0,0,132,17 -> dst 02CA9B40 132x17 at 0,0 now 22 (+22) first ch 83 alpha 255
+12:37:10.797 TextReplace offcarry blit src 02CA0180 1152x1152 glyphs 1 rect 0,0,32,64 -> dst 02CA8970 32x64 at 0,0 now 1 (+1) first ch 50 alpha 255
+12:37:10.797 TextReplace offcarry blit src 02CA0180 1152x1152 glyphs 1 rect 0,0,32,64 -> dst 02CADF60 32x64 at 0,0 now 1 (+1) first ch 49 alpha 255
+12:37:10.799 TextReplace offcarry blit src 02CA0180 1152x1152 glyphs 6 rect 0,0,138,18 -> dst 02CA9730 138x18 at 0,0 now 6 (+6) first ch 72 alpha 255
+12:37:10.800 TextReplace offcarry blit src 02CA0180 1152x1152 glyphs 9 rect 0,0,74,83 -> dst 02CA9A50 74x83 at 0,0 now 9 (+9) first ch 77 alpha 255
+12:37:11.151 twin check twin 3 800x600 N 4 bad 0 of 72 non-art tiles, px 0 | art tiles 1828 (differ from 1x 1579) worst none
+12:37:11.359 TextReplace offcarry blit src 02CA0180 1152x1152 glyphs 6 rect 0,0,138,18 -> dst 02CA9730 138x18 at 0,0 now 6 (+6) first ch 72 alpha 255
+12:37:11.359 TextReplace offcarry blit src 02CA0180 1152x1152 glyphs 9 rect 0,0,74,83 -> dst 02CA8970 74x83 at 0,0 now 9 (+9) first ch 77 alpha 255
+12:37:11.360 TextReplace offcarry blit src 02CA0180 1152x1152 glyphs 20 rect 0,0,126,17 -> dst 02CADF60 126x17 at 0,0 now 20 (+20) first ch 83 alpha 255
+12:37:11.405 Autosave copy turn=2 scenario=The Necromancer's Spirit file=G:\games\Disciples 2\SaveGame\The Necromancer's Spirit T0002.sg
+12:37:11.574 TextReplace offcarry blit src 02CA0180 1152x1152 glyphs 6 rect 0,0,138,18 -> dst 045C04A0 138x18 at 0,0 now 6 (+6) first ch 72 alpha 255
+12:37:11.574 TextReplace offcarry blit src 02CA0180 1152x1152 glyphs 9 rect 0,0,74,83 -> dst 045C0450 74x83 at 0,0 now 9 (+9) first ch 77 alpha 255
+12:37:11.574 TextReplace offcarry blit src 02CA0180 1152x1152 glyphs 1 rect 0,0,36,20 -> dst 045C0400 36x20 at 0,0 now 1 (+1) first ch 51 alpha 255
+12:37:11.583 TextReplace offcarry blit src 02CA0180 1152x1152 glyphs 1 rect 0,0,32,64 -> dst 045C04F0 32x64 at 0,0 now 1 (+1) first ch 50 alpha 255
+12:37:11.583 TextReplace offcarry blit src 02CA0180 1152x1152 glyphs 1 rect 0,0,32,64 -> dst 045C03B0 32x64 at 0,0 now 1 (+1) first ch 49 alpha 255
+12:37:11.584 TextReplace offcarry blit src 02CA0180 1152x1152 glyphs 6 rect 0,0,138,18 -> dst 045C0680 138x18 at 0,0 now 6 (+6) first ch 72 alpha 255
+12:37:11.584 TextReplace offcarry blit src 02CA0180 1152x1152 glyphs 9 rect 0,0,74,83 -> dst 045C0540 74x83 at 0,0 now 9 (+9) first ch 77 alpha 255
+12:37:11.586 TextReplace offcarry blit src 02CA0180 1152x1152 glyphs 1 rect 0,0,32,64 -> dst 045C03B0 32x64 at 0,0 now 1 (+1) first ch 49 alpha 255
+12:37:11.586 TextReplace offcarry blit src 02CA0180 1152x1152 glyphs 6 rect 0,0,138,18 -> dst 045C0860 138x18 at 0,0 now 6 (+6) first ch 72 alpha 255
+12:37:11.586 TextReplace offcarry blit src 02CA0180 1152x1152 glyphs 10 rect 0,0,74,83 -> dst 045C0770 74x83 at 0,0 now 10 (+10) first ch 77 alpha 255
+12:37:11.601 TextReplace offcarry blit src 02CA0180 1152x1152 glyphs 6 rect 0,0,138,18 -> dst 045C0680 138x18 at 0,0 now 6 (+6) first ch 72 alpha 255
+12:37:11.601 TextReplace offcarry blit src 02CA0180 1152x1152 glyphs 10 rect 0,0,74,83 -> dst 045C0540 74x83 at 0,0 now 10 (+10) first ch 77 alpha 255
+12:37:11.601 TextReplace offcarry blit src 02CA0180 1152x1152 glyphs 1 rect 0,0,36,20 -> dst 045C01D0 36x20 at 0,0 now 1 (+1) first ch 51 alpha 255
+12:37:11.608 TextReplace offcarry blit src 02CA0180 1152x1152 glyphs 1 rect 0,0,32,64 -> dst 045C07C0 32x64 at 0,0 now 1 (+1) first ch 49 alpha 255
+12:37:11.609 TextReplace offcarry blit src 02CA0180 1152x1152 glyphs 6 rect 0,0,138,18 -> dst 045C05E0 138x18 at 0,0 now 6 (+6) first ch 72 alpha 255
+12:37:11.609 TextReplace offcarry blit src 02CA0180 1152x1152 glyphs 10 rect 0,0,74,83 -> dst 045C0720 74x83 at 0,0 now 10 (+10) first ch 77 alpha 255
+12:37:11.609 TextReplace offcarry blit src 02CA0180 1152x1152 glyphs 1 rect 0,0,40,25 -> dst 045C0590 40x25 at 0,0 now 1 (+1) first ch 48 alpha 255
+12:37:11.609 TextReplace offcarry blit src 02CA0180 1152x1152 glyphs 4 rect 0,0,40,25 -> dst 045C0180 40x25 at 0,0 now 4 (+4) first ch 43 alpha 255
+12:37:11.610 TextReplace offcarry blit src 02CA0180 1152x1152 glyphs 3 rect 0,0,40,25 -> dst 045C04F0 40x25 at 0,0 now 3 (+3) first ch 43 alpha 255
+12:37:11.610 TextReplace offcarry blit src 02CA0180 1152x1152 glyphs 1 rect 0,0,40,25 -> dst 045C03B0 40x25 at 0,0 now 1 (+1) first ch 48 alpha 255
+12:37:11.610 TextReplace offcarry blit src 02CA0180 1152x1152 glyphs 1 rect 0,0,40,25 -> dst 045C0630 40x25 at 0,0 now 1 (+1) first ch 48 alpha 255
+12:37:11.618 TextReplace offcarry blit src 02CA0180 1152x1152 glyphs 107 rect 0,0,380,150 -> dst 045C0810 380x150 at 0,0 now 107 (+107) first ch 72 alpha 255
+12:37:12.116 TextReplace diag glyphs=309 skipped=275 copies=113470 carried=37769 occluded=736 dropped=43 pixelCopies=4184 rows=0 presents=474 presentGlyphs=37318 maskedFrames=119 drawn=37196 noAtlas=0
+12:37:12.116 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=475 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=21
+12:37:12.287 TextReplace offcarry blit src 02CA0180 1152x1152 glyphs 1 rect 0,0,32,64 -> dst 045C0130 32x64 at 0,0 now 1 (+1) first ch 49 alpha 255
+12:37:12.288 TextReplace offcarry blit src 02CA0180 1152x1152 glyphs 6 rect 0,0,138,18 -> dst 045C0A90 138x18 at 0,0 now 6 (+6) first ch 72 alpha 255
+12:37:12.288 TextReplace offcarry blit src 02CA0180 1152x1152 glyphs 10 rect 0,0,74,83 -> dst 045C08B0 74x83 at 0,0 now 10 (+10) first ch 77 alpha 255
+12:37:13.612 TextReplace offcarry blit src 02CA0180 1152x1152 glyphs 3 rect 0,0,40,25 -> dst 045C04F0 40x25 at 0,0 now 3 (+3) first ch 52 alpha 255
+12:37:13.612 TextReplace offcarry blit src 02CA0180 1152x1152 glyphs 2 rect 0,0,40,25 -> dst 045C0180 40x25 at 0,0 now 2 (+2) first ch 53 alpha 255
+12:37:13.629 TextReplace offcarry blit src 02CA0180 1152x1152 glyphs 3 rect 0,0,40,25 -> dst 045C04F0 40x25 at 0,0 now 3 (+3) first ch 52 alpha 255
+12:37:13.645 TextReplace offcarry blit src 02CA0180 1152x1152 glyphs 3 rect 0,0,40,25 -> dst 045C0180 40x25 at 0,0 now 3 (+3) first ch 52 alpha 255
+12:37:13.645 TextReplace offcarry blit src 02CA0180 1152x1152 glyphs 2 rect 0,0,40,25 -> dst 045C04F0 40x25 at 0,0 now 2 (+2) first ch 53 alpha 255
+12:37:13.662 TextReplace offcarry blit src 02CA0180 1152x1152 glyphs 3 rect 0,0,40,25 -> dst 045C04F0 40x25 at 0,0 now 3 (+3) first ch 52 alpha 255
+12:37:13.662 TextReplace offcarry blit src 02CA0180 1152x1152 glyphs 2 rect 0,0,40,25 -> dst 045C0180 40x25 at 0,0 now 2 (+2) first ch 53 alpha 255
+12:37:13.676 TextReplace offcarry blit src 02CA0180 1152x1152 glyphs 3 rect 0,0,40,25 -> dst 045C0180 40x25 at 0,0 now 3 (+3) first ch 52 alpha 255
+12:37:13.676 TextReplace offcarry blit src 02CA0180 1152x1152 glyphs 2 rect 0,0,40,25 -> dst 045C04F0 40x25 at 0,0 now 2 (+2) first ch 53 alpha 255
+12:37:13.693 TextReplace offcarry blit src 02CA0180 1152x1152 glyphs 3 rect 0,0,40,25 -> dst 045C04F0 40x25 at 0,0 now 3 (+3) first ch 52 alpha 255
+12:37:13.693 TextReplace offcarry blit src 02CA0180 1152x1152 glyphs 2 rect 0,0,40,25 -> dst 045C0180 40x25 at 0,0 now 2 (+2) first ch 53 alpha 255
+12:37:13.709 TextReplace offcarry blit src 02CA0180 1152x1152 glyphs 3 rect 0,0,40,25 -> dst 045C04F0 40x25 at 0,0 now 3 (+3) first ch 52 alpha 255
+12:37:13.725 TextReplace offcarry blit src 02CA0180 1152x1152 glyphs 3 rect 0,0,40,25 -> dst 045C0180 40x25 at 0,0 now 3 (+3) first ch 52 alpha 255
+12:37:13.725 TextReplace offcarry blit src 02CA0180 1152x1152 glyphs 2 rect 0,0,40,25 -> dst 045C04F0 40x25 at 0,0 now 2 (+2) first ch 53 alpha 255
+12:37:13.741 TextReplace offcarry blit src 02CA0180 1152x1152 glyphs 3 rect 0,0,40,25 -> dst 045C04F0 40x25 at 0,0 now 3 (+3) first ch 52 alpha 255
+12:37:13.741 TextReplace offcarry blit src 02CA0180 1152x1152 glyphs 2 rect 0,0,40,25 -> dst 045C0180 40x25 at 0,0 now 2 (+2) first ch 53 alpha 255
+12:37:13.757 TextReplace offcarry blit src 02CA0180 1152x1152 glyphs 3 rect 0,0,40,25 -> dst 045C04F0 40x25 at 0,0 now 3 (+3) first ch 52 alpha 255
+12:37:13.773 TextReplace offcarry blit src 02CA0180 1152x1152 glyphs 3 rect 0,0,40,25 -> dst 045C0180 40x25 at 0,0 now 3 (+3) first ch 52 alpha 255
+12:37:13.773 TextReplace offcarry blit src 02CA0180 1152x1152 glyphs 2 rect 0,0,40,25 -> dst 045C04F0 40x25 at 0,0 now 2 (+2) first ch 53 alpha 255
+12:37:13.776 TextReplace offcarry blit src 02CA0180 1152x1152 glyphs 22 rect 0,0,132,17 -> dst 045C0680 132x17 at 0,0 now 22 (+22) first ch 83 alpha 255
+12:37:13.789 TextReplace offcarry blit src 02CA0180 1152x1152 glyphs 3 rect 0,0,40,25 -> dst 045C04F0 40x25 at 0,0 now 3 (+3) first ch 52 alpha 255
+12:37:13.789 TextReplace offcarry blit src 02CA0180 1152x1152 glyphs 2 rect 0,0,40,25 -> dst 045C0180 40x25 at 0,0 now 2 (+2) first ch 53 alpha 255
+12:37:13.805 TextReplace offcarry blit src 02CA0180 1152x1152 glyphs 3 rect 0,0,40,25 -> dst 045C04F0 40x25 at 0,0 now 3 (+3) first ch 52 alpha 255
+12:37:13.821 TextReplace offcarry blit src 02CA0180 1152x1152 glyphs 3 rect 0,0,40,25 -> dst 045C0180 40x25 at 0,0 now 3 (+3) first ch 52 alpha 255
+12:37:14.118 TextReplace diag glyphs=176 skipped=173 copies=185455 carried=39300 occluded=951 dropped=35 pixelCopies=4024 rows=0 presents=475 presentGlyphs=39038 maskedFrames=358 drawn=39301 noAtlas=0
+12:37:14.118 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=476 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=52
+12:37:15.039 Autosave copy turn=3 scenario=The Necromancer's Spirit file=G:\games\Disciples 2\SaveGame\The Necromancer's Spirit T0003.sg
+12:37:15.116 twin stats 5000ms frames 1188 copy 248151 keyed 209450 fill 1611 upload 573 px 11851975 writes 1058106 unknown 0 | replays 1189 draws 1106 calls 375737 queuedMax 2 replay avg 0.392 max 2.547 ms | twins 140 419.8MB N 4 resets 0
+12:37:15.116 twin tiles check on verify avg 0.292 max 0.548 ms/frame | repaired tiles 0 rects 0 px 0 | top none
+12:37:15.116 twin art draws 399940 px 813370785 notready 10 | region hits 399204 hash lookups 28801 hits 317 misses 28055 learned expect 429 source 5 conflicts 1 rejected 0 | index 1645 entries | expectations 816421 (dup 5772160, used 429, overflow 0) | replayed 400333 calls 259357 fallbacks 0
+12:37:15.116 twin memory twins 1 (0.3 MB, created 0, evicted 0)
+12:37:15.116 twin pixel ops keyed 0 average 10215 add 2151 sub 0 empty 0 copy 10 blend 0 keyedcopy 0 tint 0 | fill rects 423 (merged 0) tint rects 0 blend rows 0 (merged 0) lighter 0 | art 0 untwinned src 18917 self 0 fallbacks 0 | replayed 12387 calls 8439
+12:37:15.116 twin ground arts 230 replayed 230 fallbacks 0 no twin 0
+12:37:15.117 twin show shown 1189 (opaque 1189, over background 0) hidden: 1x toggle 0, invalid 0 (no twin at present 0, twin gone 0), other 0 | show gpu avg 44 us max 49 us (5 samples)
+12:37:15.117 twin gpu check 3969ms ago twin 3 bad 0 of 72 non-art tiles, px 0 | art tiles 1828 (differ from 1x 1579)
+12:37:16.118 TextReplace diag glyphs=286 skipped=268 copies=69933 carried=49112 occluded=791 dropped=57 pixelCopies=4047 rows=0 presents=475 presentGlyphs=48712 maskedFrames=297 drawn=48758 noAtlas=0
+12:37:16.118 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=476 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=51
+12:37:16.153 twin check twin 0 800x600 N 4 bad 0 of 72 non-art tiles, px 0 | art tiles 1828 (differ from 1x 1578) worst none
+12:37:16.204 twin shot written twin-1x.png 800x600
+12:37:16.662 twin shot written twin-screen.png 1600x1200
+12:37:16.665 twin shot written twin-sheet.png 96x216
+12:37:17.287 CRASH code C0000005 at 6001A1C0 C4dll-R.dll+1A1C0 thread 5996
+12:37:17.287 CRASH read of 27AF38F4
+12:37:17.287 CRASH eax=00000082 ebx=27AF38F4 ecx=00000000 edx=00000000 esi=00000000 edi=A986F9C4 ebp=00A7FFEC esp=00A7FFE4 eip=772ED7C1
+12:37:17.287 CRASH stack +0004 77334609 ntdll.dll+B4609
+12:37:17.287 CRASH stack +0010 00662630 Discipl2.exe+262630
+12:37:17.340 CRASH minidump written
+12:37:19.809 DllMain attach
+12:37:19.823 Config loaded exe version major=07D3000A minor=00170001 renderer=0 mode=800x600
+12:37:19.823 Hooks::Load begin exe version major=07D3000A minor=00170001
+12:37:19.838 LoadV2 version major=07D3000A minor=00170001 check=0056339D
+12:37:19.886 image replace loaded
+12:37:19.888 Hooks loaded
+12:37:19.906 Mods loaded
+12:37:19.946 RenderStart begin renderer=0 windowed=1 mode=800x600x16
+12:37:19.951 image pack loaded: 12445 animations, 115348 frames in 47 ms
+12:37:20.059 RenderStart end gl=04060000 renderer=0
+12:37:20.060 twin index loaded 1 of 1 entries
+12:37:20.060 twin scale N=4 screen 2560x1440 mode 800x600 tile check on
+12:37:20.060 twin display config borders allowed 0 active 0 type 0 | background allowed 0 enabled 0 | interpolation 0 upscaling 0 x0 | zoomed 0 renderer 0 gl 04060000
+12:37:20.060 twin create 0 800x600 buffer 03B30850 data 7F6A0050 at frame 0
+12:37:20.060 twin create 1 800x600 buffer 03B30880 data 7F4C0050 at frame 0
+12:37:20.061 twin create 2 800x600 buffer 03B308B0 data 7F2E0050 at frame 0
+12:37:20.061 twin create 3 800x600 buffer 03B308E0 data 7EB60050 at frame 0
+12:37:20.062 twin create 4 1152x1152 buffer 02D65240 data 7E310040 at frame 0
+12:37:20.110 BinkOpen G:\games\Disciples 2\Video\SF.bik replaced with blank ok
+12:37:20.111 twin create 5 800x600 buffer 02D67570 data 7D490040 at frame 0
+12:37:20.114 twin first present buffer 03B308E0 isBack 0 isZoomed 0 borders 0 size 800x600
+12:37:20.114 TextReplace diag glyphs=0 skipped=0 copies=0 carried=0 occluded=0 dropped=0 pixelCopies=0 rows=0 presents=1 presentGlyphs=0 maskedFrames=0 drawn=0 noAtlas=0
+12:37:20.114 TextReplace diag2 cleanPresents=0 emptyDirty=1 renders=0 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=0
+12:37:20.120 twin GL ready
+12:37:20.134 twin show viewport 800x600 twin 3200x2400 frame 800x600 ratio 4.000 x 4.000 box minify
+12:37:20.145 twin show viewport 1756x1317 twin 3200x2400 frame 800x600 ratio 1.822 x 1.822 box minify
+12:37:21.106 twin destroy 5 800x600 buffer 02D67570 at frame 233
+12:37:21.108 twin create 5 800x600 buffer 02D67470 data 7D2C0040 at frame 233
+12:37:21.143 image GL ready, mipmaps on
+12:37:21.158 image art name=LOADING_GLSD frame=3266 place=0,0,800,600 clip=0,0,800,600 flipped=0 parts=1 first=0,0,0,0,800,600
+12:37:21.158 twin art cached frame=3266 src=02D67470 sheet=0,0 dst=03B308E0 0,0 800x600 canvas=0,0 of 800x600 keyed at frame 236
+12:37:21.159 image art name=LOADING_GLSD frame=3266 place=0,0,800,600 clip=0,0,800,600 flipped=0 parts=1 first=0,0,0,0,800,600
+12:37:21.159 twin art cached frame=3266 src=02D67470 sheet=0,0 dst=03B308B0 0,0 800x600 canvas=0,0 of 800x600 keyed at frame 237
+12:37:21.159 twin destroy 5 800x600 buffer 02D67470 at frame 237
+12:37:21.160 twin check twin 3 800x600 N 4 bad 0 of 0 non-art tiles, px 0 | art tiles 1900 (differ from 1x 1900) worst none
+12:37:21.263 twin create 5 24x54 buffer 25EC87B0 data 24788078 at frame 238
+12:37:21.264 twin index saved 2 entries
+12:37:21.264 twin destroy 5 24x54 buffer 25EC87B0 at frame 239
+12:37:21.265 image art name=_CUDEFAUL frame=3276 place=382,367,406,421 clip=382,367,703,600 flipped=0 parts=1 first=382,367,0,0,24,54
+12:37:21.266 twin create 5 688x1014 buffer 25EC7E50 data 7C800040 at frame 239
+12:37:21.266 twin create 6 748x896 buffer 25EC7E60 data 7C2C0040 at frame 239
+12:37:21.266 twin create 7 800x664 buffer 25EC7E70 data 7BE20040 at frame 239
+12:37:21.267 twin create 8 800x600 buffer 25EC7E80 data 7A6F0040 at frame 239
+12:37:21.267 twin create 9 200x20 buffer 25EC7E90 data 25EE5260 at frame 239
+12:37:21.267 twin create 10 200x20 buffer 25EC7EA0 data 25E51008 at frame 239
+12:37:21.267 twin create 11 100x20 buffer 25EC7EB0 data 25E79220 at frame 239
+12:37:21.267 twin create 12 100x20 buffer 25EC7EC0 data 25E75390 at frame 239
+12:37:21.267 twin create 13 100x20 buffer 25EC7ED0 data 25E71500 at frame 239
+12:37:21.267 twin create 14 24x54 buffer 25EC7EE0 data 26D8EBB0 at frame 239
+12:37:21.267 twin create 15 64x20 buffer 25EC7EF0 data 26D8C360 at frame 239
+12:37:21.267 twin create 16 64x20 buffer 25EC7F00 data 26D89B50 at frame 239
+12:37:21.267 twin create 17 36x20 buffer 25EC7F10 data 26D87C00 at frame 239
+12:37:21.301 TextReplace font 02CF8BB0 'Menu': charset 0 score 1000/1000 offset 0,0
+12:37:21.301 TextReplace font 02CF8BB0 name 'Menu' calibrated in 735 us
+12:37:21.301 TextReplace offcarry blit src 02DB0180 1152x1152 glyphs 12 rect 0,0,200,20 -> dst 02DB61C0 200x20 at 0,0 now 12 (+12) first ch 83 alpha 255
+12:37:21.301 TextReplace offcarry blit src 02DB0180 1152x1152 glyphs 8 rect 0,0,200,20 -> dst 02DB6210 200x20 at 0,0 now 8 (+8) first ch 84 alpha 255
+12:37:21.301 TextReplace offcarry blit src 02DB0180 1152x1152 glyphs 7 rect 0,0,100,20 -> dst 02DB6260 100x20 at 0,0 now 7 (+7) first ch 67 alpha 255
+12:37:21.301 TextReplace offcarry blit src 02DB0180 1152x1152 glyphs 11 rect 0,0,100,20 -> dst 02DB62B0 100x20 at 0,0 now 11 (+11) first ch 77 alpha 255
+12:37:21.302 TextReplace offcarry blit src 02DB0180 1152x1152 glyphs 7 rect 0,0,100,20 -> dst 02DB6300 100x20 at 0,0 now 7 (+7) first ch 79 alpha 255
+12:37:21.302 TextReplace offcarry blit src 02DB0180 1152x1152 glyphs 5 rect 0,0,64,20 -> dst 02DB63A0 64x20 at 0,0 now 5 (+5) first ch 73 alpha 255
+12:37:21.302 TextReplace offcarry blit src 02DB0180 1152x1152 glyphs 4 rect 0,0,64,20 -> dst 02DB63F0 64x20 at 0,0 now 4 (+4) first ch 81 alpha 255
+12:37:21.303 TextReplace font 02CFA028 'Normal': charset 0 score 998/1000 offset 0,0
+12:37:21.303 TextReplace font 02CFA028 name 'Normal' calibrated in 589 us
+12:37:21.303 TextReplace offcarry blit src 02DB0180 1152x1152 glyphs 6 rect 0,0,36,20 -> dst 02DB6440 36x20 at 0,0 now 6 (+6) first ch 118 alpha 255
+12:37:21.304 twin learned frame=3276 block 24x54 at 0,0 of 24x54 from an expectation (src 25EC7EE0 sheet=0,0)
+12:37:21.304 twin art frame=3276 src=25EC7EE0 sheet=0,0 dst=03B30880 382,367 24x54 canvas=0,0 of 24x54 keyed at frame 239
+12:37:21.304 image art name=_CUDEFAUL frame=3276 place=387,369,411,423 clip=387,369,708,600 flipped=0 parts=1 first=387,369,0,0,24,54
+12:37:21.305 twin art cached frame=3276 src=25EC7EE0 sheet=0,0 dst=03B308E0 387,369 24x54 canvas=0,0 of 24x54 keyed at frame 240
+12:37:21.305 image art name=_CUDEFAUL frame=3276 place=387,369,411,423 clip=387,369,708,600 flipped=0 parts=1 first=387,369,0,0,24,54
+12:37:21.305 image art name=_CUDEFAUL frame=3276 place=387,369,411,423 clip=387,369,708,600 flipped=0 parts=1 first=387,369,0,0,24,54
+12:37:21.305 image art name=_CUDEFAUL frame=3276 place=387,369,411,423 clip=387,369,708,600 flipped=0 parts=1 first=387,369,0,0,24,54
+12:37:21.305 image art name=_CUDEFAUL frame=3276 place=387,369,411,423 clip=387,369,708,600 flipped=0 parts=1 first=387,369,0,0,24,54
+12:37:21.305 image art name=_CUDEFAUL frame=3276 place=387,370,411,424 clip=387,370,708,600 flipped=0 parts=1 first=387,370,0,0,24,54
+12:37:21.305 image art name=_CUDEFAUL frame=3276 place=387,370,411,424 clip=387,370,708,600 flipped=0 parts=1 first=387,370,0,0,24,54
+12:37:21.305 image art name=_CUDEFAUL frame=3276 place=387,370,411,424 clip=387,370,708,600 flipped=0 parts=1 first=387,370,0,0,24,54
+12:37:21.306 image art name=_CUDEFAUL frame=3276 place=387,370,411,424 clip=387,370,708,600 flipped=0 parts=1 first=387,370,0,0,24,54
+12:37:21.306 image art name=_CUDEFAUL frame=3276 place=387,370,411,424 clip=387,370,708,600 flipped=0 parts=1 first=387,370,0,0,24,54
+12:37:21.306 image art name=_CUDEFAUL frame=3276 place=387,370,411,424 clip=387,370,708,600 flipped=0 parts=1 first=387,370,0,0,24,54
+12:37:21.306 image art name=_CUDEFAUL frame=3276 place=387,370,411,424 clip=387,370,708,600 flipped=0 parts=1 first=387,370,0,0,24,54
+12:37:21.306 image art name=_CUDEFAUL frame=3276 place=387,370,411,424 clip=387,370,708,600 flipped=0 parts=1 first=387,370,0,0,24,54
+12:37:21.306 image art name=_CUDEFAUL frame=3276 place=387,370,411,424 clip=387,370,708,600 flipped=0 parts=1 first=387,370,0,0,24,54
+12:37:21.306 image art name=_CUDEFAUL frame=3276 place=387,370,411,424 clip=387,370,708,600 flipped=0 parts=1 first=387,370,0,0,24,54
+12:37:21.306 image art name=_CUDEFAUL frame=3276 place=387,370,411,424 clip=387,370,708,600 flipped=0 parts=1 first=387,370,0,0,24,54
+12:37:21.306 image art name=_CUDEFAUL frame=3276 place=387,370,411,424 clip=387,370,708,600 flipped=0 parts=1 first=387,370,0,0,24,54
+12:37:21.306 image art name=_CUDEFAUL frame=3276 place=387,370,411,424 clip=387,370,708,600 flipped=0 parts=1 first=387,370,0,0,24,54
+12:37:21.306 image art name=_CUDEFAUL frame=3276 place=387,370,411,424 clip=387,370,708,600 flipped=0 parts=1 first=387,370,0,0,24,54
+12:37:21.306 image art name=_CUDEFAUL frame=3276 place=387,370,411,424 clip=387,370,708,600 flipped=0 parts=1 first=387,370,0,0,24,54
+12:37:21.306 image art name=_CUDEFAUL frame=3276 place=387,370,411,424 clip=387,370,708,600 flipped=0 parts=1 first=387,370,0,0,24,54
+12:37:21.306 image art name=_CUDEFAUL frame=3276 place=387,370,411,424 clip=387,370,708,600 flipped=0 parts=1 first=387,370,0,0,24,54
+12:37:21.306 image art name=_CUDEFAUL frame=3276 place=387,370,411,424 clip=387,370,708,600 flipped=0 parts=1 first=387,370,0,0,24,54
+12:37:21.308 image art name=_CUDEFAUL frame=3276 place=387,370,411,424 clip=387,370,708,600 flipped=0 parts=1 first=387,370,0,0,24,54
+12:37:21.308 image art name=_CUDEFAUL frame=3276 place=387,370,411,424 clip=387,370,708,600 flipped=0 parts=1 first=387,370,0,0,24,54
+12:37:21.308 image art name=_CUDEFAUL frame=3276 place=387,370,411,424 clip=387,370,708,600 flipped=0 parts=1 first=387,370,0,0,24,54
+12:37:21.308 image art name=_CUDEFAUL frame=3276 place=387,370,411,424 clip=387,370,708,600 flipped=0 parts=1 first=387,370,0,0,24,54
+12:37:21.309 twin art cached frame=3276 src=25EC7EE0 sheet=0,0 dst=03B308B0 387,370 24x54 canvas=0,0 of 24x54 keyed at frame 241
+12:37:21.309 image art name=_CUDEFAUL frame=3276 place=387,370,411,424 clip=387,370,708,600 flipped=0 parts=1 first=387,370,0,0,24,54
+12:37:21.309 image art name=_CUDEFAUL frame=3276 place=387,370,411,424 clip=387,370,708,600 flipped=0 parts=1 first=387,370,0,0,24,54
+12:37:21.336 twin learned frame=1867 block 800x600 at 0,0 of 800x600 from an expectation (src 25EC7E80 sheet=0,0)
+12:37:21.336 twin art cached frame=1867 src=25EC7E80 sheet=0,0 dst=03B30850 0,0 800x600 canvas=0,0 of 800x600 keyed at frame 242
+12:37:21.337 twin art cached frame=3276 src=25EC7EE0 sheet=0,0 dst=03B30850 389,371 24x54 canvas=0,0 of 24x54 keyed at frame 242
+12:37:21.341 twin art cached frame=1867 src=25EC7E80 sheet=0,0 dst=03B30880 0,0 800x600 canvas=0,0 of 800x600 keyed at frame 243
+12:37:21.342 twin learned frame=115169 block 187x112 at 0,0 of 187x112 from an expectation (src 25EC7E60 sheet=0,112)
+12:37:21.342 twin art cached frame=115169 src=25EC7E60 sheet=0,112 dst=03B30880 73,321 187x112 canvas=0,0 of 187x112 keyed at frame 243
+12:37:21.342 twin learned frame=115229 block 172x169 at 0,0 of 172x169 from an expectation (src 25EC7E50 sheet=0,169)
+12:37:21.342 twin art cached frame=115229 src=25EC7E50 sheet=0,169 dst=03B30880 628,431 172x169 canvas=0,0 of 172x169 keyed at frame 243
+12:37:21.343 twin art cached frame=3276 src=25EC7EE0 sheet=0,0 dst=03B30880 389,371 24x54 canvas=0,0 of 24x54 keyed at frame 243
+12:37:21.347 twin art cached frame=1867 src=25EC7E80 sheet=0,0 dst=03B308E0 0,0 800x600 canvas=0,0 of 800x600 keyed at frame 244
+12:37:21.347 twin art cached frame=115169 src=25EC7E60 sheet=0,112 dst=03B308E0 73,321 187x112 canvas=0,0 of 187x112 keyed at frame 244
+12:37:21.347 twin art cached frame=115229 src=25EC7E50 sheet=0,169 dst=03B308E0 628,431 172x169 canvas=0,0 of 172x169 keyed at frame 244
+12:37:21.348 twin art cached frame=3276 src=25EC7EE0 sheet=0,0 dst=03B308E0 389,371 24x54 canvas=0,0 of 24x54 keyed at frame 244
+12:37:21.351 twin art cached frame=1867 src=25EC7E80 sheet=0,0 dst=03B308B0 0,0 800x600 canvas=0,0 of 800x600 keyed at frame 245
+12:37:21.351 twin art cached frame=115169 src=25EC7E60 sheet=0,112 dst=03B308B0 73,321 187x112 canvas=0,0 of 187x112 keyed at frame 245
+12:37:21.351 twin art cached frame=115229 src=25EC7E50 sheet=0,169 dst=03B308B0 628,431 172x169 canvas=0,0 of 172x169 keyed at frame 245
+12:37:21.352 twin art cached frame=3276 src=25EC7EE0 sheet=0,0 dst=03B308B0 390,371 24x54 canvas=0,0 of 24x54 keyed at frame 245
+12:37:21.356 twin art cached frame=1867 src=25EC7E80 sheet=0,0 dst=03B30850 0,0 800x600 canvas=0,0 of 800x600 keyed at frame 246
+12:37:21.356 twin art cached frame=115169 src=25EC7E60 sheet=0,112 dst=03B30850 73,321 187x112 canvas=0,0 of 187x112 keyed at frame 246
+12:37:21.356 twin art cached frame=115229 src=25EC7E50 sheet=0,169 dst=03B30850 628,431 172x169 canvas=0,0 of 172x169 keyed at frame 246
+12:37:21.356 twin art cached frame=3276 src=25EC7EE0 sheet=0,0 dst=03B30850 390,371 24x54 canvas=0,0 of 24x54 keyed at frame 246
+12:37:21.359 twin art cached frame=1867 src=25EC7E80 sheet=0,0 dst=03B30880 0,0 800x600 canvas=0,0 of 800x600 keyed at frame 247
+12:37:21.359 twin art cached frame=115169 src=25EC7E60 sheet=0,112 dst=03B30880 73,321 187x112 canvas=0,0 of 187x112 keyed at frame 247
+12:37:21.361 twin art cached frame=115229 src=25EC7E50 sheet=0,169 dst=03B30880 628,431 172x169 canvas=0,0 of 172x169 keyed at frame 247
+12:37:21.361 twin art cached frame=3276 src=25EC7EE0 sheet=0,0 dst=03B30880 390,371 24x54 canvas=0,0 of 24x54 keyed at frame 247
+12:37:21.364 twin art cached frame=1867 src=25EC7E80 sheet=0,0 dst=03B308E0 0,0 800x600 canvas=0,0 of 800x600 keyed at frame 248
+12:37:21.364 twin art cached frame=115169 src=25EC7E60 sheet=0,112 dst=03B308E0 73,321 187x112 canvas=0,0 of 187x112 keyed at frame 248
+12:37:21.364 twin art cached frame=115229 src=25EC7E50 sheet=0,169 dst=03B308E0 628,431 172x169 canvas=0,0 of 172x169 keyed at frame 248
+12:37:21.364 twin art cached frame=3276 src=25EC7EE0 sheet=0,0 dst=03B308E0 390,371 24x54 canvas=0,0 of 24x54 keyed at frame 248
+12:37:21.368 twin art cached frame=1867 src=25EC7E80 sheet=0,0 dst=03B308B0 0,0 800x600 canvas=0,0 of 800x600 keyed at frame 249
+12:37:21.372 twin learned frame=115170 block 187x112 at 0,0 of 187x112 from an expectation (src 25EC7E60 sheet=187,0)
+12:37:21.372 twin learned frame=115230 block 172x169 at 0,0 of 172x169 from an expectation (src 25EC7E50 sheet=172,0)
+12:37:21.436 twin learned frame=115171 block 187x112 at 0,0 of 187x112 from an expectation (src 25EC7E60 sheet=187,112)
+12:37:21.436 twin learned frame=115231 block 172x169 at 0,0 of 172x169 from an expectation (src 25EC7E50 sheet=172,169)
+12:37:21.503 twin learned frame=115172 block 187x112 at 0,0 of 187x112 from an expectation (src 25EC7E60 sheet=0,224)
+12:37:21.503 twin learned frame=115232 block 172x169 at 0,0 of 172x169 from an expectation (src 25EC7E50 sheet=0,338)
+12:37:21.569 twin learned frame=115173 block 187x112 at 0,0 of 187x112 from an expectation (src 25EC7E60 sheet=187,224)
+12:37:21.571 twin learned frame=115233 block 172x169 at 0,0 of 172x169 from an expectation (src 25EC7E50 sheet=172,338)
+12:37:21.637 twin learned frame=115174 block 187x112 at 0,0 of 187x112 from an expectation (src 25EC7E60 sheet=0,336)
+12:37:21.637 twin learned frame=115234 block 172x169 at 0,0 of 172x169 from an expectation (src 25EC7E50 sheet=344,0)
+12:37:21.701 twin learned frame=115175 block 187x112 at 0,0 of 187x112 from an expectation (src 25EC7E60 sheet=187,336)
+12:37:21.701 twin learned frame=115235 block 172x169 at 0,0 of 172x169 from an expectation (src 25EC7E50 sheet=344,169)
+12:37:21.768 twin learned frame=115176 block 187x112 at 0,0 of 187x112 from an expectation (src 25EC7E60 sheet=374,0)
+12:37:21.768 twin learned frame=115236 block 172x169 at 0,0 of 172x169 from an expectation (src 25EC7E50 sheet=344,338)
+12:37:21.835 twin learned frame=115177 block 187x112 at 0,0 of 187x112 from an expectation (src 25EC7E60 sheet=374,112)
+12:37:21.835 twin learned frame=115237 block 172x169 at 0,0 of 172x169 from an expectation (src 25EC7E50 sheet=0,507)
+12:37:21.902 twin learned frame=115178 block 187x112 at 0,0 of 187x112 from an expectation (src 25EC7E60 sheet=374,224)
+12:37:21.902 twin learned frame=115238 block 172x169 at 0,0 of 172x169 from an expectation (src 25EC7E50 sheet=172,507)
+12:37:21.965 twin learned frame=115179 block 187x112 at 0,0 of 187x112 from an expectation (src 25EC7E60 sheet=374,336)
+12:37:21.965 twin learned frame=115239 block 172x169 at 0,0 of 172x169 from an expectation (src 25EC7E50 sheet=344,507)
+12:37:22.032 twin learned frame=115180 block 187x112 at 0,0 of 187x112 from an expectation (src 25EC7E60 sheet=0,448)
+12:37:22.032 twin learned frame=115240 block 172x169 at 0,0 of 172x169 from an expectation (src 25EC7E50 sheet=516,0)
+12:37:22.099 TextReplace diag glyphs=61 skipped=60 copies=1666 carried=11100 occluded=0 dropped=0 pixelCopies=0 rows=0 presents=421 presentGlyphs=10980 maskedFrames=0 drawn=10920 noAtlas=0
+12:37:22.099 TextReplace diag2 cleanPresents=0 emptyDirty=238 renders=421 slotMiss=0 slotEmpty=239 atlas=0 in 0 us calibrate 1324 us lockCleared=7
+12:37:22.099 twin learned frame=115181 block 187x112 at 0,0 of 187x112 from an expectation (src 25EC7E60 sheet=187,448)
+12:37:22.099 twin learned frame=115241 block 172x169 at 0,0 of 172x169 from an expectation (src 25EC7E50 sheet=516,169)
+12:37:22.167 twin learned frame=115182 block 187x112 at 0,0 of 187x112 from an expectation (src 25EC7E60 sheet=374,448)
+12:37:22.167 twin learned frame=115242 block 172x169 at 0,0 of 172x169 from an expectation (src 25EC7E50 sheet=516,338)
+12:37:22.216 Continue game G:\games\Disciples 2\SaveGame\BattleSave.sg
+12:37:22.248 twin destroy 8 800x600 buffer 25EC7E80 at frame 450
+12:37:22.249 twin destroy 6 748x896 buffer 25EC7E60 at frame 450
+12:37:22.249 twin destroy 5 688x1014 buffer 25EC7E50 at frame 450
+12:37:22.249 twin destroy 7 800x664 buffer 25EC7E70 at frame 450
+12:37:22.250 twin destroy 11 100x20 buffer 25EC7EB0 at frame 450
+12:37:22.250 twin destroy 15 64x20 buffer 25EC7EF0 at frame 450
+12:37:22.250 twin destroy 12 100x20 buffer 25EC7EC0 at frame 450
+12:37:22.250 twin destroy 13 100x20 buffer 25EC7ED0 at frame 450
+12:37:22.250 twin destroy 16 64x20 buffer 25EC7F00 at frame 450
+12:37:22.250 twin destroy 9 200x20 buffer 25EC7E90 at frame 450
+12:37:22.250 twin destroy 10 200x20 buffer 25EC7EA0 at frame 450
+12:37:22.250 twin destroy 17 36x20 buffer 25EC7F10 at frame 450
+12:37:22.250 twin destroy 14 24x54 buffer 25EC7EE0 at frame 450
+12:37:22.279 twin create 5 244x232 buffer 25EC78F0 data 0A960040 at frame 452
+12:37:22.279 twin create 6 300x70 buffer 25EC7980 data 0A9A0040 at frame 452
+12:37:22.281 TextReplace font 02CF93E0 'vlarge': charset 0 score 995/1000 offset 0,0
+12:37:22.281 TextReplace font 02CF93E0 name 'vlarge' calibrated in 1358 us
+12:37:22.281 TextReplace offcarry blit src 02DB0180 1152x1152 glyphs 10 rect 0,0,300,70 -> dst 02DB8830 300x70 at 0,0 now 10 (+10) first ch 80 alpha 255
+12:37:22.282 twin learned frame=115153 block 61x44 at 0,0 of 61x44 from an expectation (src 25EC78F0 sheet=183,110)
+12:37:22.345 twin learned frame=115154 block 61x55 at 0,0 of 61x55 from an expectation (src 25EC78F0 sheet=183,0)
+12:37:22.660 twin destroy 5 244x232 buffer 25EC78F0 at frame 534
+12:37:22.660 twin destroy 6 300x70 buffer 25EC7980 at frame 534
+12:37:22.661 twin create 5 800x600 buffer 259AE300 data 7C720040 at frame 534
+12:37:22.661 twin create 6 440x586 buffer 259AE310 data 7C440040 at frame 534
+12:37:22.661 twin create 7 640x360 buffer 259AE320 data 7B380040 at frame 534
+12:37:22.661 twin create 8 24x54 buffer 259AE330 data 2807BF50 at frame 534
+12:37:22.667 TextReplace font 02CF97F8 'large': charset 0 score 993/1000 offset 0,0
+12:37:22.667 TextReplace font 02CF97F8 name 'large' calibrated in 821 us
+12:37:22.670 TextReplace font 02CF8FC8 'medbold': charset 0 score 1000/1000 offset 0,0
+12:37:22.670 TextReplace font 02CF8FC8 name 'medbold' calibrated in 602 us
+12:37:22.670 TextReplace offcarry blit src 02DB0180 1152x1152 glyphs 861 rect 0,0,440,586 -> dst 02DB8830 440x586 at 0,0 now 861 (+861) first ch 84 alpha 255
+12:37:23.373 twin destroy 5 800x600 buffer 259AE300 at frame 702
+12:37:23.374 twin destroy 6 440x586 buffer 259AE310 at frame 702
+12:37:23.374 twin destroy 7 640x360 buffer 259AE320 at frame 702
+12:37:23.376 twin destroy 8 24x54 buffer 259AE330 at frame 702
+12:37:23.380 twin create 5 128x128 buffer 259AE820 data 0A9A0040 at frame 702
+12:37:23.380 twin create 6 128x128 buffer 259AE7B0 data 272D0040 at frame 702
+12:37:23.380 twin create 7 128x128 buffer 259AE650 data 282D0040 at frame 702
+12:37:23.380 twin create 8 128x128 buffer 259AE7D0 data 0AF90040 at frame 702
+12:37:23.380 twin create 9 128x128 buffer 259AE920 data 0AFE0040 at frame 702
+12:37:23.380 twin create 10 128x128 buffer 259AE8B0 data 0B020040 at frame 702
+12:37:23.381 twin create 11 128x128 buffer 259AE8A0 data 0B060040 at frame 702
+12:37:23.381 twin create 12 512x512 buffer 259AE910 data 7D4D0040 at frame 702
+12:37:23.381 twin create 13 128x128 buffer 259AE890 data 0B0B0040 at frame 702
+12:37:23.381 twin create 14 128x128 buffer 259AE900 data 0B0F0040 at frame 702
+12:37:23.381 twin create 15 128x128 buffer 259AE8F0 data 0B140040 at frame 702
+12:37:23.381 twin create 16 128x128 buffer 259AE8E0 data 0B1A0040 at frame 702
+12:37:23.381 twin create 17 128x128 buffer 259AE8D0 data 0B220040 at frame 702
+12:37:23.381 twin create 18 128x128 buffer 259AE8C0 data 0B260040 at frame 702
+12:37:23.381 twin create 19 128x128 buffer 259AE930 data 0B2A0040 at frame 702
+12:37:23.416 TextReplace offcarry blit src 02DB0180 1152x1152 glyphs 1 rect 0,0,40,25 -> dst 02DB8A10 40x25 at 0,0 now 1 (+1) first ch 48 alpha 255
+12:37:23.416 TextReplace offcarry blit src 02DB0180 1152x1152 glyphs 3 rect 0,0,40,25 -> dst 02DB8B00 40x25 at 0,0 now 3 (+3) first ch 55 alpha 255
+12:37:23.416 TextReplace offcarry blit src 02DB0180 1152x1152 glyphs 3 rect 0,0,40,25 -> dst 02DB8B50 40x25 at 0,0 now 3 (+3) first ch 49 alpha 255
+12:37:23.416 TextReplace offcarry blit src 02DB0180 1152x1152 glyphs 1 rect 0,0,40,25 -> dst 02DB8BA0 40x25 at 0,0 now 1 (+1) first ch 48 alpha 255
+12:37:23.416 TextReplace offcarry blit src 02DB0180 1152x1152 glyphs 1 rect 0,0,40,25 -> dst 02DB8BF0 40x25 at 0,0 now 1 (+1) first ch 48 alpha 255
+12:37:23.428 TextReplace offcarry blit src 02DB0180 1152x1152 glyphs 1 rect 0,0,36,20 -> dst 02DB9000 36x20 at 0,0 now 1 (+1) first ch 52 alpha 255
+12:37:23.435 TextReplace offcarry blit src 02DB0180 1152x1152 glyphs 1 rect 0,0,36,20 -> dst 02DB8DD0 36x20 at 0,0 now 1 (+1) first ch 52 alpha 255
+12:37:23.439 TextReplace offcarry blit src 02DB0180 1152x1152 glyphs 24 rect 0,0,206,165 -> dst 02DB92D0 206x165 at 0,0 now 24 (+24) first ch 82 alpha 255
+12:37:24.101 TextReplace diag glyphs=1096 skipped=906 copies=11456 carried=9746 occluded=147 dropped=17 pixelCopies=1797 rows=0 presents=426 presentGlyphs=8830 maskedFrames=0 drawn=8940 noAtlas=0
+12:37:24.101 TextReplace diag2 cleanPresents=0 emptyDirty=2 renders=427 slotMiss=0 slotEmpty=2 atlas=0 in 0 us calibrate 2781 us lockCleared=7
+12:37:24.188 image ground art chunk=0 data=7E310040 size=128x128 ops=39
+12:37:24.188 image ground art chunk=0 data=7E310040 size=128x128 ops=39
+12:37:24.188 image ground art chunk=0 data=7E310040 size=128x128 ops=39
+12:37:24.188 image ground art chunk=0 data=7E310040 size=128x128 ops=39
+12:37:24.188 image ground art chunk=0 data=7E310040 size=128x128 ops=39
+12:37:24.190 image ground art chunk=0 data=7E310040 size=128x128 ops=39
+12:37:24.190 twin memory twin 116 base=0CE0A2F8 pitch 70 70x85 frame 186
+12:37:24.190 TextReplace offcarry blit src 02DB0180 1152x1152 glyphs 6 rect 0,0,138,18 -> dst 02DB9370 138x18 at 0,0 now 6 (+6) first ch 72 alpha 255
+12:37:24.190 TextReplace offcarry blit src 02DB0180 1152x1152 glyphs 10 rect 0,0,74,83 -> dst 02DB92D0 74x83 at 0,0 now 10 (+10) first ch 77 alpha 255
+12:37:25.102 twin stats 5000ms frames 1088 copy 159574 keyed 146693 fill 1129 upload 454 px 20912940 writes 5637 unknown 0 | replays 1086 draws 1011 calls 115080 queuedMax 2 replay avg 0.156 max 22.520 ms | twins 120 401.7MB N 4 resets 0
+12:37:25.102 twin tiles check on verify avg 0.172 max 0.578 ms/frame | repaired tiles 0 rects 0 px 0 | top none
+12:37:25.103 twin art draws 122444 px 401999593 notready 4 | region hits 120628 hash lookups 78418 hits 1171 misses 76598 learned expect 649 source 20 conflicts 0 rejected 0 | index 669 entries | expectations 241492 (dup 10933660, used 649, overflow 0) | replayed 122138 calls 73453 fallbacks 0
+12:37:25.103 twin memory twins 1 (0.3 MB, created 1, evicted 0)
+12:37:25.103 twin pixel ops keyed 0 average 3881 add 1491 sub 0 empty 0 copy 1 blend 0 keyedcopy 0 tint 0 | fill rects 41 (merged 0) tint rects 0 blend rows 0 (merged 0) lighter 2 | art 0 untwinned src 3694 self 0 fallbacks 0 | replayed 5359 calls 3489
+12:37:25.103 twin ground arts 6 replayed 6 fallbacks 0 no twin 0
+12:37:25.103 twin show shown 1085 (opaque 1085, over background 0) hidden: 1x toggle 0, invalid 0 (no twin at present 0, twin gone 0), other 0 | show gpu avg 49 us max 61 us (4 samples)
+12:37:25.103 twin gpu check 3953ms ago twin 3 bad 0 of 0 non-art tiles, px 0 | art tiles 1900 (differ from 1x 1900)
+12:37:25.623 TextReplace offcarry blit src 02DB0180 1152x1152 glyphs 22 rect 0,0,132,17 -> dst 02DB95F0 132x17 at 0,0 now 22 (+22) first ch 83 alpha 255
+12:37:25.677 image ground art chunk=0 data=7E310040 size=128x128 ops=39
+12:37:25.677 image ground art chunk=0 data=7E310040 size=128x128 ops=39
+12:37:25.677 image ground art chunk=0 data=7E310040 size=128x128 ops=39
+12:37:25.677 image ground art chunk=0 data=7E310040 size=128x128 ops=41
+12:37:25.677 image ground art chunk=0 data=7E310040 size=128x128 ops=39
+12:37:25.677 image ground art chunk=0 data=7E310040 size=128x128 ops=49
+12:37:25.678 image ground art chunk=0 data=7E310040 size=128x128 ops=39
+12:37:25.678 image ground art chunk=0 data=7E310040 size=128x128 ops=46
+12:37:25.678 image ground art chunk=0 data=7E310040 size=128x128 ops=46
+12:37:25.678 image ground art chunk=0 data=7E310040 size=128x128 ops=46
+12:37:25.756 TextReplace offcarry blit src 02DB0180 1152x1152 glyphs 6 rect 0,0,138,18 -> dst 02DBDA60 138x18 at 0,0 now 6 (+6) first ch 72 alpha 255
+12:37:25.756 TextReplace offcarry blit src 02DB0180 1152x1152 glyphs 9 rect 0,0,74,83 -> dst 02DBE820 74x83 at 0,0 now 9 (+9) first ch 77 alpha 255
+12:37:26.102 TextReplace diag glyphs=58 skipped=53 copies=33899 carried=14518 occluded=476 dropped=41 pixelCopies=4134 rows=0 presents=475 presentGlyphs=14418 maskedFrames=0 drawn=14391 noAtlas=0
+12:37:26.102 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=476 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=3
+12:37:26.154 twin check twin 3 800x600 N 4 bad 0 of 72 non-art tiles, px 0 | art tiles 1828 (differ from 1x 1578) worst none
+12:37:26.893 twin memory twin 131 base=0CFDA2F8 pitch 70 70x85 frame 549
+12:37:26.894 TextReplace offcarry blit src 02DB0180 1152x1152 glyphs 5 rect 0,0,70,17 -> dst 02DB9AA0 70x17 at 0,0 now 5 (+5) first ch 52 alpha 255
+12:37:26.894 twin memory twin 132 base=0AF8A2F8 pitch 70 70x85 frame 477
+12:37:26.894 TextReplace offcarry blit src 02DB0180 1152x1152 glyphs 5 rect 0,0,70,17 -> dst 02DB9B40 70x17 at 0,0 now 5 (+5) first ch 53 alpha 255
+12:37:26.894 TextReplace offcarry blit src 02DB0180 1152x1152 glyphs 5 rect 0,0,70,17 -> dst 02DB9BE0 70x17 at 0,0 now 5 (+5) first ch 53 alpha 255
+12:37:26.918 Turn art loaded
+12:37:26.918 TextReplace font 02CF9C10 'medium': charset 0 score 999/1000 offset 0,0
+12:37:26.918 TextReplace font 02CF9C10 name 'medium' calibrated in 771 us
+12:37:26.919 TextReplace font 02CFA440 'small': charset 0 score 1000/1000 offset 0,0
+12:37:26.919 TextReplace font 02CFA440 name 'small' calibrated in 535 us
+12:37:26.921 TextReplace offcarry blit src 02DB0180 1152x1152 glyphs 41 rect 0,0,444,69 -> dst 02DB9E60 444x69 at 0,0 now 41 (+41) first ch 49 alpha 255
+12:37:26.922 twin memory twin 140 base=0C9D0040 pitch 130 130x142 frame 187
+12:37:26.922 TextReplace offcarry blit src 02DB0180 1152x1152 glyphs 16 rect 0,0,116,41 -> dst 02DB9F00 116x41 at 0,0 now 16 (+16) first ch 72 alpha 255
+12:37:26.922 twin memory twin 141 base=0C9F0040 pitch 130 130x142 frame 550
+12:37:26.922 TextReplace offcarry blit src 02DB0180 1152x1152 glyphs 20 rect 0,0,116,41 -> dst 02DB9FA0 116x41 at 0,0 now 20 (+20) first ch 71 alpha 255
+12:37:26.922 TextReplace offcarry blit src 02DB0180 1152x1152 glyphs 7 rect 0,0,70,17 -> dst 02DBA040 70x17 at 0,0 now 7 (+7) first ch 49 alpha 255
+12:37:26.923 TextReplace offcarry blit src 02DB0180 1152x1152 glyphs 41 rect 0,0,444,69 -> dst 02DB9E60 444x69 at 0,0 now 41 (+41) first ch 49 alpha 255
+12:37:26.924 TextReplace offcarry blit src 02DB0180 1152x1152 glyphs 41 rect 0,0,444,69 -> dst 02DB9E60 444x69 at 0,0 now 41 (+41) first ch 49 alpha 255
+12:37:26.924 TextReplace offcarry blit src 02DB0180 1152x1152 glyphs 41 rect 0,0,444,69 -> dst 02DB9E60 444x69 at 0,0 now 41 (+41) first ch 49 alpha 255
+12:37:26.924 TextReplace offcarry blit src 02DB0180 1152x1152 glyphs 41 rect 0,0,444,69 -> dst 02DB9E60 444x69 at 0,0 now 41 (+41) first ch 49 alpha 255
+12:37:26.925 TextReplace offcarry blit src 02DB0180 1152x1152 glyphs 41 rect 0,0,444,69 -> dst 02DB9E60 444x69 at 0,0 now 41 (+41) first ch 49 alpha 255
+12:37:26.925 TextReplace offcarry blit src 02DB0180 1152x1152 glyphs 41 rect 0,0,444,69 -> dst 02DB9E60 444x69 at 0,0 now 41 (+41) first ch 49 alpha 255
+12:37:26.926 TextReplace offcarry blit src 02DB0180 1152x1152 glyphs 41 rect 0,0,444,69 -> dst 02DB9E60 444x69 at 0,0 now 41 (+41) first ch 49 alpha 255
+12:37:26.926 TextReplace offcarry blit src 02DB0180 1152x1152 glyphs 41 rect 0,0,444,69 -> dst 02DB9E60 444x69 at 0,0 now 41 (+41) first ch 49 alpha 255
+12:37:26.927 TextReplace offcarry blit src 02DB0180 1152x1152 glyphs 41 rect 0,0,444,69 -> dst 02DB9E60 444x69 at 0,0 now 41 (+41) first ch 49 alpha 255
+12:37:26.927 TextReplace offcarry blit src 02DB0180 1152x1152 glyphs 41 rect 0,0,444,69 -> dst 02DB9E60 444x69 at 0,0 now 41 (+41) first ch 49 alpha 255
+12:37:26.927 TextReplace offcarry blit src 02DB0180 1152x1152 glyphs 41 rect 0,0,444,69 -> dst 02DB9E60 444x69 at 0,0 now 41 (+41) first ch 49 alpha 255
+12:37:26.927 TextReplace offcarry blit src 02DB0180 1152x1152 glyphs 41 rect 0,0,444,69 -> dst 02DB9E60 444x69 at 0,0 now 41 (+41) first ch 49 alpha 255
+12:37:26.927 TextReplace offcarry blit src 02DB0180 1152x1152 glyphs 41 rect 0,0,444,69 -> dst 02DB9E60 444x69 at 0,0 now 41 (+41) first ch 49 alpha 255
+12:37:26.928 TextReplace offcarry blit src 02DB0180 1152x1152 glyphs 41 rect 0,0,444,69 -> dst 02DB9E60 444x69 at 0,0 now 41 (+41) first ch 49 alpha 255
+12:37:26.928 TextReplace offcarry blit src 02DB0180 1152x1152 glyphs 41 rect 0,0,444,69 -> dst 02DB9E60 444x69 at 0,0 now 41 (+41) first ch 49 alpha 255
+12:37:26.928 TextReplace offcarry blit src 02DB0180 1152x1152 glyphs 41 rect 0,0,444,69 -> dst 02DB9E60 444x69 at 0,0 now 41 (+41) first ch 49 alpha 255
+12:37:26.929 TextReplace offcarry blit src 02DB0180 1152x1152 glyphs 41 rect 0,0,444,69 -> dst 02DB9E60 444x69 at 0,0 now 41 (+41) first ch 49 alpha 255
+12:37:26.929 TextReplace offcarry blit src 02DB0180 1152x1152 glyphs 41 rect 0,0,444,69 -> dst 02DB9E60 444x69 at 0,0 now 41 (+41) first ch 49 alpha 255
+12:37:26.929 TextReplace offcarry blit src 02DB0180 1152x1152 glyphs 41 rect 0,0,444,69 -> dst 02DB9E60 444x69 at 0,0 now 41 (+41) first ch 49 alpha 255
+12:37:26.930 TextReplace offcarry blit src 02DB0180 1152x1152 glyphs 41 rect 0,0,444,69 -> dst 02DB9E60 444x69 at 0,0 now 41 (+41) first ch 49 alpha 255
+12:37:26.930 TextReplace offcarry blit src 02DB0180 1152x1152 glyphs 41 rect 0,0,444,69 -> dst 02DB9E60 444x69 at 0,0 now 41 (+41) first ch 49 alpha 255
+12:37:26.930 TextReplace offcarry blit src 02DB0180 1152x1152 glyphs 41 rect 0,0,444,69 -> dst 02DB9E60 444x69 at 0,0 now 41 (+41) first ch 49 alpha 255
+12:37:26.930 TextReplace offcarry blit src 02DB0180 1152x1152 glyphs 41 rect 0,0,444,69 -> dst 02DB9E60 444x69 at 0,0 now 41 (+41) first ch 49 alpha 255
+12:37:26.930 TextReplace offcarry blit src 02DB0180 1152x1152 glyphs 41 rect 0,0,444,69 -> dst 02DB9E60 444x69 at 0,0 now 41 (+41) first ch 49 alpha 255
+12:37:26.931 TextReplace offcarry blit src 02DB0180 1152x1152 glyphs 41 rect 0,0,444,69 -> dst 02DB9E60 444x69 at 0,0 now 41 (+41) first ch 49 alpha 255
+12:37:26.931 TextReplace offcarry blit src 02DB0180 1152x1152 glyphs 41 rect 0,0,444,69 -> dst 02DB9E60 444x69 at 0,0 now 41 (+41) first ch 49 alpha 255
+12:37:26.931 TextReplace offcarry blit src 02DB0180 1152x1152 glyphs 41 rect 0,0,444,69 -> dst 02DB9E60 444x69 at 0,0 now 41 (+41) first ch 49 alpha 255
+12:37:26.931 TextReplace offcarry blit src 02DB0180 1152x1152 glyphs 41 rect 0,0,444,69 -> dst 02DB9E60 444x69 at 0,0 now 41 (+41) first ch 49 alpha 255
+12:37:26.932 TextReplace offcarry blit src 02DB0180 1152x1152 glyphs 41 rect 0,0,444,69 -> dst 02DB9E60 444x69 at 0,0 now 41 (+41) first ch 49 alpha 255
+12:37:26.932 TextReplace offcarry blit src 02DB0180 1152x1152 glyphs 41 rect 0,0,444,69 -> dst 02DB9E60 444x69 at 0,0 now 41 (+41) first ch 49 alpha 255
+12:37:26.932 TextReplace offcarry blit src 02DB0180 1152x1152 glyphs 41 rect 0,0,444,69 -> dst 02DB9E60 444x69 at 0,0 now 41 (+41) first ch 49 alpha 255
+12:37:26.932 TextReplace offcarry blit src 02DB0180 1152x1152 glyphs 41 rect 0,0,444,69 -> dst 02DB9E60 444x69 at 0,0 now 41 (+41) first ch 49 alpha 255
+12:37:26.933 TextReplace offcarry blit src 02DB0180 1152x1152 glyphs 41 rect 0,0,444,69 -> dst 02DB9E60 444x69 at 0,0 now 41 (+41) first ch 49 alpha 255
+12:37:26.933 TextReplace offcarry blit src 02DB0180 1152x1152 glyphs 41 rect 0,0,444,69 -> dst 02DB9E60 444x69 at 0,0 now 41 (+41) first ch 49 alpha 255
+12:37:26.934 TextReplace offcarry blit src 02DB0180 1152x1152 glyphs 41 rect 0,0,444,69 -> dst 02DB9E60 444x69 at 0,0 now 41 (+41) first ch 49 alpha 255
+12:37:26.934 TextReplace offcarry blit src 02DB0180 1152x1152 glyphs 41 rect 0,0,444,69 -> dst 02DB9E60 444x69 at 0,0 now 41 (+41) first ch 49 alpha 255
+12:37:26.934 TextReplace offcarry blit src 02DB0180 1152x1152 glyphs 41 rect 0,0,444,69 -> dst 02DB9E60 444x69 at 0,0 now 41 (+41) first ch 49 alpha 255
+12:37:26.934 TextReplace offcarry blit src 02DB0180 1152x1152 glyphs 41 rect 0,0,444,69 -> dst 02DB9E60 444x69 at 0,0 now 41 (+41) first ch 49 alpha 255
+12:37:26.935 TextReplace offcarry blit src 02DB0180 1152x1152 glyphs 41 rect 0,0,444,69 -> dst 02DB9E60 444x69 at 0,0 now 41 (+41) first ch 49 alpha 255
+12:37:26.935 twin learn rejected place frame=1255 sheet=0,0 990x600 dst=0,0 canvas=-40,0 of 950x600 at frame 1511
+12:37:26.937 TextReplace offcarry blit src 02DB0180 1152x1152 glyphs 41 rect 0,0,444,69 -> dst 02DB9E60 444x69 at 0,0 now 41 (+41) first ch 49 alpha 255
+12:37:26.937 TextReplace offcarry blit src 02DB0180 1152x1152 glyphs 41 rect 0,0,444,69 -> dst 02DB9E60 444x69 at 0,0 now 41 (+41) first ch 49 alpha 255
+12:37:26.937 TextReplace offcarry blit src 02DB0180 1152x1152 glyphs 41 rect 0,0,444,69 -> dst 02DB9E60 444x69 at 0,0 now 41 (+41) first ch 49 alpha 255
+12:37:26.938 TextReplace offcarry blit src 02DB0180 1152x1152 glyphs 41 rect 0,0,444,69 -> dst 02DB9E60 444x69 at 0,0 now 41 (+41) first ch 49 alpha 255
+12:37:26.938 TextReplace offcarry blit src 02DB0180 1152x1152 glyphs 41 rect 0,0,444,69 -> dst 02DB9E60 444x69 at 0,0 now 41 (+41) first ch 49 alpha 255
+12:37:26.938 TextReplace offcarry blit src 02DB0180 1152x1152 glyphs 41 rect 0,0,444,69 -> dst 02DB9E60 444x69 at 0,0 now 41 (+41) first ch 49 alpha 255
+12:37:26.939 TextReplace offcarry blit src 02DB0180 1152x1152 glyphs 41 rect 0,0,444,69 -> dst 02DB9E60 444x69 at 0,0 now 41 (+41) first ch 49 alpha 255
+12:37:26.939 TextReplace offcarry blit src 02DB0180 1152x1152 glyphs 41 rect 0,0,444,69 -> dst 02DB9E60 444x69 at 0,0 now 41 (+41) first ch 49 alpha 255
+12:37:26.939 TextReplace offcarry blit src 02DB0180 1152x1152 glyphs 41 rect 0,0,444,69 -> dst 02DB9E60 444x69 at 0,0 now 41 (+41) first ch 49 alpha 255
+12:37:26.939 TextReplace offcarry blit src 02DB0180 1152x1152 glyphs 41 rect 0,0,444,69 -> dst 02DB9E60 444x69 at 0,0 now 41 (+41) first ch 49 alpha 255
+12:37:26.940 TextReplace offcarry blit src 02DB0180 1152x1152 glyphs 41 rect 0,0,444,69 -> dst 02DB9E60 444x69 at 0,0 now 41 (+41) first ch 49 alpha 255
+12:37:26.941 twin learn rejected place frame=1255 sheet=0,0 990x600 dst=0,0 canvas=-40,0 of 950x600 at frame 1512
+12:37:26.947 twin learn rejected place frame=1255 sheet=0,0 990x600 dst=0,0 canvas=-40,0 of 950x600 at frame 1513
+12:37:26.947 twin learn rejected place frame=1903 sheet=173,0 173x416 dst=627,45 canvas=0,13 of 173x424 at frame 1513
+12:37:26.952 twin learn rejected place frame=1255 sheet=0,0 990x600 dst=0,0 canvas=-40,0 of 950x600 at frame 1514
+12:37:26.953 twin learn rejected place frame=1903 sheet=173,0 173x416 dst=627,45 canvas=0,13 of 173x424 at frame 1514
+12:37:26.958 twin learn rejected place frame=1255 sheet=0,0 990x600 dst=0,0 canvas=-40,0 of 950x600 at frame 1515
+12:37:26.958 twin learn rejected place frame=1903 sheet=173,0 173x416 dst=627,45 canvas=0,13 of 173x424 at frame 1515
+12:37:26.962 twin learn rejected place frame=1255 sheet=0,0 990x600 dst=0,0 canvas=-40,0 of 950x600 at frame 1516
+12:37:26.963 twin learn rejected place frame=1903 sheet=173,0 173x416 dst=627,45 canvas=0,13 of 173x424 at frame 1516
+12:37:26.967 twin learn rejected place frame=1255 sheet=0,0 990x600 dst=0,0 canvas=-40,0 of 950x600 at frame 1517
+12:37:26.967 twin learn rejected place frame=1903 sheet=173,0 173x416 dst=627,45 canvas=0,13 of 173x424 at frame 1517
+12:37:26.971 twin learn rejected place frame=1255 sheet=0,0 990x600 dst=0,0 canvas=-40,0 of 950x600 at frame 1518
+12:37:26.972 twin learn rejected place frame=1903 sheet=173,0 173x416 dst=627,45 canvas=0,13 of 173x424 at frame 1518
+12:37:26.976 twin learn rejected place frame=1255 sheet=0,0 990x600 dst=0,0 canvas=-40,0 of 950x600 at frame 1519
+12:37:26.976 twin learn rejected place frame=1903 sheet=173,0 173x416 dst=627,45 canvas=0,13 of 173x424 at frame 1519
+12:37:28.100 TextReplace diag glyphs=109884 skipped=109877 copies=38128 carried=149122 occluded=2829 dropped=109797 pixelCopies=8049 rows=0 presents=456 presentGlyphs=39131 maskedFrames=206 drawn=39111 noAtlas=0
+12:37:28.100 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=457 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 1306 us lockCleared=2656
+12:37:30.100 TextReplace diag glyphs=7 skipped=7 copies=41102 carried=52847 occluded=6397 dropped=7 pixelCopies=11969 rows=0 presents=475 presentGlyphs=52734 maskedFrames=476 drawn=52856 noAtlas=0
+12:37:30.100 twin stats 5000ms frames 1171 copy 113541 keyed 96442 fill 1210 upload 2771 px 87845845 writes 75445 unknown 0 | replays 1171 draws 1003 calls 153648 queuedMax 2 replay avg 0.215 max 4.944 ms | twins 143 506.4MB N 4 resets 0
+12:37:30.100 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=476 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=1
+12:37:30.100 twin tiles check on verify avg 0.212 max 0.465 ms/frame | repaired tiles 0 rects 0 px 0 | top none
+12:37:30.100 twin art draws 152526 px 362661411 notready 853 | region hits 152054 hash lookups 33715 hits 928 misses 32390 learned expect 397 source 9 conflicts 0 rejected 1494 | index 1071 entries | expectations 267440 (dup 8133213, used 1891, overflow 0) | replayed 152768 calls 84148 fallbacks 0
+12:37:30.100 twin memory twins 5 (3.3 MB, created 4, evicted 0)
+12:37:30.100 twin pixel ops keyed 0 average 22068 add 2941 sub 0 empty 0 copy 14 blend 0 keyedcopy 0 tint 0 | fill rects 39 (merged 0) tint rects 4 blend rows 0 (merged 0) lighter 2 | art 0 untwinned src 3316 self 0 fallbacks 0 | replayed 24977 calls 7843
+12:37:30.100 twin ground arts 28 replayed 28 fallbacks 0 no twin 0
+12:37:30.100 twin show shown 1170 (opaque 1170, over background 0) hidden: 1x toggle 0, invalid 0 (no twin at present 0, twin gone 0), other 0 | show gpu avg 53 us max 72 us (4 samples)
+12:37:30.100 twin gpu check 3953ms ago twin 3 bad 0 of 72 non-art tiles, px 0 | art tiles 1828 (differ from 1x 1578)
+12:37:31.156 twin check twin 3 800x600 N 4 bad 0 of 1367 non-art tiles, px 0 | art tiles 533 (differ from 1x 413) worst none
+12:37:31.620 twin art tint magenta
+12:37:32.100 TextReplace diag glyphs=0 skipped=0 copies=42014 carried=53736 occluded=6876 dropped=0 pixelCopies=12002 rows=0 presents=475 presentGlyphs=53622 maskedFrames=476 drawn=53720 noAtlas=0
+12:37:32.100 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=476 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=0
+12:37:34.099 TextReplace diag glyphs=52 skipped=44 copies=39515 carried=67816 occluded=7140 dropped=44 pixelCopies=7733 rows=0 presents=475 presentGlyphs=67658 maskedFrames=476 drawn=67772 noAtlas=0
+12:37:34.099 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=476 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=0
+12:37:35.100 twin stats 5000ms frames 1190 copy 37336 keyed 33894 fill 1191 upload 14 px 543200 writes 11 unknown 0 | replays 1191 draws 949 calls 57837 queuedMax 2 replay avg 0.085 max 1.119 ms | twins 145 514.2MB N 4 resets 0
+12:37:35.100 twin tiles check on verify avg 0.177 max 0.407 ms/frame | repaired tiles 0 rects 0 px 0 | top none
+12:37:35.100 twin art draws 43458 px 218633646 notready 1190 | region hits 44637 hash lookups 9715 hits 6 misses 9704 learned expect 5 source 0 conflicts 0 rejected 2380 | index 1076 entries | expectations 106476 (dup 10568258, used 2385, overflow 0) | replayed 43485 calls 20190 fallbacks 0
+12:37:35.100 twin memory twins 5 (3.3 MB, created 0, evicted 0)
+12:37:35.100 twin pixel ops keyed 0 average 25763 add 2335 sub 0 empty 0 copy 0 blend 0 keyedcopy 0 tint 0 | fill rects 1 (merged 0) tint rects 0 blend rows 0 (merged 0) lighter 1 | art 0 untwinned src 0 self 0 fallbacks 0 | replayed 28126 calls 6889
+12:37:35.100 twin ground arts 0 replayed 0 fallbacks 0 no twin 0
+12:37:35.100 twin show shown 1191 (opaque 1191, over background 0) hidden: 1x toggle 0, invalid 0 (no twin at present 0, twin gone 0), other 0 | show gpu avg 122 us max 403 us (5 samples)
+12:37:35.100 twin gpu check 3953ms ago twin 3 bad 0 of 1367 non-art tiles, px 0 | art tiles 533 (differ from 1x 413)
+12:37:35.224 twin memory twin 149 base=0CA10040 pitch 130 130x142 frame 478
+12:37:35.622 twin memory twin 151 base=0CC09ED8 pitch 70 70x85 frame 1458
+12:37:36.100 TextReplace diag glyphs=45733 skipped=45729 copies=40277 carried=92837 occluded=3987 dropped=45735 pixelCopies=9741 rows=0 presents=458 presentGlyphs=47034 maskedFrames=275 drawn=47188 noAtlas=0
+12:37:36.100 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=459 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=1478
+12:37:36.151 twin check twin 3 800x600 N 4 bad 0 of 1368 non-art tiles, px 0 | art tiles 532 (differ from 1x 424) worst none
+12:37:36.234 twin shot written twin-1x.png 800x600
+12:37:36.318 twin shot written twin-screen.png 1600x1200
+12:37:36.319 twin shot written twin-sheet.png 160x128
+12:37:38.102 TextReplace diag glyphs=128737 skipped=128715 copies=33644 carried=159404 occluded=1292 dropped=122747 pixelCopies=5229 rows=0 presents=427 presentGlyphs=36500 maskedFrames=167 drawn=36541 noAtlas=0
+12:37:38.102 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=428 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=4679
+12:37:40.101 TextReplace diag glyphs=37837 skipped=37831 copies=33909 carried=60405 occluded=1560 dropped=37778 pixelCopies=5079 rows=0 presents=475 presentGlyphs=22656 maskedFrames=219 drawn=22738 noAtlas=0
+12:37:40.101 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=475 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=2254
+12:37:40.101 twin stats 5000ms frames 1124 copy 85089 keyed 66986 fill 1173 upload 8570 px 269720832 writes 12426 unknown 0 | replays 1123 draws 967 calls 119555 queuedMax 2 replay avg 0.460 max 168.005 ms | twins 124 405.0MB N 4 resets 0
+12:37:40.101 twin tiles check on verify avg 0.221 max 0.849 ms/frame | repaired tiles 0 rects 0 px 0 | top none
+12:37:40.101 twin art draws 105643 px 306315599 notready 905 | region hits 105218 hash lookups 32375 hits 962 misses 31045 learned expect 368 source 4 conflicts 0 rejected 1732 | index 1446 entries | expectations 185477 (dup 6603994, used 2100, overflow 0) | replayed 105074 calls 55979 fallbacks 0
+12:37:40.101 twin memory twins 7 (4.8 MB, created 2, evicted 0)
+12:37:40.101 twin pixel ops keyed 0 average 14023 add 25244 sub 0 empty 0 copy 39 blend 9 keyedcopy 0 tint 0 | fill rects 49 (merged 0) tint rects 16 blend rows 0 (merged 0) lighter 7 | art 0 untwinned src 0 self 0 fallbacks 0 | replayed 39303 calls 5829
+12:37:40.101 twin ground arts 0 replayed 0 fallbacks 0 no twin 0
+12:37:40.101 twin show shown 1123 (opaque 1123, over background 0) hidden: 1x toggle 0, invalid 0 (no twin at present 0, twin gone 0), other 0 | show gpu avg 129 us max 394 us (4 samples)
+12:37:40.101 twin gpu check 3953ms ago twin 3 bad 0 of 1368 non-art tiles, px 0 | art tiles 532 (differ from 1x 424)
+12:37:41.152 twin check twin 2 800x600 N 4 bad 0 of 72 non-art tiles, px 0 | art tiles 1828 (differ from 1x 1828) worst none
+12:37:42.101 TextReplace diag glyphs=9 skipped=9 copies=27771 carried=6321 occluded=472 dropped=1 pixelCopies=1025 rows=0 presents=471 presentGlyphs=6303 maskedFrames=0 drawn=6344 noAtlas=0
+12:37:42.101 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=472 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=4
+12:37:42.798 twin art tint off
+12:37:44.101 TextReplace diag glyphs=0 skipped=0 copies=25715 carried=4284 occluded=476 dropped=0 pixelCopies=0 rows=0 presents=475 presentGlyphs=4275 maskedFrames=0 drawn=4284 noAtlas=0
+12:37:44.101 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=476 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=0
+12:37:44.794 twin memory twin 147 base=272B9AB8 pitch 70 70x85 frame 135
+12:37:45.102 twin stats 5000ms frames 1185 copy 58574 keyed 52621 fill 1224 upload 107 px 3722157 writes 58 unknown 0 | replays 1185 draws 994 calls 82656 queuedMax 2 replay avg 0.109 max 6.001 ms | twins 150 492.4MB N 4 resets 0
+12:37:45.102 twin tiles check on verify avg 0.171 max 0.436 ms/frame | repaired tiles 0 rects 0 px 0 | top none
+12:37:45.102 twin art draws 91110 px 993912620 notready 1 | region hits 90733 hash lookups 18640 hits 285 misses 18262 learned expect 93 source 4 conflicts 0 rejected 0 | index 1542 entries | expectations 130784 (dup 11931024, used 93, overflow 0) | replayed 91716 calls 44337 fallbacks 0
+12:37:45.102 twin memory twins 8 (5.1 MB, created 1, evicted 0)
+12:37:45.102 twin pixel ops keyed 0 average 1025 add 516 sub 0 empty 0 copy 1 blend 0 keyedcopy 2 tint 0 | fill rects 39 (merged 0) tint rects 0 blend rows 0 (merged 0) lighter 0 | art 0 untwinned src 2 self 0 fallbacks 0 | replayed 1568 calls 918
+12:37:45.102 twin ground arts 0 replayed 0 fallbacks 0 no twin 0
+12:37:45.102 twin show shown 1186 (opaque 1186, over background 0) hidden: 1x toggle 0, invalid 0 (no twin at present 0, twin gone 0), other 0 | show gpu avg 123 us max 393 us (5 samples)
+12:37:45.102 twin gpu check 3953ms ago twin 2 bad 0 of 72 non-art tiles, px 0 | art tiles 1828 (differ from 1x 1828)
+12:37:46.103 TextReplace diag glyphs=456 skipped=398 copies=16112 carried=92994 occluded=164 dropped=20 pixelCopies=0 rows=0 presents=473 presentGlyphs=92478 maskedFrames=0 drawn=92378 noAtlas=0
+12:37:46.103 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=474 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=16
+12:37:46.154 twin check twin 2 800x600 N 4 bad 0 of 0 non-art tiles, px 0 | art tiles 1900 (differ from 1x 1852) worst none
+12:37:48.100 TextReplace diag glyphs=335 skipped=292 copies=9079 carried=71666 occluded=0 dropped=32 pixelCopies=0 rows=0 presents=475 presentGlyphs=71194 maskedFrames=0 drawn=71014 noAtlas=0
+12:37:48.100 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=475 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=8
+12:37:48.975 twin memory twin 143 base=0C68A2F8 pitch 70 70x85 frame 156
+12:37:49.581 twin memory twin 136 base=0CFD45F8 pitch 70 70x85 frame 150
+12:37:50.053 twin memory twin 146 base=0CD2A2F8 pitch 70 70x85 frame 165
+12:37:50.099 twin stats 5000ms frames 1186 copy 33250 keyed 32735 fill 1290 upload 289 px 3091025 writes 193 unknown 0 | replays 1187 draws 1026 calls 47000 queuedMax 2 replay avg 0.081 max 5.136 ms | twins 150 494.3MB N 4 resets 0
+12:37:50.099 twin tiles check on verify avg 0.117 max 0.309 ms/frame | repaired tiles 0 rects 0 px 0 | top none
+12:37:50.099 twin art draws 21232 px 588229172 notready 4 | region hits 21201 hash lookups 17670 hits 11 misses 17635 learned expect 24 source 8 conflicts 0 rejected 0 | index 1571 entries | expectations 32699 (dup 7499065, used 24, overflow 0) | replayed 21213 calls 14442 fallbacks 0
+12:37:50.099 twin memory twins 10 (5.9 MB, created 3, evicted 0)
+12:37:50.099 twin pixel ops keyed 0 average 0 add 0 sub 0 empty 0 copy 4 blend 0 keyedcopy 9 tint 0 | fill rects 104 (merged 0) tint rects 0 blend rows 0 (merged 0) lighter 0 | art 0 untwinned src 9 self 0 fallbacks 0 | replayed 4 calls 4
+12:37:50.099 twin ground arts 0 replayed 0 fallbacks 0 no twin 0
+12:37:50.099 twin show shown 1186 (opaque 1186, over background 0) hidden: 1x toggle 0, invalid 0 (no twin at present 0, twin gone 0), other 0 | show gpu avg 48 us max 58 us (5 samples)
+12:37:50.100 twin gpu check 3953ms ago twin 2 bad 0 of 0 non-art tiles, px 0 | art tiles 1900 (differ from 1x 1852)
+12:37:50.102 TextReplace diag glyphs=997 skipped=868 copies=9373 carried=216135 occluded=0 dropped=77 pixelCopies=0 rows=0 presents=474 presentGlyphs=143295 maskedFrames=0 drawn=143585 noAtlas=0
+12:37:50.102 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=475 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=23
+12:37:51.154 twin check twin 2 800x600 N 4 bad 0 of 0 non-art tiles, px 0 | art tiles 1900 (differ from 1x 1868) worst none
+12:37:51.778 twin art tint magenta
+12:37:52.101 TextReplace diag glyphs=0 skipped=0 copies=9520 carried=145656 occluded=0 dropped=0 pixelCopies=0 rows=0 presents=476 presentGlyphs=145656 maskedFrames=0 drawn=145656 noAtlas=0
+12:37:52.101 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=476 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=0
+12:37:54.100 TextReplace diag glyphs=10 skipped=10 copies=20628 carried=69752 occluded=416 dropped=1 pixelCopies=894 rows=0 presents=472 presentGlyphs=69747 maskedFrames=33 drawn=70349 noAtlas=0
+12:37:54.100 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=473 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=5
+12:37:54.541 twin art tint off
+12:37:55.100 twin stats 5000ms frames 1187 copy 104343 keyed 92982 fill 1244 upload 152 px 2359755 writes 1162 unknown 0 | replays 1186 draws 1021 calls 134575 queuedMax 2 replay avg 0.154 max 12.184 ms | twins 164 494.5MB N 4 resets 0
+12:37:55.100 twin tiles check on verify avg 0.163 max 0.451 ms/frame | repaired tiles 0 rects 0 px 0 | top none
+12:37:55.100 twin art draws 137641 px 679053493 notready 0 | region hits 136793 hash lookups 36858 hits 843 misses 36010 learned expect 5 source 3 conflicts 0 rejected 0 | index 1579 entries | expectations 204395 (dup 8001416, used 5, overflow 0) | replayed 137356 calls 76963 fallbacks 0
+12:37:55.100 twin memory twins 10 (5.9 MB, created 0, evicted 0)
+12:37:55.100 twin pixel ops keyed 0 average 2200 add 1584 sub 0 empty 0 copy 0 blend 0 keyedcopy 0 tint 0 | fill rects 57 (merged 0) tint rects 0 blend rows 0 (merged 0) lighter 0 | art 0 untwinned src 3316 self 0 fallbacks 0 | replayed 3774 calls 1975
+12:37:55.100 twin ground arts 30 replayed 30 fallbacks 0 no twin 0
+12:37:55.101 twin show shown 1186 (opaque 1186, over background 0) hidden: 1x toggle 0, invalid 0 (no twin at present 0, twin gone 0), other 0 | show gpu avg 56 us max 62 us (4 samples)
+12:37:55.101 twin gpu check 3953ms ago twin 2 bad 0 of 0 non-art tiles, px 0 | art tiles 1900 (differ from 1x 1868)
+12:37:56.103 TextReplace diag glyphs=1812 skipped=1577 copies=25656 carried=134220 occluded=667 dropped=4 pixelCopies=1306 rows=0 presents=474 presentGlyphs=132126 maskedFrames=68 drawn=131629 noAtlas=0
+12:37:56.103 TextReplace diag2 cleanPresents=0 emptyDirty=0 renders=475 slotMiss=0 slotEmpty=0 atlas=0 in 0 us calibrate 0 us lockCleared=50
+12:37:56.156 twin check twin 1 800x600 N 4 bad 0 of 0 non-art tiles, px 0 | art tiles 1900 (differ from 1x 1900) worst none
+12:37:58.010 twin index saved 1609 entries
+12:37:58.027 twin GL released
+12:37:58.067 twin destroy 2 800x600 buffer 03B308B0 at frame 8793
+12:37:58.068 twin destroy 3 800x600 buffer 03B308E0 at frame 8793
+12:37:58.068 twin destroy 1 800x600 buffer 03B30880 at frame 8793
+12:37:58.068 twin destroy 0 800x600 buffer 03B30850 at frame 8793
