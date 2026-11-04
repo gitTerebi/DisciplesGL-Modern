@@ -94,6 +94,7 @@
 #define SOURCE_WEIGHT 100
 #define TRACE_LOGS 24
 #define SEEN_SLOTS 65536
+#define LEARN_LOGS 16
 #define INDEX_MIN_SIZE 8
 #define INDEX_SAVE_PERIOD 60000
 #define INDEX_LOGS 32
@@ -162,6 +163,7 @@ namespace Twin
 	struct Region {
 		RECT rect;
 		ULONGLONG hash;
+		BOOL learned;
 		LONG frame;
 		BOOL flipped;
 		LONG placeW;
@@ -359,6 +361,10 @@ namespace Twin
 		DWORD untwinnedLogs;
 		DWORD clipLogs;
 		DWORD notReadyLogs;
+		DWORD learnLogs;
+		DWORD learnedLogs;
+		DWORD learnCalls;
+		BOOL learning;
 	} index;
 
 	struct {
@@ -921,8 +927,8 @@ namespace Twin
 
 		++game.list->counters.uploads;
 		game.list->counters.pixels += width * height;
+		// an upload only brings unchanged 1x onto the twin; real writes already dropped their regions when they were marked
 		CoverArt(twin, rect);
-		DropRegions(twin, rect);
 
 		if (twin->mirror)
 		{
@@ -964,6 +970,7 @@ namespace Twin
 
 	VOID Repair(Record* twin, DWORD id, const RECT* rect, DWORD tiles, BOOL present)
 	{
+		DropRegions(twin, rect);
 		Upload(twin, id, rect);
 
 		DWORD px = (rect->right - rect->left) * (rect->bottom - rect->top);
@@ -1965,6 +1972,7 @@ namespace Twin
 
 		region->rect = *rect;
 		region->hash = hash;
+		region->learned = FALSE;
 		region->frame = frame;
 		region->flipped = flipped;
 		region->placeW = placeW;
@@ -2009,6 +2017,22 @@ namespace Twin
 		for (DWORD i = 0; i < source->regionCount && !region; ++i)
 			if (Contains(&source->regions[i].rect, from))
 				region = &source->regions[i];
+
+		if (index.learnedLogs < LEARN_LOGS)
+		{
+			const Region* learnedRegion = NULL;
+			RECT part;
+			for (DWORD i = 0; i < source->regionCount && !learnedRegion; ++i)
+				if (source->regions[i].learned && IntersectRect(&part, &source->regions[i].rect, from))
+					learnedRegion = &source->regions[i];
+			if (learnedRegion)
+			{
+				++index.learnedLogs;
+				DebugLog("twin copy from source-learned region frame=%d region %d,%d %dx%d copy %d,%d %dx%d: %s at frame %u", learnedRegion->frame,
+					learnedRegion->rect.left, learnedRegion->rect.top, learnedRegion->rect.right - learnedRegion->rect.left, learnedRegion->rect.bottom - learnedRegion->rect.top,
+					from->left, from->top, width, height, region == learnedRegion ? "inside, region hit" : "only overlaps it, not inside", game.frameNo);
+			}
+		}
 
 		Expect* e = art.count && !mirror ? Match(x, y, srcRect->right - srcRect->left, srcRect->bottom - srcRect->top, srcRect->left, srcRect->top) : NULL;
 		if (e && !PlaceSane(e, x, y))
@@ -2153,12 +2177,24 @@ namespace Twin
 	}
 
 	VOID LearnBlock(const VOID* data, LONG pitch, const RECT* rect, LONG frame, const RECT* canvas, LONG canvasWidth, LONG canvasHeight, BOOL flipped);
+	Record* Adopt(const VOID* ptr, DWORD* id);
 
 	VOID LearnArt(const VOID* data, LONG pitch, const RECT* rect, LONG frame, const RECT* canvas, LONG canvasWidth, LONG canvasHeight, BOOL flipped)
 	{
 		Timed timed("LearnArt");
-		if (!Active() || !data || !rect || !canvas || frame < 0 || pitch <= 0)
+		if (!Active())
 			return;
+
+		++index.learnCalls;
+		if (!data || !rect || !canvas || frame < 0 || pitch <= 0)
+		{
+			if (index.learnLogs < LEARN_LOGS)
+			{
+				++index.learnLogs;
+				DebugLog("twin learn at source refused: data=%p pitch %d frame %d rect %s canvas %s", data, pitch, frame, rect ? "set" : "missing", canvas ? "set" : "missing");
+			}
+			return;
+		}
 
 		Sync();
 		LearnBlock(data, pitch, rect, frame, canvas, canvasWidth, canvasHeight, flipped);
@@ -2185,11 +2221,39 @@ namespace Twin
 		const DWORD* first = (const DWORD*)data + rect->top * pitch + rect->left;
 		DWORD id;
 		Record* twin = FindAddress(first, &id);
+		BOOL adopted = FALSE;
+		if (!twin && !index.learning)
+		{
+			index.learning = TRUE;
+			twin = Adopt(first, &id);
+			index.learning = FALSE;
+			adopted = twin != NULL;
+		}
+
+		// the decode that just wrote these pixels is still pending as dirty; take it now so the region made below survives the first copy
+		LONG x = 0, y = 0;
+		BOOL placed = twin && PixelPos(twin, first, pitch, width, height, &x, &y);
+		RECT block = { x, y, x + width, y + height };
+		DWORD flushed = 0;
+		if (placed)
+		{
+			DWORD before = game.list ? game.list->counters.pixels : 0;
+			DrainSyncIn(twin, &block);
+			FlushRegion(twin, id, &block, TRUE);
+			flushed = game.list ? game.list->counters.pixels - before : 0;
+		}
 
 		BOOL solid;
 		ULONGLONG hash = HashBlock(first, pitch, width, height, HashKey(twin), &solid);
 		if (solid)
+		{
+			if (index.learnLogs < LEARN_LOGS)
+			{
+				++index.learnLogs;
+				DebugLog("twin learn at source frame=%d data=%p pitch %d %dx%d: block solid or unreadable, twin %s", frame, data, pitch, width, height, twin ? TwinKind(twin) : "none");
+			}
 			return;
+		}
 
 		IndexEntry* kept = IndexCreate(hash, width, height);
 		if (!kept)
@@ -2207,14 +2271,23 @@ namespace Twin
 		++index.learnedSource;
 
 		const Identity* dominant = Dominant(kept);
-		if (!dominant)
-			return;
-
-		LONG x, y;
-		if (twin && PixelPos(twin, first, pitch, width, height, &x, &y))
+		BOOL region = FALSE;
+		if (dominant && placed)
 		{
-			RECT block = { x, y, x + width, y + height };
 			AddRegion(twin, &block, hash, dominant->frame, dominant->flipped, dominant->canvasW, dominant->canvasH, dominant->cx, dominant->cy);
+			for (DWORD i = 0; i < twin->regionCount; ++i)
+				if (EqualRect(&twin->regions[i].rect, &block))
+					twin->regions[i].learned = TRUE;
+			region = TRUE;
+		}
+
+		if (index.learnLogs < LEARN_LOGS)
+		{
+			++index.learnLogs;
+			DebugLog("twin learn at source frame=%d data=%p pitch %d %dx%d canvas %d,%d of %dx%d | twin %s%s %u at %d,%d | region %s | flushed %u px | identity frame %d at frame %u",
+				frame, data, pitch, width, height, canvas->left, canvas->top, canvasWidth, canvasHeight, twin ? TwinKind(twin) : "none", adopted ? " (created now)" : "",
+				twin ? id : TWIN_NONE, x, y, region ? "created" : placed ? "not created (no identity)" : twin ? "not created (pitch or rect does not fit the twin)" : "not created (no twin)",
+				flushed, dominant ? dominant->frame : -1, game.frameNo);
 		}
 	}
 
@@ -3349,8 +3422,8 @@ namespace Twin
 		art.expected = art.duplicates = art.matched = art.draws = art.px = art.notReady = art.overflow = 0;
 		index.regionHits = index.lookups = index.hits = index.misses = index.learnedExpect = index.learnedSource = index.conflicts = index.rejected = 0;
 
-		DebugLog("twin index identities: multi-identity entries %u | context draws %u content draws %u | evidence %u", index.multi, index.contextDraws, index.contentDraws, index.evidence);
-		index.contextDraws = index.contentDraws = index.evidence = 0;
+		DebugLog("twin index identities: multi-identity entries %u | context draws %u content draws %u | evidence %u | LearnArt calls %u", index.multi, index.contextDraws, index.contentDraws, index.evidence, index.learnCalls);
+		index.contextDraws = index.contentDraws = index.evidence = index.learnCalls = 0;
 
 		LARGE_INTEGER qpc;
 		QueryPerformanceCounter(&qpc);
