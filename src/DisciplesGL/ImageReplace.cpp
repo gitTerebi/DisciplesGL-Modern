@@ -1197,6 +1197,26 @@ namespace ImageReplace
 		return ReadFile(file, buffer, size, &read, &ov) && read == size;
 	}
 
+	BOOL PackPresent()
+	{
+		static INT present = -1;
+		if (present < 0)
+		{
+			CHAR path[MAX_PATH];
+			DWORD length = GetModuleFileName(NULL, path, sizeof(path));
+			while (length && path[length - 1] != '\\')
+				--length;
+			StrCopy(path + length, "gamenames-v1.galleanpack");
+			present = GetFileAttributes(path) != INVALID_FILE_ATTRIBUTES;
+			if (!present)
+			{
+				StrCopy(path + length, "assets-v1.galleanpack");
+				present = GetFileAttributes(path) != INVALID_FILE_ATTRIBUTES;
+			}
+		}
+		return present;
+	}
+
 	BOOL OpenPack()
 	{
 		CHAR path[MAX_PATH];
@@ -1248,7 +1268,8 @@ namespace ImageReplace
 			return FALSE;
 		MemoryZero(pack.texs, pack.frameCount * sizeof(Tex));
 
-		DebugLog("image pack loaded: %d animations, %d frames in %d ms", pack.animCount, pack.frameCount, GetTickCount() - tick);
+		DebugLog("image pack loaded: %s, %d animations, %d frames in %d ms", pack.gameNames ? "gamenames-v1.galleanpack (game names, canvas origin)" : "assets-v1.galleanpack (asset ids)",
+			pack.animCount, pack.frameCount, GetTickCount() - tick);
 		return TRUE;
 	}
 
@@ -1485,7 +1506,8 @@ namespace ImageReplace
 		pack.thread = CreateThread(NULL, 0, Worker, NULL, 0, NULL);
 	}
 
-	LONG PackFrameFor(const CHAR* owner, DWORD index, LONG canvasW, LONG canvasH, Origin* origin, const PackAnim** found)
+	// exact: FALSE when only a variant of the name (.PNG added or cut, spell prefix) is in the pack
+	LONG PackFrameFor(const CHAR* owner, DWORD index, LONG canvasW, LONG canvasH, Origin* origin, const PackAnim** found, BOOL* exact = NULL)
 	{
 		*found = NULL;
 		CHAR name[NAME_LENGTH + 8];
@@ -1494,6 +1516,8 @@ namespace ImageReplace
 		name[length] = '\0';
 		Upper(name);
 		const PackAnim* anim = FindAnim(name);
+		if (exact)
+			*exact = anim != NULL;
 		if (!anim)
 		{
 			DWORD size = StrLength(name);
@@ -1845,7 +1869,8 @@ namespace ImageReplace
 
 		DropRange(s);
 		LONG w = (LONG)s->dims[0], h = (LONG)s->dims[1];
-		BOOL range = config.bpp32Hooked && first && w > 0 && h > 0 && pitch >= w && pitch <= RANGE_PITCH && memory.count < sizeof(memory.list) / sizeof(*memory.list);
+		// an 8-bit decode read as 32 bpp at half its pitch is no image even where it fits: its memory twin took a seed nothing copies out of, every decode
+		BOOL range = !(indices && Twin::SeedMode()) && config.bpp32Hooked && first && w > 0 && h > 0 && pitch >= w && pitch <= RANGE_PITCH && memory.count < sizeof(memory.list) / sizeof(*memory.list);
 		const BYTE* end = range ? first + ((h - 1) * pitch + w) * sizeof(DWORD) : NULL;
 		if (range && IsBadReadPtr(first, end - first))
 		{
@@ -1854,8 +1879,7 @@ namespace ImageReplace
 		}
 		if (!range)
 		{
-			// read as 32 bpp, an 8-bit decode wider than half the scratch pitch or taller than about half its rows does not fit: every full-screen background did
-			// not, so none was named; it is still captured for the indexed blit that converts it
+			// it is still captured for the indexed blit that converts it
 			if (indices && first && w > 0 && h > 0 && Twin::SeedMode() && Twin::Active())
 			{
 				++memory.captureOnly;
@@ -2251,6 +2275,7 @@ namespace ImageReplace
 	{
 		if (!game.initialized || !stores.count)
 			return;
+		Twin::Cost cost(Twin::CostImage);
 		++storeStats.faceCopies;
 
 		BOOL flipped = FALSE, linked = FALSE;
@@ -2304,8 +2329,10 @@ namespace ImageReplace
 
 	VOID OnGround(GroundKind kind, const VOID* tile, const Hooks::BlitObject* obj, const POINT* src, const POINT* dst, const RECT* rect, const BYTE* blendMask, const DWORD* alphaMask)
 	{
+		Twin::CountGround();
 		if (!Enabled() || !obj->isTrueColor || !sub_MaskData)
 			return;
+		Twin::Cost cost(Twin::CostImage);
 
 		GroundChunk* c = FindChunk(obj->data);
 		if (!c || !c->valid)
@@ -3355,10 +3382,93 @@ namespace ImageReplace
 	Twin::SeedPiece sheetPieces[4096];
 	Twin::SeedConflict sheetConflicts[256];
 	BYTE sheetShared[4096];
+	// per piece, for the piece log and the overlap check: the part's place in its frame's canvas and the frame's entry in sheetFrames
+	POINT sheetCanvas[4096];
+	WORD sheetFrameOf[4096];
+	BYTE sheetDrop[4096];
+
+	#define SHEET_FRAME_INFO 64
+	#define SHEET_PIECE_LOGS 20
+	#define SHEET_UNCERTAIN_LOGS 64
+	#define SHEET_OVERLAP_LIMIT 1024
+
+	struct SheetFrameInfo {
+		const CHAR* name;
+		const PackAnim* anim;
+		LONG frame;
+		LONG cw, ch;
+		BYTE origin;
+		BYTE exact;
+		BYTE ambiguous;
+	};
+
+	SheetFrameInfo sheetFrames[SHEET_FRAME_INFO];
+	DWORD sheetFrameCount;
+
+	struct {
+		DWORD pieceLogs, uncertainLogs;
+		DWORD wrongSize, ambiguous, overlaps, duplicates, dropped, unchecked;
+	} sheetCheck;
+
+	// the same name with or without .PNG
+	BOOL SameStem(const CHAR* a, const CHAR* b)
+	{
+		DWORD la = StrLength(a), lb = StrLength(b);
+		if (la > 4 && !StrCompareInsensitive(a + la - 4, ".PNG"))
+			la -= 4;
+		if (lb > 4 && !StrCompareInsensitive(b + lb - 4, ".PNG"))
+			lb -= 4;
+		if (la != lb)
+			return FALSE;
+		for (DWORD i = 0; i < la; ++i)
+		{
+			CHAR x = a[i], y = b[i];
+			if (x >= 'a' && x <= 'z')
+				x -= 32;
+			if (y >= 'a' && y <= 'z')
+				y -= 32;
+			if (x != y)
+				return FALSE;
+		}
+		return TRUE;
+	}
+
+	const CHAR* const originNames[] = { "canvas", "centre", "sprite" };
+
+	// the full piece list, so a misplacement can be read from the log: sheet rect -> pack frame, its part's rect in the frame canvas, the frame box placed in the sheet
+	VOID SheetPieceLog(const CHAR* label, DWORD fileId, LONG w, LONG h, DWORD count, const Twin::SeedSheetStats* stats, const CHAR* why)
+	{
+		DebugLog("image sheet pieces %.40s file %u %dx%d (%s): frames %u, pieces %u, dropped as uncertain %u (block of another size %u, frames whose pack entry may be the file %u) | pack %s",
+			label, fileId, w, h, why, sheetFrameCount, count, stats->uncertain, stats->wrongSize, stats->ambiguous, pack.gameNames ? "gamenames" : "assets");
+		for (DWORD f = 0; f < sheetFrameCount && f < 12; ++f)
+		{
+			const SheetFrameInfo* i = &sheetFrames[f];
+			const PackFrame* pf = i->frame >= 0 ? &pack.frames[i->frame] : NULL;
+			DebugLog("image sheet pieces %.40s frame [%u] %.48s canvas %dx%d -> pack %.48s%s #%d %dx%d offset %d,%d origin %s%s", label, f, i->name, i->cw, i->ch,
+				i->anim ? pack.names + i->anim->name : "-", i->exact ? "" : " (name variant)", i->frame, pf ? pf->w : 0, pf ? pf->h : 0, pf ? pf->ox : 0, pf ? pf->oy : 0,
+				originNames[i->origin < 3 ? i->origin : 0], i->ambiguous ? " AMBIGUOUS" : "");
+		}
+		CHAR text[1100];
+		CHAR* at = text;
+		DWORD lines = 0;
+		for (DWORD k = 0; k < count && lines < 16; ++k)
+		{
+			const Twin::SeedPiece* p = &sheetPieces[k];
+			at += StrPrint(at, " %d,%d %dx%d->[%u]#%d canvas %d,%d place %d,%d%s;", p->to.left, p->to.top, p->to.right - p->to.left, p->to.bottom - p->to.top, sheetFrameOf[k], p->frame,
+				sheetCanvas[k].x, sheetCanvas[k].y, p->place.left, p->place.top, sheetDrop[k] ? " DROPPED" : "");
+			if (at - text > 700 || k + 1 == count)
+			{
+				DebugLog("image sheet pieces %.40s (sheet rect -> [frame] #pack frame, part's canvas pos, frame box in the sheet, not flipped):%s", label, text);
+				at = text;
+				*at = 0;
+				++lines;
+			}
+		}
+	}
 
 	// the packer's frames sit in deduped blocks of one sheet; each block gets the 4K of the first frame that uses it, at that frame's canvas position
-	// FALSE when no -INDEX.OPT entry points at the file; the pieces are in the static tables until the next call
-	BOOL SheetPieces(Archive* a, DWORD fileId, LONG w, LONG h, DWORD* pieceCount, DWORD* conflictOut, Twin::SeedSheetStats* statsOut, DWORD* blockOut)
+	// FALSE when no -INDEX.OPT entry points at the file; the pieces are in the static tables until the next call. Only pieces placed with certainty are kept
+	BOOL SheetPieces(Archive* a, DWORD fileId, const CHAR* label, LONG w, LONG h, BOOL log, DWORD* pieceCount, DWORD* conflictOut, Twin::SeedSheetStats* statsOut, DWORD* blockOut)
 	{
 		DWORD offsets[SHEET_BLOCKS];
 		DWORD blocks = 0;
@@ -3384,11 +3494,20 @@ namespace ImageReplace
 		Twin::SeedSheetStats stats;
 		MemoryZero(&stats, sizeof(stats));
 		const BYTE* end = a->images + a->imagesSize;
+		sheetFrameCount = 0;
 
 		for (DWORD b = 0; b < blocks; ++b)
 		{
 			if (offsets[b] > a->imagesSize || a->imagesSize - offsets[b] < 1 + 2 + 4 + 4 + 1024 + 4)
 				continue;
+			// Gallean ties a block to the file whose PNG has the block's size; a block of another size describes another sheet
+			LONG sizeX = *(const LONG*)(a->images + offsets[b] + 3), sizeY = *(const LONG*)(a->images + offsets[b] + 7);
+			if ((sizeX || sizeY) && (sizeX != w || sizeY != h))
+			{
+				++stats.wrongSize;
+				++sheetCheck.wrongSize;
+				continue;
+			}
 			const BYTE* p = a->images + offsets[b] + 1 + 2 + 4 + 4 + 1024;
 			DWORD frames = *(const DWORD*)p;
 			p += 4;
@@ -3410,7 +3529,8 @@ namespace ImageReplace
 				const SheetLink* link = FindLink(a, name);
 				Origin origin = OriginCanvas;
 				const PackAnim* anim;
-				LONG frame = PackFrameFor(link ? link->anim : name, link ? link->index : 0, cw, ch, &origin, &anim);
+				BOOL exact = FALSE;
+				LONG frame = PackFrameFor(link ? link->anim : name, link ? link->index : 0, cw, ch, &origin, &anim, &exact);
 				if (frame < 0)
 				{
 					++stats.unmapped;
@@ -3421,6 +3541,32 @@ namespace ImageReplace
 				{
 					++stats.additive;
 					continue;
+				}
+
+				// the pack names plain files and frames alike, and PlainFrame reads a file's entry as the file itself: when this frame's entry is named like the sheet file,
+				// is its size and the parts reorder the sheet, it may hold the sheet's layout instead of the frame's canvas, and nothing tells the two apart
+				BOOL reorders = FALSE;
+				for (DWORD i = 0; i < parts && !reorders; ++i)
+					reorders = part[i * 6] != part[i * 6 + 2] || part[i * 6 + 1] != part[i * 6 + 3];
+				BOOL fileEntry = !exact || (label && SameStem(pack.names + anim->name, label));
+				BOOL ambiguous = pack.gameNames && fileEntry && reorders && pf->w == w && pf->h == h;
+				WORD frameOf = (WORD)min(sheetFrameCount, (DWORD)SHEET_FRAME_INFO - 1);
+				if (sheetFrameCount < SHEET_FRAME_INFO)
+				{
+					SheetFrameInfo* info = &sheetFrames[sheetFrameCount++];
+					info->name = name;
+					info->anim = anim;
+					info->frame = frame;
+					info->cw = cw;
+					info->ch = ch;
+					info->origin = (BYTE)origin;
+					info->exact = (BYTE)exact;
+					info->ambiguous = (BYTE)ambiguous;
+				}
+				if (ambiguous)
+				{
+					++stats.ambiguous;
+					++sheetCheck.ambiguous;
 				}
 
 				LONG ox = pf->ox, oy = pf->oy;
@@ -3451,7 +3597,15 @@ namespace ImageReplace
 					if (k < count)
 					{
 						if (pieces[k].frame == frame)
+						{
+							// one block drawn at two places of the same frame can carry the 4K of only one of them
+							if (!EqualRect(&pieces[k].place, &place) && !sheetDrop[k])
+							{
+								sheetDrop[k] = TRUE;
+								++sheetCheck.duplicates;
+							}
 							continue;
+						}
 						if (!shared[k])
 						{
 							shared[k] = TRUE;
@@ -3473,12 +3627,66 @@ namespace ImageReplace
 					pieces[count].to = to;
 					pieces[count].place = place;
 					pieces[count].frame = frame;
+					sheetCanvas[count].x = cx;
+					sheetCanvas[count].y = cy;
+					sheetFrameOf[count] = frameOf;
+					sheetDrop[count] = (BYTE)ambiguous;
 					shared[count++] = FALSE;
 				}
 			}
 		}
 
-		*pieceCount = count;
+		// blocks that overlap without being the same block: the overlap holds one set of 1x pixels, so both must take the same 4K there (same frame, same frame box).
+		// Across frames the first keeps it, as a shared block does; within one frame neither can be trusted
+		if (count <= SHEET_OVERLAP_LIMIT)
+		{
+			for (DWORD i = 0; i < count; ++i)
+				for (DWORD k = i + 1; k < count; ++k)
+				{
+					RECT part;
+					if (!IntersectRect(&part, &pieces[i].to, &pieces[k].to))
+						continue;
+					if (pieces[i].frame == pieces[k].frame && EqualRect(&pieces[i].place, &pieces[k].place))
+						continue;
+					if (!sheetDrop[k])
+						++sheetCheck.overlaps;
+					sheetDrop[k] = TRUE;
+					if (pieces[i].frame == pieces[k].frame)
+						sheetDrop[i] = TRUE;
+				}
+		}
+		else
+			++sheetCheck.unchecked;
+
+		for (DWORD i = 0; i < count; ++i)
+			stats.uncertain += sheetDrop[i];
+		sheetCheck.dropped += stats.uncertain;
+
+		// logged before the uncertain pieces are taken out, so the next round sees where they would have gone
+		if (log && sheetCheck.pieceLogs < SHEET_PIECE_LOGS)
+		{
+			++sheetCheck.pieceLogs;
+			SheetPieceLog(label, fileId, w, h, count, &stats, "sheet seed");
+		}
+		else if ((stats.uncertain || stats.wrongSize) && sheetCheck.uncertainLogs < SHEET_UNCERTAIN_LOGS)
+		{
+			++sheetCheck.uncertainLogs;
+			SheetPieceLog(label, fileId, w, h, count, &stats, "uncertain");
+		}
+
+		DWORD kept = 0;
+		for (DWORD i = 0; i < count; ++i)
+		{
+			if (sheetDrop[i])
+				continue;
+			pieces[kept] = pieces[i];
+			shared[kept] = shared[i];
+			sheetCanvas[kept] = sheetCanvas[i];
+			sheetFrameOf[kept] = sheetFrameOf[i];
+			++kept;
+		}
+
+		*pieceCount = kept;
 		*conflictOut = conflictCount;
 		*statsOut = stats;
 		*blockOut = blocks;
@@ -3508,6 +3716,12 @@ namespace ImageReplace
 			return "no frame name is in the pack";
 		if (stats->unmapped + stats->additive == stats->frames)
 			return "its frames are additive or not in the pack";
+		if (stats->ambiguous)
+			return "its pack entry is named like the sheet file and is its size, so it may hold the file's layout, not the frame's: left 1x";
+		if (stats->wrongSize)
+			return "its -IMAGES.OPT block is of another sheet size";
+		if (stats->uncertain)
+			return "its blocks overlap with other places in the frame: left 1x";
 		return "every part falls outside the sheet";
 	}
 
@@ -3517,7 +3731,7 @@ namespace ImageReplace
 		LONG w = (LONG)s->dims[0], h = (LONG)s->dims[1];
 		DWORD count, conflictCount, blocks;
 		Twin::SeedSheetStats stats;
-		if (!SheetPieces(a, s->file->id, w, h, &count, &conflictCount, &stats, &blocks))
+		if (!SheetPieces(a, s->file->id, s->file->name, w, h, TRUE, &count, &conflictCount, &stats, &blocks))
 			return FALSE;
 
 		const CHAR* label = s->file->name;
@@ -3593,6 +3807,8 @@ namespace ImageReplace
 		DebugLog("image seed sources since start: store draws %d (new memory %d) | faces loaded %d, face copies %d | ranges %d, decodes with art store %d face %d | archives with sheet tables %u | ground chunks %d builds %d published %d | prefetch at store load: files %u, frames asked %u",
 			storeStats.draws, storeStats.drawLinks, storeStats.faceLoads, storeStats.faceCopies, memory.count, memory.learnStore, memory.learnFace, sheets.archives,
 			ground.chunkCount, ground.builds, ground.published, storeStats.prefetchLoads, storeStats.prefetchFrames);
+		DebugLog("image sheet checks since start: pieces left 1x as uncertain %u | blocks of another sheet size %u, frames whose pack entry is named like the sheet file and may hold its layout %u, overlapping pieces with different 4K %u, one block at two places of a frame %u, sheets too big to check %u",
+			sheetCheck.dropped, sheetCheck.wrongSize, sheetCheck.ambiguous, sheetCheck.overlaps, sheetCheck.duplicates, sheetCheck.unchecked);
 		LogRecords();
 	}
 
@@ -3699,7 +3915,7 @@ namespace ImageReplace
 		RecordRead list[RECORD_READS];
 		DWORD head;
 		DWORD gameThread;
-		DWORD opens, untracked, tableFull, noTable, live, liveMax, reads, records, headers, inside, pngs, sheets, plains, noSize, otherThread, named, takenByStore, unmatched, logs;
+		DWORD opens, untracked, tableFull, noTable, live, liveMax, top, reads, records, headers, inside, pngs, sheets, plains, noSize, otherThread, named, takenByStore, unmatched, logs;
 		DWORD callers[RECORD_CALLERS];
 		DWORD callerCount, callersDumped;
 	} records;
@@ -3724,7 +3940,7 @@ namespace ImageReplace
 
 	VOID OnFileOpen(const CHAR* path, HANDLE handle)
 	{
-		if (!records.ready || !path || handle == INVALID_HANDLE_VALUE || !EndsWith(path, ".ff") || !Twin::SeedMode())
+		if (!records.ready || !path || handle == INVALID_HANDLE_VALUE || !EndsWith(path, ".ff") || !Twin::SeedMode() || !Twin::Active())
 			return;
 
 		Archive* a = FindArchive(path);
@@ -3746,6 +3962,8 @@ namespace ImageReplace
 				records.liveMax = records.live;
 			records.files[slot].handle = handle;
 			records.files[slot].archive = a;
+			if (slot + 1 > records.top)
+				records.top = slot + 1;
 		}
 		else
 		{
@@ -3763,7 +3981,8 @@ namespace ImageReplace
 	{
 		if (!records.ready || !handle)
 			return FALSE;
-		for (DWORD i = 0; i < RECORD_FILES; ++i)
+		// every ReadFile of the game asks; only the slots ever used are searched
+		for (DWORD i = 0; i < records.top; ++i)
 			if (records.files[i].handle == handle)
 				return TRUE;
 		return FALSE;
@@ -3771,10 +3990,10 @@ namespace ImageReplace
 
 	VOID OnFileClose(HANDLE handle)
 	{
-		if (!records.ready || !handle)
+		if (!records.ready || !handle || !records.live)
 			return;
 		EnterCriticalSection(&records.cs);
-		for (DWORD i = 0; i < RECORD_FILES; ++i)
+		for (DWORD i = 0; i < records.top; ++i)
 			if (records.files[i].handle == handle)
 			{
 				records.files[i].handle = NULL;
@@ -3795,7 +4014,7 @@ namespace ImageReplace
 
 		EnterCriticalSection(&records.cs);
 		Archive* a = NULL;
-		for (DWORD i = 0; i < RECORD_FILES && !a; ++i)
+		for (DWORD i = 0; i < records.top && !a; ++i)
 			if (records.files[i].handle == handle)
 				a = records.files[i].archive;
 		if (!a)
@@ -3896,7 +4115,7 @@ namespace ImageReplace
 		}
 
 		// the 4K is asked for at the read, ahead of the decode; only the game thread touches the pack's queues
-		if (onGame && png && Twin::SeedMode())
+		if (onGame && png && Twin::SeedMode() && Twin::Active())
 		{
 			if (!a->sheetsLoaded)
 				LoadSheets(a);
@@ -3961,7 +4180,7 @@ namespace ImageReplace
 		}
 		DWORD count = 0, conflictCount = 0, blocks = 0;
 		Twin::SeedSheetStats stats;
-		if (a->itemCount && SheetPieces(a, file->id, width, height, &count, &conflictCount, &stats, &blocks))
+		if (a->itemCount && SheetPieces(a, file->id, file->name, width, height, log, &count, &conflictCount, &stats, &blocks))
 		{
 			out->sheet = TRUE;
 			if (log)
@@ -4134,10 +4353,18 @@ namespace ImageReplace
 	// desc is the game's BlitObject (data, clip rect, pitch); the store decodes into a reused scratch one, and the surface that shows the art is written from it after
 	VOID __fastcall StoreDraw(VOID* thisObj, DWORD /*edx*/, const BYTE* desc)
 	{
+		if (!Twin::Active())
+		{
+			((VOID(__thiscall*)(VOID*, const BYTE*))sub_StoreDraw)(thisObj, desc);
+			return;
+		}
 		records.gameThread = GetCurrentThreadId();
 		Twin::DecodeBegin();
 		((VOID(__thiscall*)(VOID*, const BYTE*))sub_StoreDraw)(thisObj, desc);
-		StoreDrawn(thisObj, desc, (DWORD)_ReturnAddress());
+		{
+			Twin::Cost cost(Twin::CostImage);
+			StoreDrawn(thisObj, desc, (DWORD)_ReturnAddress());
+		}
 		Twin::DecodeEnd();
 	}
 
@@ -4259,7 +4486,7 @@ namespace ImageReplace
 		s->dims[0] = size[0];
 		s->dims[1] = size[1];
 		// the face is seeded at its first DrawFaces, which copies it on at once; asked for now, its 4K is usually there by then
-		if (Twin::SeedMode() && Enabled())
+		if (Twin::SeedMode() && Twin::Active() && Enabled())
 		{
 			LONG frame = StoreFrame(s);
 			if (frame >= 0)

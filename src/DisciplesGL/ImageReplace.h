@@ -26,6 +26,8 @@ namespace ImageReplace
 	VOID ReleaseGL();
 	BOOL ArtTexture(LONG frame, GLuint* id, LONG* width, LONG* height);
 	BOOL ArtReady(LONG frame);
+	// a 4K pack file (gamenames-v1 or assets-v1) sits next to the game; checked once, before the twins decide whether to run
+	BOOL PackPresent();
 	LONG ArtState(LONG frame);
 	BOOL ArtUpload(LONG frame);
 	LONG ArtBytes(LONG frame);

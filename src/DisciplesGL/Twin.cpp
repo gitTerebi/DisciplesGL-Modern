@@ -178,6 +178,8 @@
 #define STACK_CALLERS 6
 #define SCREEN_LABELS 24
 #define SEED_PENDING_FRAMES 3600
+#define XFER_UNLOCK_RETRIES 4
+#define FIND_CACHE 256
 #define SEED_WAIT_DEFAULT 0
 #define SEED_CONFLICT_CELL 16
 #define SEED_CONFLICT_BATCH 16
@@ -392,6 +394,7 @@ namespace Twin
 		DWORD guardFails;
 		DWORD xferSeq;
 		DWORD failSeq;
+		DWORD failTries;
 		DWORD watchFailSeq;
 		DWORD trapWrites;
 		DWORD trapEip;
@@ -480,6 +483,9 @@ namespace Twin
 		DWORD resetsLogged;
 		DWORD resetTick;
 		BOOL tileCheck;
+		DWORD findCache[FIND_CACHE];
+		// twins get a CPU mirror only when the tile check was on at start; Ctrl+F11 can then turn the check off and on again
+		BOOL mirrors;
 		BOOL tileKeyDown;
 		BOOL tintKeyDown;
 		struct {
@@ -588,6 +594,64 @@ namespace Twin
 		LONGLONG qpc;
 	} slow;
 
+	#define HITCH_MS 50
+	#define HITCH_LOGS 20
+	#define HITCH_LOG_TOTAL 400
+	#define COST_HIST 5
+
+	const CHAR* const costNames[CostKinds] = { "-", "record", "mirror", "tile check", "seed", "trap", "lookup", "diagnostics", "image" };
+	const DWORD costHistMs[COST_HIST - 1] = { 17, 33, 50, 100 };
+
+	struct {
+		DWORD thread;
+		DWORD cur;
+		ULONGLONG mark;
+		ULONGLONG acc[CostKinds];
+		ULONGLONG sum[CostKinds];
+		ULONGLONG max[CostKinds];
+		ULONGLONG totalSum, totalMax;
+		DWORD presents;
+		LONGLONG lastQpc;
+		LONGLONG intervalSum, intervalMax;
+		DWORD hist[COST_HIST];
+		DWORD hitches, hitchLogs, hitchLogsTotal;
+		ULONGLONG frameSlowCycles;
+		const CHAR* frameSlowName;
+		DWORD frameSeeds, frameGround;
+		ULONGLONG calTsc;
+		LONGLONG calQpc;
+		ULONGLONG tscPerMs;
+	} spent;
+
+	Cost::Cost(DWORD kind)
+	{
+		if (__readfsdword(0x24) != spent.thread)
+		{
+			prev = CostKinds;
+			return;
+		}
+		ULONGLONG now = __rdtsc();
+		spent.acc[spent.cur] += now - spent.mark;
+		spent.mark = now;
+		prev = spent.cur;
+		spent.cur = kind;
+	}
+
+	Cost::~Cost()
+	{
+		if (prev == CostKinds)
+			return;
+		ULONGLONG now = __rdtsc();
+		spent.acc[spent.cur] += now - spent.mark;
+		spent.mark = now;
+		spent.cur = prev;
+	}
+
+	VOID CountGround()
+	{
+		++spent.frameGround;
+	}
+
 	struct Timed {
 		const CHAR* name;
 		ULONGLONG start;
@@ -599,6 +663,11 @@ namespace Twin
 			{
 				slow.cycles = cycles;
 				slow.name = name;
+			}
+			if (cycles > spent.frameSlowCycles)
+			{
+				spent.frameSlowCycles = cycles;
+				spent.frameSlowName = name;
 			}
 		}
 	};
@@ -871,6 +940,8 @@ namespace Twin
 		DWORD indexedOther;
 		DWORD indexedInsideDropped;
 		DWORD unlockLarge;
+		DWORD unlockSmall;
+		DWORD unlockRetired;
 		// the latest decode has a name but no pack art; its blits are not unnamed memory
 		const BYTE* artSrc;
 		LONG artSrcPitch;
@@ -1196,6 +1267,10 @@ namespace Twin
 		LONGLONG replayUs;
 		DWORD replayMaxUs;
 		DWORD lastReplayUs;
+		// render thread: time between two Draw calls that had frames to show
+		DWORD showHist[COST_HIST];
+		DWORD showGapMaxUs;
+		LONGLONG showQpc;
 		DWORD artDraws;
 		DWORD artFallbacks;
 		DWORD artCalls;
@@ -1400,9 +1475,36 @@ namespace Twin
 #pragma endregion
 
 #pragma region Record
+	// Twin.Mode=off (or DGL_TWIN_MODE=off), or no 4K pack next to the game: no twins at all, the wrapper runs as it did before them
+	BOOL Wanted()
+	{
+		static INT wanted = -1;
+		if (wanted < 0)
+		{
+			CHAR value[16], fallback[] = "seed";
+			Config::Get("Twin", "Mode", fallback, value, sizeof(value));
+			const CHAR* origin = "Twin.Mode";
+			CHAR env[16];
+			DWORD length = GetEnvironmentVariable("DGL_TWIN_MODE", env, sizeof(env));
+			if (length && length < sizeof(env))
+			{
+				StrCopy(value, env);
+				origin = "DGL_TWIN_MODE";
+			}
+			BOOL off = !StrCompareInsensitive(value, "off");
+			BOOL pack = ImageReplace::PackPresent();
+			wanted = !off && pack;
+			if (off)
+				DebugLog("twin off (%s=off): no twins, no trap, no tile check, no seeding; the pixel buffer is uploaded as before twins", origin);
+			else if (!pack)
+				DebugLog("twin off: no 4K pack (gamenames-v1.galleanpack or assets-v1.galleanpack) next to the game, so twins would only cost time");
+		}
+		return wanted;
+	}
+
 	BOOL Active()
 	{
-		return config.renderer != RendererGDI && config.gl.version.value >= GL_VER_3_0 && config.bpp32Hooked && !config.type.editor;
+		return config.renderer != RendererGDI && config.gl.version.value >= GL_VER_3_0 && config.bpp32Hooked && !config.type.editor && Wanted();
 	}
 
 	List* CurrentList()
@@ -1753,6 +1855,7 @@ namespace Twin
 
 	VOID Repair(Record* twin, DWORD id, const RECT* rect, DWORD tiles, BOOL present)
 	{
+		Cost cost(CostTile);
 		SeedWrite(twin, rect);
 		DropRegions(twin, rect);
 		Upload(twin, id, rect);
@@ -1783,6 +1886,7 @@ namespace Twin
 
 	VOID Verify(Record* twin, DWORD id, const RECT* rect, const RECT* skip, DWORD skipCount, BOOL present)
 	{
+		Cost cost(CostTile);
 		if (!game.tileCheck || !twin->mirror)
 			return;
 
@@ -1842,6 +1946,7 @@ namespace Twin
 
 	VOID MirrorCopy(Record* target, const RECT* to, const Record* source, const RECT* from, BOOL keyed, DWORD key)
 	{
+		Cost cost(CostMirror);
 		if (!target->mirror)
 			return;
 
@@ -1885,6 +1990,7 @@ namespace Twin
 
 	VOID MirrorFill(Record* twin, const RECT* rect, DWORD color)
 	{
+		Cost cost(CostMirror);
 		if (!twin->mirror)
 			return;
 
@@ -1936,6 +2042,7 @@ namespace Twin
 
 	Record* Find(StateBuffer* buffer, DWORD* id)
 	{
+		Cost cost(CostLookup);
 		if (!buffer)
 			return NULL;
 
@@ -1945,10 +2052,21 @@ namespace Twin
 			return &game.twins[game.lastOwner];
 		}
 
+		// every copy, lock and unlock looks up its surfaces; the slot only remembers, the owner check decides
+		DWORD slot = ((DWORD)buffer >> 4) & (FIND_CACHE - 1);
+		DWORD cached = game.findCache[slot];
+		if (cached < game.top && game.twins[cached].owner == buffer)
+		{
+			game.lastOwner = cached;
+			*id = cached;
+			return &game.twins[cached];
+		}
+
 		for (DWORD i = 0; i < game.top; ++i)
 			if (game.twins[i].owner == buffer)
 			{
 				game.lastOwner = i;
+				game.findCache[slot] = i;
 				*id = i;
 				return &game.twins[i];
 			}
@@ -2008,6 +2126,7 @@ namespace Twin
 
 	VOID DrainSync()
 	{
+		Cost cost(CostMirror);
 		for (DWORD i = 0; i < game.syncCount; ++i)
 		{
 			Record* twin = &game.twins[game.syncs[i].id];
@@ -2114,12 +2233,17 @@ namespace Twin
 		if (!SeedMode())
 			LoadIndex();
 
+		// it has repaired nothing in any logged run, and its mirrors copy every pixel the twins see a second time; off, no twin gets a mirror
+		game.tileCheck = Config::Get("Twin", "TileCheck", 0) != 0;
 		CHAR env[8];
 		DWORD length = GetEnvironmentVariable("DGL_TWIN_TILECHECK", env, sizeof(env));
-		game.tileCheck = !(length && length < sizeof(env) && env[0] == '0');
+		if (length && length < sizeof(env))
+			game.tileCheck = env[0] != '0';
+		game.mirrors = game.tileCheck;
 		QueryPerformanceFrequency(&game.frequency);
 
-		DebugLog("twin scale N=%d screen %dx%d mode %dx%d tile check %s", scale, screenW, screenH, width, height, game.tileCheck ? "on" : "off");
+		DebugLog("twin scale N=%d screen %dx%d mode %dx%d tile check %s (Twin.TileCheck), diagnostics %s (Twin.Diagnostics)", scale, screenW, screenH, width, height,
+			game.tileCheck ? "on" : "off, no CPU mirrors", Diagnostics() ? "on" : "off");
 		DebugLog("twin display config borders allowed %u active %u type %u | background allowed %u enabled %u | interpolation %u upscaling %u x%u | zoomed %u renderer %u gl %08X",
 			config.borders.allowed, config.borders.active, config.borders.type, config.background.allowed, config.background.enabled,
 			config.image.interpolation, config.image.upscaling, config.image.value, Config::IsZoomed(), config.renderer, config.gl.version.value);
@@ -2293,6 +2417,7 @@ namespace Twin
 
 	VOID ExpectArt(LONG frame, BOOL flipped, const RECT* place, const RECT* clip, const ArtPart* parts, DWORD count)
 	{
+		Cost cost(CostLookup);
 		if (!Active() || !place || !parts || !count || SeedMode())
 			return;
 
@@ -3279,6 +3404,7 @@ namespace Twin
 	VOID LearnArt(const VOID* data, LONG pitch, const RECT* rect, LONG frame, const RECT* canvas, LONG canvasWidth, LONG canvasHeight, BOOL flipped)
 	{
 		Timed timed("LearnArt");
+		Cost cost(CostLookup);
 		if (!Active() || SeedMode())
 			return;
 
@@ -3516,6 +3642,7 @@ namespace Twin
 	VOID OnMemory(const VOID* base, LONG pitch, LONG width, LONG height)
 	{
 		Timed timed("OnMemory");
+		Cost cost(CostRecord);
 		if (!base || width <= 0 || height <= 0 || pitch < width || !Active())
 			return;
 
@@ -3593,6 +3720,7 @@ namespace Twin
 	VOID OnMemoryFree(const VOID* data)
 	{
 		Timed timed("OnMemoryFree");
+		Cost cost(CostRecord);
 		if (!data)
 			return;
 
@@ -3631,10 +3759,18 @@ namespace Twin
 			seeds.waitMs = (DWORD)max(0, min(wait, 2000));
 			wait = Config::Get("Twin", "SeedLoadWait", SEED_LOAD_WAIT_DEFAULT);
 			seeds.loadWaitMs = (DWORD)max(0, min(wait, 2000));
-			DebugLog("twin mode %s (%s=%s, seed wait %u ms): %s", seeds.seed ? "seed" : "match", origin, value, seeds.waitMs,
+			DebugLog("twin mode %s (%s=%s, seed wait %u ms): %s", !StrCompareInsensitive(value, "off") ? "off" : seeds.seed ? "seed" : "match", origin, value, seeds.waitMs,
 				seeds.seed ? "4K art is written where named 1x art is decoded; no expectations, regions, hash lookups or twin-index.bin" : "expectations, regions and the hash index identify art");
 		}
 		return seeds.seed;
+	}
+
+	BOOL Diagnostics()
+	{
+		static INT wanted = -1;
+		if (wanted < 0)
+			wanted = Config::Get("Twin", "Diagnostics", 0) != 0;
+		return wanted;
 	}
 
 	// the GPU check and the screenshots read back on the render thread; they run only on F12 unless asked for
@@ -3959,6 +4095,7 @@ namespace Twin
 	// returns 0 when nothing was recorded, 1 done, 2 deferred
 	DWORD SeedAt(Record* twin, DWORD id, const RECT* at, LONG pitch, SeedKind kind, const CHAR* label, const SeedPiece* pieces, DWORD count, const SeedConflict* conflicts, DWORD conflictCount, BOOL transfer)
 	{
+		Cost cost(CostSeed);
 		SeedCounters* c = &seeds.kinds[kind];
 		RECT rect = *at;
 		LONG width = rect.right - rect.left, height = rect.bottom - rect.top;
@@ -4059,6 +4196,8 @@ namespace Twin
 			SeedLog(transfer ? "transfer skipped: every piece fell outside the image" : "skipped: every piece fell outside the image", kind, label, twin, id, &rect, pitch, NULL, 0);
 			return 0;
 		}
+		if (!seeds.deriving)
+			++spent.frameSeeds;
 		if (seeds.deriving)
 			;
 		else if (transfer)
@@ -4128,6 +4267,7 @@ namespace Twin
 	// an unkeyed copy out of memory whose seed still waits for its art takes the waiting pieces along, so the 4K lands where the pixels went even after the source is reused
 	VOID SeedDerive(Record* target, DWORD dstId, const RECT* to, Record* source, const RECT* from, BOOL mirror)
 	{
+		Cost cost(CostSeed);
 		if (!source->seedCount || target == source)
 			return;
 		// a buffer that was presented is redrawn every frame; an offscreen surface of the screen's size (a full-screen background) takes the pieces
@@ -4200,6 +4340,7 @@ namespace Twin
 	VOID SeedArt(const VOID* first, LONG pitch, LONG width, LONG height, SeedKind kind, const CHAR* name, const SeedPiece* pieces, DWORD count, const SeedConflict* conflicts, DWORD conflictCount, const SeedSheetStats* sheet, BOOL memoryTwin)
 	{
 		Timed timed("SeedArt");
+		Cost cost(CostSeed);
 		if (!Active() || !SeedMode() || !first || width <= 0 || height <= 0 || (memoryTwin && pitch < width) || (DWORD)kind >= SeedKinds)
 			return;
 
@@ -4305,6 +4446,7 @@ namespace Twin
 
 	VOID DecodeSource(const VOID* data, LONG pitchField, BYTE trueColor, const RECT* rect)
 	{
+		Cost cost(CostSeed);
 		if (!xfer.depth || !data || !rect)
 			return;
 
@@ -4327,6 +4469,8 @@ namespace Twin
 			return "no frame name of the sheet is in the pack";
 		if (sheet->unmapped + sheet->additive == sheet->frames)
 			return "its frames are additive or not in the pack";
+		if (sheet->uncertain || sheet->wrongSize)
+			return "no piece could be placed with certainty (see image sheet uncertain)";
 		return "every part falls outside the sheet";
 	}
 
@@ -4700,6 +4844,23 @@ namespace Twin
 			twin->arrive.lockCaller, twin->arrive.lockOuter, twin->arrive.locks);
 	}
 
+	// a blitted part of a decode: the pieces that reach into it, clipped to it and moved into its coordinates; each piece's frame box moves with it, so its 4K stays where it was.
+	// The decode snapshot and the loader's own pieces both go through here
+	DWORD ClipPieces(const SeedPiece* pieces, DWORD count, const RECT* sub, SeedPiece* out)
+	{
+		DWORD n = 0;
+		for (DWORD i = 0; i < count; ++i)
+		{
+			SeedPiece p = pieces[i];
+			if (!IntersectRect(&p.to, &pieces[i].to, sub))
+				continue;
+			OffsetRect(&p.to, -sub->left, -sub->top);
+			OffsetRect(&p.place, -sub->left, -sub->top);
+			out[n++] = p;
+		}
+		return n;
+	}
+
 	DWORD XferSeed(Record* twin, DWORD id, LONG x, LONG y, const RECT* sub)
 	{
 		RECT rect = { x, y, x + sub->right - sub->left, y + sub->bottom - sub->top };
@@ -4715,16 +4876,7 @@ namespace Twin
 			xfer.subPieces = (SeedPiece*)MemoryAlloc(xfer.count * sizeof(SeedPiece));
 			xfer.subCap = xfer.subPieces ? xfer.count : 0;
 		}
-		DWORD n = 0;
-		for (DWORD i = 0; i < xfer.count && xfer.subPieces; ++i)
-		{
-			SeedPiece p = xfer.pieces[i];
-			if (!IntersectRect(&p.to, &xfer.pieces[i].to, sub))
-				continue;
-			OffsetRect(&p.to, -sub->left, -sub->top);
-			OffsetRect(&p.place, -sub->left, -sub->top);
-			xfer.subPieces[n++] = p;
-		}
+		DWORD n = xfer.subPieces ? ClipPieces(xfer.pieces, xfer.count, sub, xfer.subPieces) : 0;
 		return n ? SeedAt(twin, id, &rect, twin->pitch, (SeedKind)xfer.kind, xfer.name, xfer.subPieces, n, NULL, 0, TRUE) : 0;
 	}
 
@@ -4827,6 +4979,7 @@ namespace Twin
 			if (twin->arrive.failSeq != xfer.seq)
 			{
 				twin->arrive.failSeq = xfer.seq;
+				twin->arrive.failTries = 0;
 				++xfer.guardFails;
 				if (!quiet)
 					XferLogReject(via, reason, twin, id, at[bestK].x, at[bestK].y, &best, xfer.height);
@@ -4973,6 +5126,7 @@ namespace Twin
 
 	VOID XferResolve(BOOL final)
 	{
+		Cost cost(CostSeed);
 		static BOOL resolving;
 		if (!xfer.watchCount || resolving)
 			return;
@@ -5232,16 +5386,7 @@ namespace Twin
 				xfer.loaderCap = xfer.loaderPieces ? count : 0;
 			}
 			RECT sub = { ln->sx, ln->sy, ln->sx + width, ln->sy + height };
-			DWORD n = 0;
-			for (DWORD i = 0; i < count && xfer.loaderPieces; ++i)
-			{
-				SeedPiece p = ln->pieces[i];
-				if (!IntersectRect(&p.to, &ln->pieces[i].to, &sub))
-					continue;
-				OffsetRect(&p.to, -sub.left, -sub.top);
-				OffsetRect(&p.place, -sub.left, -sub.top);
-				xfer.loaderPieces[n++] = p;
-			}
+			DWORD n = xfer.loaderPieces ? ClipPieces(ln->pieces, count, &sub, xfer.loaderPieces) : 0;
 			pieces = xfer.loaderPieces;
 			count = n;
 			conflicts = NULL;
@@ -5415,6 +5560,7 @@ namespace Twin
 	VOID OnIndexedBlit(const BYTE* src, LONG srcPitch, const DWORD* palette, const DWORD* dst, LONG dstPitch, LONG width, LONG height, const DWORD* slot)
 	{
 		Timed timed("OnIndexedBlit");
+		Cost cost(CostSeed);
 		if (!src || !dst || !palette || width <= 0 || height <= 0 || !Active())
 			return;
 		DWORD noteId;
@@ -5465,6 +5611,7 @@ namespace Twin
 
 	VOID DecodeEnd()
 	{
+		Cost cost(CostSeed);
 		if (xfer.depth)
 			--xfer.depth;
 		if (xfer.depth)
@@ -5497,6 +5644,7 @@ namespace Twin
 
 	VOID OnLock(StateBuffer* buffer, const RECT* rect, DWORD caller, DWORD outer)
 	{
+		Cost cost(CostSeed);
 		if (!buffer || !Active())
 			return;
 
@@ -5519,6 +5667,7 @@ namespace Twin
 	VOID OnUnlock(StateBuffer* buffer)
 	{
 		Timed timed("OnUnlock");
+		Cost cost(CostSeed);
 		if (!buffer || !Active())
 			return;
 
@@ -5547,6 +5696,18 @@ namespace Twin
 		}
 		if (!xfer.valid || twin->arrive.xferSeq == xfer.seq)
 			return;
+		// the game locks some surfaces tens of thousands of times a second: one that cannot hold the decode, or whose guard already failed
+		// a few times for it, is not compared again for the same decode
+		if (twin->width < xfer.width || twin->height < xfer.height)
+		{
+			++xfer.unlockSmall;
+			return;
+		}
+		if (twin->arrive.failSeq == xfer.seq && ++twin->arrive.failTries > XFER_UNLOCK_RETRIES)
+		{
+			++xfer.unlockRetired;
+			return;
+		}
 
 		const Arrival* a = &twin->arrive;
 		BOOL during = a->lockSeq != xfer.seq;
@@ -5562,9 +5723,9 @@ namespace Twin
 		DebugLog("twin seed transfer since start: decodes %u (named %u, snapshot failed %u; BlitObject format byte 0: %u, 1: %u, other %u, no StoreDraw source %u) | locks %u unlocks %u (untwinned %u, memory twins %u, inside a decode %u) | tries %u: no decode %u, already taken %u, decoded there %u, stale %u, does not fit %u",
 			xfer.decodes, xfer.named, xfer.snapshotFailed, xfer.formatBytes[0], xfer.formatBytes[1], xfer.formatBytes[2], xfer.formatBytes[3],
 			xfer.locks, xfer.unlocks, xfer.unlocksUntwinned, xfer.unlocksMemory, xfer.unlocksInside, xfer.tries, xfer.noDecode, xfer.consumed, xfer.direct, xfer.stale, xfer.noFit);
-		DebugLog("twin seed transfer done: unlock with the decode during the lock %u, before the lock %u | inside the decode call %u | hooked write %u (watched %u) | surface created before the decode %u (watched %u) | first write trapped %u (watched %u, late %u) | indexed blit from the decode %u | rejected %u surfaces (blank %u, partial at the end %u, mostly matching but not a fresh surface %u), unlocks of much larger surfaces %u",
+		DebugLog("twin seed transfer done: unlock with the decode during the lock %u, before the lock %u | inside the decode call %u | hooked write %u (watched %u) | surface created before the decode %u (watched %u) | first write trapped %u (watched %u, late %u) | indexed blit from the decode %u | rejected %u surfaces (blank %u, partial at the end %u, mostly matching but not a fresh surface %u), unlocks of much larger surfaces %u, not compared: smaller than the decode %u, guard failed %u times already %u",
 			xfer.byDuring, xfer.byBefore, xfer.byInside, xfer.byWrite, xfer.watches, xfer.byCreated, xfer.createdWatches, xfer.byTrap, xfer.trapWatches, xfer.trapLate, xfer.byIndexed,
-			xfer.guardFails, xfer.blank, xfer.partialExpired, xfer.weakTolerant, xfer.unlockLarge);
+			xfer.guardFails, xfer.blank, xfer.partialExpired, xfer.weakTolerant, xfer.unlockLarge, xfer.unlockSmall, XFER_UNLOCK_RETRIES, xfer.unlockRetired);
 		DebugLog("twin seed transfer guard since start: exact rgb32 %u bgr32 %u 565 %u indices %u palette %u | tolerant 565 %u indices %u palette %u | indexed blits %u: from the decode %u (part of it %u, no surface twin %u), into the decode %u, other sources %u, dropped inside a decode %u",
 			xfer.exact[GuardRgb], xfer.exact[GuardBgr], xfer.exact[Guard565], xfer.exact[GuardIndexed], xfer.exact[GuardPalette], xfer.tolerant[Guard565], xfer.tolerant[GuardIndexed], xfer.tolerant[GuardPalette],
 			xfer.indexed, xfer.indexedFromDecode, xfer.indexedPartial, xfer.indexedNoTwin, xfer.indexedIntoDecode, xfer.indexedOther, xfer.indexedInsideDropped);
@@ -5579,7 +5740,8 @@ namespace Twin
 		if (!trap.chosen)
 		{
 			trap.chosen = TRUE;
-			trap.wanted = Config::Get("Twin", "WriteTrap", 1) != 0;
+			// it named no game writer in the 18:27 run but faulted on our own writes and re-armed pages every second; on demand only
+			trap.wanted = Config::Get("Twin", "WriteTrap", 0) != 0 && Wanted();
 		}
 		return trap.wanted;
 	}
@@ -5785,6 +5947,10 @@ namespace Twin
 
 	VOID Note(Record* twin, DWORD kind, const RECT* rect, DWORD src)
 	{
+		// GameCaller scans the stack on every copy, fill and write; the notes only feed log lines
+		if (kind != NoteTrap && !Diagnostics())
+			return;
+		Cost cost(CostDiag);
 		Arrival* a = &twin->arrive;
 		WriteNote* n = &a->notes[a->noteHead++ % WRITE_RING];
 		n->kind = kind;
@@ -6082,6 +6248,7 @@ namespace Twin
 
 	VOID TrapAttach(Record* twin, DWORD id)
 	{
+		Cost cost(CostTrap);
 		if (!twin->owner->isPaged || twin->memory || ((DWORD)twin->base & (TRAP_PAGE - 1)))
 		{
 			++trap.notPaged;
@@ -6124,6 +6291,7 @@ namespace Twin
 
 	VOID TrapDetach(DWORD id)
 	{
+		Cost cost(CostTrap);
 		TrapRange* r = &trap.ranges[id];
 		const BYTE* start = r->start;
 		if (!start)
@@ -6138,6 +6306,7 @@ namespace Twin
 	// a write of ours is about to happen there: those pages open, so it costs one call instead of a fault per page
 	VOID TrapOpen(Record* twin, const RECT* rect)
 	{
+		Cost cost(CostTrap);
 		DWORD id = DWORD(twin - game.twins);
 		if (id >= TWIN_MAX || trap.noOpen)
 			return;
@@ -6189,6 +6358,7 @@ namespace Twin
 	// at the next twin call that drains, so after the hooked write that opened the pages has finished
 	VOID TrapReopen()
 	{
+		Cost cost(CostTrap);
 		DWORD count = trap.reopenCount;
 		trap.reopenCount = 0;
 		for (DWORD i = 0; i < count; ++i)
@@ -6215,6 +6385,7 @@ namespace Twin
 
 	VOID TrapRearm(DWORD now)
 	{
+		Cost cost(CostTrap);
 		if (!trap.on)
 			return;
 		if (now - trap.windowTick >= 1000)
@@ -6657,6 +6828,7 @@ namespace Twin
 
 	VOID TrapDrain()
 	{
+		Cost cost(CostTrap);
 		if (trap.draining)
 			return;
 		trap.draining = TRUE;
@@ -6759,6 +6931,9 @@ namespace Twin
 
 	VOID CountCoverage(Record* source, const RECT* from)
 	{
+		if (!Diagnostics())
+			return;
+		Cost cost(CostDiag);
 		LONG px = Area(from);
 		ScreenCover* screen = screens.current ? &screens.list[screens.current - 1] : NULL;
 		if (!source)
@@ -6941,6 +7116,7 @@ namespace Twin
 	VOID OnCreate(StateBuffer* buffer, LONG width, LONG height)
 	{
 		Timed timed("OnCreate");
+		Cost cost(CostRecord);
 		if (!Active() || !buffer || !buffer->data || width <= 0 || height <= 0)
 			return;
 
@@ -7005,10 +7181,10 @@ namespace Twin
 		twin->seedCount = 0;
 		twin->coverPx = twin->coverCopies = 0;
 		MemoryZero(&twin->arrive, sizeof(twin->arrive));
-		twin->mirror = (DWORD*)MemoryAlloc(width * height * sizeof(DWORD));
+		twin->mirror = game.mirrors ? (DWORD*)MemoryAlloc(width * height * sizeof(DWORD)) : NULL;
 		if (twin->mirror)
 			MemoryCopy(twin->mirror, twin->base, width * height * sizeof(DWORD));
-		else if (game.fails < LOG_FAILS)
+		else if (game.mirrors && game.fails < LOG_FAILS)
 		{
 			++game.fails;
 			DebugLog("twin mirror %dx%d buffer %08X: out of memory, tile check off for it", width, height, buffer);
@@ -7034,6 +7210,7 @@ namespace Twin
 	VOID GroundArt(const VOID* data, LONG pitch, const RECT* rect, const VOID* ops, DWORD bytes)
 	{
 		Timed timed("GroundArt");
+		Cost cost(CostRecord);
 		if (!Active() || !data || !rect || !ops || !bytes)
 			return;
 
@@ -7111,6 +7288,7 @@ namespace Twin
 	VOID OnRelease(StateBuffer* buffer)
 	{
 		Timed timed("OnRelease");
+		Cost cost(CostRecord);
 		DrainSync();
 
 		DWORD id;
@@ -7126,6 +7304,13 @@ namespace Twin
 
 	VOID TraceBegin(const CHAR* name, DWORD mode, BOOL mirror)
 	{
+		art.reason = "no art lookup";
+		art.drew = FALSE;
+		if (!Diagnostics())
+		{
+			trace.name = NULL;
+			return;
+		}
 		MemoryZero(&trace, sizeof(trace));
 		trace.name = name;
 		trace.mode = mode;
@@ -7137,7 +7322,7 @@ namespace Twin
 
 	VOID TraceEnd()
 	{
-		if (index.traceLogs >= TRACE_LOGS || !((trace.source && trace.source->memory) || (trace.target && trace.target->memory)))
+		if (!trace.name || index.traceLogs >= TRACE_LOGS || !((trace.source && trace.source->memory) || (trace.target && trace.target->memory)))
 			return;
 
 		++index.traceLogs;
@@ -7174,6 +7359,7 @@ namespace Twin
 	// which twin, rect and game code filled a surface, and how that source itself got those pixels
 	VOID CopyInRecord(Record* target, DWORD dstId, const RECT* to, Record* source, DWORD srcId, const RECT* from, BOOL keyed)
 	{
+		Cost cost(CostDiag);
 		Arrival* a = &target->arrive;
 		if (source->arrive.known[0] && source != target)
 			MemoryCopy(a->known, source->arrive.known, sizeof(a->known));
@@ -7237,6 +7423,7 @@ namespace Twin
 	VOID OnCopy(StateBuffer* dst, LONG x, LONG y, StateBuffer* src, const RECT* srcRect, BOOL keyed, DWORD key)
 	{
 		Timed timed("OnCopy");
+		Cost cost(CostRecord);
 		DWORD caller = game.copyCaller, outer = game.copyOuter;
 		game.copyCaller = game.copyOuter = 0;
 		if (!Active() || !srcRect)
@@ -7335,7 +7522,7 @@ namespace Twin
 		FlushRegion(source, srcId, &from);
 		Verify(source, srcId, &from, NULL, 0, FALSE);
 		CountCoverage(source, &from);
-		if (source != target)
+		if (source != target && Diagnostics())
 		{
 			if (Carries4K(source, &from))
 				++target->arrive.in4K;
@@ -7455,6 +7642,7 @@ namespace Twin
 	VOID OnFill(StateBuffer* dst, const RECT* rect, DWORD color)
 	{
 		Timed timed("OnFill");
+		Cost cost(CostRecord);
 		if (!Active())
 			return;
 
@@ -7521,6 +7709,7 @@ namespace Twin
 	VOID OnWrite(const VOID* first, LONG pitch, LONG width, LONG height)
 	{
 		Timed timed("OnWrite");
+		Cost cost(CostRecord);
 		if (!first || width <= 0 || height <= 0 || !Active())
 			return;
 
@@ -7565,6 +7754,7 @@ namespace Twin
 	VOID OnWriteAll(StateBuffer* buffer)
 	{
 		Timed timed("OnWriteAll");
+		Cost cost(CostRecord);
 		if (!Active())
 			return;
 
@@ -7595,6 +7785,7 @@ namespace Twin
 	VOID OnPixelCopy(PixelMode mode, const DWORD* src, LONG srcPitch, const DWORD* dst, LONG dstPitch, LONG width, LONG height, DWORD key, DWORD param)
 	{
 		Timed timed("OnPixelCopy");
+		Cost cost(CostRecord);
 		if (!dst || !src || width <= 0 || height <= 0 || (DWORD)mode >= PIXEL_MODES || !Active())
 			return;
 
@@ -7767,6 +7958,7 @@ namespace Twin
 	VOID OnFillRect(const DWORD* first, LONG pitch, LONG width, LONG height, DWORD color)
 	{
 		Timed timed("OnFillRect");
+		Cost cost(CostRecord);
 		if (!first || width <= 0 || height <= 0 || !Active())
 			return;
 
@@ -7785,6 +7977,7 @@ namespace Twin
 	VOID OnTintRect(const DWORD* first, LONG pitch, LONG width, LONG height, DWORD color, DWORD weight)
 	{
 		Timed timed("OnTintRect");
+		Cost cost(CostRecord);
 		if (!first || width <= 0 || height <= 0 || !weight || !Active())
 			return;
 
@@ -7819,6 +8012,7 @@ namespace Twin
 	VOID OnBlendRow(const DWORD* src, const DWORD* dst, LONG length, const BYTE* mask, BOOL keyed, DWORD key)
 	{
 		Timed timed("OnBlendRow");
+		Cost cost(CostRecord);
 		if (!src || !dst || !mask || length <= 0 || !Active())
 			return;
 
@@ -7911,6 +8105,7 @@ namespace Twin
 	VOID OnLighter(const DWORD* first, LONG pitch, LONG width, LONG height, DWORD key, BOOL lighten)
 	{
 		Timed timed("OnLighter");
+		Cost cost(CostRecord);
 		if (!first || width <= 0 || height <= 0 || !Active())
 			return;
 
@@ -8027,10 +8222,14 @@ namespace Twin
 		}
 	}
 
+	VOID LogCosts(DWORD elapsed);
+
 	VOID LogInterval(DWORD now)
 	{
+		Cost cost(CostDiag);
 		DWORD elapsed = now - game.logTick;
 		game.logTick = now;
+		LogCosts(elapsed);
 
 		Lock();
 		DWORD replays = shared.replays;
@@ -8147,11 +8346,136 @@ namespace Twin
 		MemoryZero(&game.interval, sizeof(Counters));
 	}
 
+	DWORD CostBucket(LONGLONG ms)
+	{
+		DWORD k = 0;
+		while (k < COST_HIST - 1 && ms >= (LONGLONG)costHistMs[k])
+			++k;
+		return k;
+	}
+
+	DWORD CostUs(ULONGLONG cycles)
+	{
+		return spent.tscPerMs ? DWORD(cycles * 1000 / spent.tscPerMs) : 0;
+	}
+
+	// closes the frame that ends at this present: the twin and image time it took, the interval since the last present, and a line for a hitch
+	VOID CostPresent()
+	{
+		LARGE_INTEGER q;
+		QueryPerformanceCounter(&q);
+		ULONGLONG now = __rdtsc();
+		if (!spent.thread)
+		{
+			spent.thread = __readfsdword(0x24);
+			spent.mark = now;
+			spent.lastQpc = q.QuadPart;
+			spent.calTsc = now;
+			spent.calQpc = q.QuadPart;
+			return;
+		}
+		LONGLONG frequency = game.frequency.QuadPart ? game.frequency.QuadPart : 1;
+		if (q.QuadPart - spent.calQpc >= frequency / 4)
+		{
+			spent.tscPerMs = (now - spent.calTsc) / (ULONGLONG)max((q.QuadPart - spent.calQpc) * 1000 / frequency, 1LL);
+			spent.calTsc = now;
+			spent.calQpc = q.QuadPart;
+		}
+
+		spent.acc[spent.cur] += now - spent.mark;
+		spent.mark = now;
+		ULONGLONG total = 0;
+		for (DWORD k = CostNone + 1; k < CostKinds; ++k)
+		{
+			total += spent.acc[k];
+			spent.sum[k] += spent.acc[k];
+			if (spent.acc[k] > spent.max[k])
+				spent.max[k] = spent.acc[k];
+		}
+		spent.totalSum += total;
+		if (total > spent.totalMax)
+			spent.totalMax = total;
+
+		LONGLONG interval = q.QuadPart - spent.lastQpc;
+		spent.lastQpc = q.QuadPart;
+		spent.intervalSum += interval;
+		if (interval > spent.intervalMax)
+			spent.intervalMax = interval;
+		LONGLONG ms = interval * 1000 / frequency;
+		++spent.hist[CostBucket(ms)];
+		++spent.presents;
+
+		if (ms >= HITCH_MS)
+		{
+			++spent.hitches;
+			if (spent.hitchLogs < HITCH_LOGS && spent.hitchLogsTotal < HITCH_LOG_TOTAL)
+			{
+				++spent.hitchLogs;
+				++spent.hitchLogsTotal;
+				CHAR parts[400];
+				CHAR* at = parts;
+				*at = 0;
+				for (DWORD k = CostNone + 1; k < CostKinds; ++k)
+					if (CostUs(spent.acc[k]) >= 100)
+						at += StrPrint(at, " %s %u.%u", costNames[k], CostUs(spent.acc[k]) / 1000, CostUs(spent.acc[k]) % 1000 / 100);
+				const Counters* c = game.list ? &game.list->counters : NULL;
+				DWORD slowUs = CostUs(spent.frameSlowCycles);
+				DebugLog("twin hitch: present interval %u ms at frame %u | twin and image code %u.%u ms:%s | slowest call %s %u.%u ms | this frame: seeds %u, uploads %u (%u Kpx), copies %u, fills %u, ground blits %u (%s)",
+					(DWORD)ms, game.frameNo, CostUs(total) / 1000, CostUs(total) % 1000 / 100, *parts ? parts : " none", spent.frameSlowName ? spent.frameSlowName : "none",
+					slowUs / 1000, slowUs % 1000 / 100, spent.frameSeeds, c ? c->uploads : 0, c ? c->pixels / 1000 : 0, c ? c->copies : 0, c ? c->fills : 0, spent.frameGround,
+					spent.frameGround ? "the map view was drawn" : "no map drawing");
+			}
+		}
+
+		MemoryZero(spent.acc, sizeof(spent.acc));
+		spent.frameSlowCycles = 0;
+		spent.frameSlowName = NULL;
+		spent.frameSeeds = spent.frameGround = 0;
+	}
+
+	VOID LogCosts(DWORD elapsed)
+	{
+		if (!spent.presents)
+			return;
+		LONGLONG frequency = game.frequency.QuadPart ? game.frequency.QuadPart : 1;
+		CHAR text[700];
+		CHAR* at = text;
+		*at = 0;
+		for (DWORD k = CostNone + 1; k < CostKinds; ++k)
+		{
+			DWORD avg = CostUs(spent.sum[k] / spent.presents), top = CostUs(spent.max[k]);
+			at += StrPrint(at, " %s %u.%03u/%u.%03u;", costNames[k], avg / 1000, avg % 1000, top / 1000, top % 1000);
+		}
+		DWORD avg = CostUs(spent.totalSum / spent.presents), top = CostUs(spent.totalMax);
+		DWORD intervalAvgUs = DWORD(spent.intervalSum * 1000000 / frequency / spent.presents), intervalMaxUs = DWORD(spent.intervalMax * 1000000 / frequency);
+		DWORD share = spent.intervalSum ? DWORD(CostUs(spent.totalSum) * 1000ULL / (DWORD)max(spent.intervalSum * 1000000 / frequency, 1LL)) : 0;
+		DebugLog("twin game-thread cost %ums: presents %u, interval avg %u.%03u max %u.%03u ms (<17 %u, <33 %u, <50 %u, <100 %u, >=100 %u; hitches %u) | ms per present avg/max:%s total %u.%03u/%u.%03u (%u.%u%% of the game thread)",
+			elapsed, spent.presents, intervalAvgUs / 1000, intervalAvgUs % 1000, intervalMaxUs / 1000, intervalMaxUs % 1000, spent.hist[0], spent.hist[1], spent.hist[2], spent.hist[3], spent.hist[4],
+			spent.hitches, text, avg / 1000, avg % 1000, top / 1000, top % 1000, share / 10, share % 10);
+		MemoryZero(spent.sum, sizeof(spent.sum));
+		MemoryZero(spent.max, sizeof(spent.max));
+		MemoryZero(spent.hist, sizeof(spent.hist));
+		spent.totalSum = spent.totalMax = 0;
+		spent.intervalSum = spent.intervalMax = 0;
+		spent.presents = spent.hitches = spent.hitchLogs = 0;
+
+		Lock();
+		DWORD shows[COST_HIST];
+		MemoryCopy(shows, shared.showHist, sizeof(shows));
+		MemoryZero(shared.showHist, sizeof(shared.showHist));
+		DWORD showMaxUs = shared.showGapMaxUs;
+		shared.showGapMaxUs = 0;
+		Unlock();
+		DebugLog("twin render show interval %ums: <17 %u, <33 %u, <50 %u, <100 %u, >=100 %u | max %u.%03u ms", elapsed, shows[0], shows[1], shows[2], shows[3], shows[4], showMaxUs / 1000, showMaxUs % 1000);
+	}
+
 	VOID OnPresent(StateBuffer* screen, LONG left, LONG top)
 	{
 		Timed timed("OnPresent");
 		if (!Active())
 			return;
+		CostPresent();
+		Cost cost(CostRecord);
 
 		Sync();
 		DWORD screenId;
@@ -8181,7 +8505,7 @@ namespace Twin
 		if (down && !game.tileKeyDown)
 		{
 			game.tileCheck = !game.tileCheck;
-			DebugLog("twin tile check %s", game.tileCheck ? "on" : "off");
+			DebugLog("twin tile check %s%s", game.tileCheck ? "on" : "off", game.tileCheck && !game.mirrors ? " (no effect: Twin.TileCheck=0 at start, so no twin has a CPU mirror)" : "");
 			if (game.tileCheck)
 			{
 				for (DWORD i = 0; i < game.top; ++i)
@@ -10475,11 +10799,24 @@ namespace Twin
 		if (shared.state != 2)
 			return FALSE;
 
+		LARGE_INTEGER showAt;
+		QueryPerformanceCounter(&showAt);
 		Lock();
 		List* lists = shared.head;
 		shared.head = shared.tail = NULL;
 		shared.queued = 0;
 		shared.bytes = 0;
+		if (lists && game.frequency.QuadPart)
+		{
+			if (shared.showQpc)
+			{
+				LONGLONG us = (showAt.QuadPart - shared.showQpc) * 1000000 / game.frequency.QuadPart;
+				++shared.showHist[CostBucket(us / 1000)];
+				if (us > (LONGLONG)shared.showGapMaxUs)
+					shared.showGapMaxUs = (DWORD)us;
+			}
+			shared.showQpc = showAt.QuadPart;
+		}
 		Unlock();
 
 		if (!lists && !gl.shown.valid)

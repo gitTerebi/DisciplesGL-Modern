@@ -10,14 +10,18 @@ This page describes the `seed` mode of the twin renderer. It replaces the old wa
 
 | Key | Values | Default |
 |---|---|---|
-| `Mode` | `seed`, `match` | `seed` |
+| `Mode` | `seed`, `match`, `off`. `off`: `Twin::Active()` is FALSE, so there are no twins, no trap, no tile check, no `StoreDraw` or record-read work, and the renderer uploads the pixel buffer as it did before twins | `seed` |
+| `TileCheck` | `1` gives every twin a CPU mirror and compares it with the surface at each copy source and present, repairing tiles the hooks missed; `0` makes no mirrors at all | 0 |
+| `Diagnostics` | `1` keeps the per-copy write notes (each one scans the stack for the game caller), copy-in and arrival records, coverage tables and copy traces; `0` skips them | 0 |
 | `SeedWait` | ms the game thread may wait at one decode for the pack worker to decode its art (0 to 2000). 0: it never waits, the seed is deferred and lands when the art arrives (see Streaming) | 0 |
 | `SeedLoadWait` | ms a decode may wait while the game is loading, that is when no present came for more than 100 ms (0 to 2000) | 100 |
-| `WriteTrap` | `1` keeps the pages of every offscreen surface read-only until the game's first write, to name the code that writes it (see First-write trap); `0` off | 1 |
+| `WriteTrap` | `1` keeps the pages of every offscreen surface read-only until the game's first write, to name the code that writes it (see First-write trap); `0` off | 0 |
 | `TrapCopy` | `1` replays a trapped `rep movs` from one twin into another as a twin copy when the 1x rows are equal (see Map view) | 1 |
 | `GpuCheck` | `1` runs the GPU check every 5 s and takes the screenshots 15 s after the first seed, as before; `0` only on F12 | 0 |
 
-The environment variable `DGL_TWIN_MODE=match` overrides the ini. The first log line names the mode and where it came from: `twin mode seed (Twin.Mode=seed, seed wait 0 ms)`.
+The environment variable `DGL_TWIN_MODE=match` (or `off`) overrides the ini, and `DGL_TWIN_TILECHECK=0|1` overrides `TileCheck`. The first log line names the mode and where it came from: `twin mode seed (Twin.Mode=seed, seed wait 0 ms)`. Twins also turn off when no 4K pack (`gamenames-v1.galleanpack` or `assets-v1.galleanpack`) is next to the game; `twin off: ...` says which reason applies, once. `twin scale ...` names the tile check and diagnostics state.
+
+Why these defaults: the tile check repaired 0 tiles in every logged run, while its mirrors copy every pixel the twins see a second time and it compares tiles at every copy source and present (0.15 to 0.25 ms per present in the 18:27 run, at about 235 presents a second). The trap named no game writer in the 18:27 run, but faulted 3311 times on our own writes and re-armed up to 1807 pages a second through `VirtualProtect`. The diagnostics scan up to 96 stack slots per copy for the write note, at about 85000 copies a second. Ctrl+F11 only toggles the check on twins that have a mirror, so with `TileCheck=0` at start it has no effect.
 
 `match` is the old path and is unchanged, so the two modes can be compared. It is due for removal in the next round.
 
@@ -266,6 +270,63 @@ No new game hook is needed: `StoreDraw` is the loader, and it is hooked in every
 - **Per screen.** Each large plain image (at least 480x480, not a sheet) that `StoreDraw` decodes names the current screen (`Twin::ScreenLabel`). Every copy is counted under that screen, 4K px against 1x px, in `twin coverage per screen since start` (24 screens; the one with the fewest px makes room).
 - **Names of 1x sources.** Every twin keeps the latest named image that reached it (`Arrival.known`), whether seeded into it or carried in by a copy. The coverage list shows the store name or, marked `~`, that name.
 
+## The unit card portrait (18:27 run)
+
+### What the run showed
+
+The unit card (`_PG0500IX.PNG`, 710x564) showed its portrait, `G000UU5017.PNG` 301x364 (`Events.ff`, record 2747), in 4K but with its blocks out of order: horizontal bands of the face stacked in the wrong order, as the packed sheet holds them.
+
+- The portrait did not take the new loader-pieces path. The run has `by loader pieces: seeded 0`: every loader seed went through the decode snapshot. The portrait's `twin seed #228 sheet transfer` into twin 4 came from the guarded snapshot path (the hooked write after the decode), and twin 134, the 301x364 surface the game copies it to, took the pending pieces by `SeedDerive`. The 17:48 run (before 1bc60e4) seeded it the same way, with the same 14 pieces of pack frame 479.
+- The loader path and the snapshot path place a blitted part the same way: the pieces are clipped to the part, and both their sheet rect and their frame box move by the part's origin. Both now go through `Twin::ClipPieces`.
+- `SheetPieces` follows Gallean's `ImagesExtractor`: a part is `{canvas x, canvas y, sheet x, sheet y, w, h}` (Gallean's `SourceX/Y` is the canvas, `DestX/Y` the sheet), and the frame's 4K is placed at `sheet - canvas` (plus the pack offset, or half the canvas for centre origins). The math matches the extractor. What it cannot know is what the pack entry holds.
+
+### Cause (suspected)
+
+The pack entry the frame resolves to may hold the file's own layout, not the frame's canvas. The user's pack is `gamenames-v1` (DLG frames resolve in it; the assets pack has no names for them), which keys entries by game name with a canvas origin. The portrait's only frame is named like its file, so `PackFrameFor` finds the entry `G000UU5017`. `PlainFrame`/`StoreFrame` read that same entry as the file itself, the identity layout, while `SheetPieces` reads it as the frame's canvas. Both readings fit geometrically, since the canvas is the size of the sheet. The parts reorder the sheet into strips, so at most one of the two readings is right. If the entry holds the file's layout, the sheet seed sends each strip the 4K of the strip that sits at its canvas place in the file. Once the game reassembles the parts, that shows the file's layout, which is what the screenshot shows. The 18:27 log has no piece list, so this is not confirmed. The next log shows it (see Checks).
+
+### Fix
+
+A sheet seed keeps only pieces it can place with certainty. Everything else stays 1x and is logged:
+
+- **Ambiguous pack entry.** With the gamenames pack, a frame whose pack entry is named like the sheet file (with or without `.PNG`), or found only through a name variant, and is the sheet's size, while its parts reorder the sheet, seeds nothing. The portrait is such a frame. A frame with a canvas of its own size, or whose parts keep their place, is not affected.
+- **Block of another sheet.** A `-IMAGES.OPT` block whose stored sheet size is not the decode's size is skipped. Gallean ties a block to its file by that size, and a clipped decode fails it too.
+- **Overlaps.** Two pieces whose sheet rects overlap without being the same block, and which do not take the same 4K there (same frame and frame box), are uncertain. Across frames the first keeps the overlap, as a shared block does; within one frame both are dropped. A block that one frame draws at two places is dropped too, since it can carry only one of them.
+- **Sheet rects** outside the decode were already left out (`parts outside`).
+
+### Checks
+
+- `image sheet pieces <file> ...`: the full piece list for the first 20 sheet seeds, and for every sheet with an uncertain piece (64 more). The header line has the frames, pieces, the dropped count and the pack. Then one line per frame (up to 12): the frame name, canvas, pack entry (and whether only a name variant matched), pack frame, size, offset, origin and `AMBIGUOUS`. Then the pieces, about 15 per line: `sheet x,y wxh->[frame]#pack frame canvas x,y place x,y`, with `DROPPED` for uncertain ones. Sheets are never flipped.
+- `image sheet checks since start` (every 5 s): pieces left 1x, blocks of another size, ambiguous frames, overlaps, double-placed blocks, sheets too big for the overlap check (over 1024 pieces).
+- The no-4K reason on a loader line or `twin decode without 4K` names the uncertain case.
+
+To confirm the cause, read the portrait's piece lines. If its pieces have `canvas` positions different from their sheet positions and its frame is `AMBIGUOUS`, the cause holds. Whether the gamenames pack stores such entries in file layout is a question for the pack builder. If it does, these frames can be seeded as plain images (identity) instead of left 1x.
+
+### Sheets with 0 pieces
+
+`G000UU0019HMOVA2A00.PNG` 577x590 (`BatUnits.ff`) is the attack aura layer (`A2`) of unit 0019, and every frame in it is additive. The same holds for `MRKCURSMALLA.PNG`, `DEATH_NEUTRAL_S10.PNG` and `G000UU9999DYIN8.PNG`. Their lines say `every frame is additive (aura or glow), which is not seeded`. `FOG.PNG` is not in the pack. All of this is by design (see Sheet construction).
+
+### 8-bit decodes get no memory twin
+
+Every `StoreDraw` decode is 8-bit (format byte 0). A small one used to fit the 32 bpp range and got a memory twin over the scratch, read at half its pitch, plus a seed into it (`twin seed #227 ... twin 129 memory ... pitch 576`). That twin is no image, and nothing copies out of it. Now every 8-bit decode is captured for the transfer only, as the big ones already were. This saves an upload and a seed per decode.
+
+## Game-thread cost and hitches
+
+With twins on, units moved at about half speed. The game thread is now measured by category, and the costly parts can be switched off.
+
+- **`Twin::Cost` scopes** charge rdtsc time to the innermost category: record (copies, fills, pixel ops, present), mirror (CPU mirror updates and syncs), tile check (verify, repair), seed (seeds, transfers, unlock compares, indexed blits), trap, lookup (twin lookup, match-mode art lookup), diagnostics (notes, copy-in, coverage, the 5 s logs) and image (`StoreDraw`'s work, ground, face copies). Only the game thread counts. The first present picks it.
+- `twin game-thread cost 5000ms` (every 5 s): presents, the present interval avg/max and its histogram (<17, <33, <50, <100, >=100 ms), hitches, and the avg/max ms per present of each category, then the total and its share of the game thread.
+- `twin hitch` (each present interval of 50 ms or more, at most 20 per 5 s and 400 in all): the interval, the twin and image time in that frame by category, the slowest call (`Timed`) and its time, the seeds, uploads (Kpx), copies and fills of the frame, and the ground blits (`the map view was drawn`, the scrolling signal).
+- `twin render show interval` (every 5 s): the render thread's time between two `Draw`s that had frames, as a histogram, and its max.
+
+Per-frame cost removed:
+
+- `WriteTrap`, `TileCheck` and `Diagnostics` default to 0 (see Switch).
+- An unlock of a surface smaller than the latest decode is not compared, and a surface whose guard already failed 4 times for a decode is not compared again for it. The 18:27 run had 4.9 million unlocks and 3.3 million transfer tries in 70 s. `twin seed transfer done` counts both cases.
+- Twin lookup by surface has a 256-slot cache in front of its linear search (about 200 twins, twice per copy).
+- The `.ff` handle table (1024 slots since 1bc60e4) is searched only up to its highest used slot. That search runs on every `ReadFile` and `CloseHandle` of the game.
+
+Still costly, and now measured: the transfer guard on the indexed blit of a big decode (`OnIndexedBlit` up to 16 ms), and `SeedLoadWait`. A decode after a present gap of more than 100 ms waits up to 100 ms for its 4K (max 101 ms in the 18:27 run). A hitch can then turn into a longer one.
+
 ## Streaming
 
 The game thread no longer waits for 4K (`SeedWait=0`). A seed whose art is not decoded yet is deferred: the 1x stays, and `SeedPoll` emits the pieces at a later present once the art is there. The only waits left are while the game is loading (`SeedLoadWait`, when no present came for more than 100 ms), at most 1 s in all between two presents.
@@ -403,6 +464,12 @@ Ground in seed mode therefore keeps `GroundArt`/`DrawGround` (`CmdGround`), exac
 | `twin seed streaming 5s` | every 5 s | deferred seeds, carried by copies, late landings with latency in frames and ms, frames still decoding or over the upload budget, pieces dropped by writes, waits while loading |
 | `twin replay per command 5s` / `twin replay slowest command 5s` | every 5 s | dispatches, total and max per command type; the slowest command |
 | `twin slow replay` | each replay over 50 ms, first 64 | the replay's time and its slowest command |
+| `twin off: ...` | once | twins are off: `Twin.Mode=off`, or no 4K pack |
+| `image sheet pieces <file> ...` | first 20 sheet seeds, then sheets with uncertain pieces (64) | frames, pack entries and the full piece list (see The unit card portrait) |
+| `image sheet checks since start` | every 5 s | pieces left 1x as uncertain, and why |
+| `twin game-thread cost 5000ms` | every 5 s | present interval histogram, ms per present by category, total |
+| `twin hitch` | each present interval of 50 ms or more (20 per 5 s) | the frame's twin time by category, slowest call, seeds, uploads, copies, ground blits |
+| `twin render show interval` | every 5 s | render-thread time between shows, as a histogram |
 
 The log rotates to `DisciplesGL-debug.log.old` at 8 MB, and `test.bat` ships it as `<game>-DisciplesGL-debug.old.log`. In the 14:58 run, Ctrl+F11 also started TextReplace's F11 trace, which flooded the log with `trace bltfast/lock/surface` lines, so the 2 MB rotation lost the first `twin seed #n` lines. Ctrl+F10/F11/F12 now reach only the twin toggles: no F11 trace, no F12 dump, and no BattleLoad bind (F10 remapped to Ctrl+L quick load).
 
@@ -423,4 +490,6 @@ The tile check (`twin tiles check`, `twin repair`), the GPU check (`twin check t
 7. **Additive frames**, the turn strip (`TurnOrder.cpp`) and ground tile textures are not seeded.
 8. **The seed draw assumes `StoreDraw` overwrites its rect.** If the game ever composites a store image onto existing content through `StoreDraw`, then 4K-transparent texels over opaque background 1x pixels come out transparent.
 9. **Streaming risks.** Pieces of a sheet now land over several presents, so a frame can briefly show a mix of 1x and 4K. A derived seed assumes the unkeyed copy replaced its rect; a later keyed copy or write over it drops the pieces it touches.
-10. **Trap risks.** A write into a trapped page from kernel mode (`ReadFile` into a surface, a GDI call writing it) fails with an error instead of faulting, so the trap would break it. No such path is known. The VEH also sees every exception in the process, but it returns at once for anything that is not a write AV inside a trapped page. Each fault costs a few microseconds; the page budget bounds it at about 2048 a second plus first writes. `WriteTrap=0` turns it off and goes back to heap-allocated surfaces.
+10. **Trap risks.** A write into a trapped page from kernel mode (`ReadFile` into a surface, a GDI call writing it) fails with an error instead of faulting, so the trap would break it. No such path is known. The VEH also sees every exception in the process, but it returns at once for anything that is not a write AV inside a trapped page. Each fault costs a few microseconds; the page budget bounds it at about 2048 a second plus first writes. `WriteTrap=0`, now the default, turns it off and goes back to heap-allocated surfaces.
+11. **The ambiguous-frame rule leaves 4K out.** Event portraits, and any other single frame named like its file whose parts reorder the sheet, stay 1x with the gamenames pack until the pack's layout for such entries is known.
+12. **No tile check by default.** A CPU write that no hook sees now stays on the GPU twin as stale pixels until the twin is next uploaded. In every logged run the check repaired nothing.

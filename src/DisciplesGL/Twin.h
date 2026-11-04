@@ -8,6 +8,17 @@ namespace Twin
 {
 	// game thread
 	BOOL Active();
+	// game-thread time inside twin and image code, per present and category; a scope charges its own time, not its callees' scopes
+	enum CostKind { CostNone, CostRecord, CostMirror, CostTile, CostSeed, CostTrap, CostLookup, CostDiag, CostImage, CostKinds };
+	struct Cost {
+		DWORD prev;
+		explicit Cost(DWORD kind);
+		~Cost();
+	};
+	// [Twin] Diagnostics=1: per-copy write notes and caller scans, copy-in and arrival records, coverage tables, copy traces
+	BOOL Diagnostics();
+	// a ground tile or border blit: the map view is being drawn, which scrolling does every frame
+	VOID CountGround();
 	VOID OnCreate(StateBuffer* buffer, LONG width, LONG height);
 	VOID OnRelease(StateBuffer* buffer);
 	VOID OnCopy(StateBuffer* dst, LONG x, LONG y, StateBuffer* src, const RECT* srcRect, BOOL keyed, DWORD key);
@@ -58,6 +69,10 @@ namespace Twin
 		DWORD additive;
 		DWORD outside;
 		DWORD shared;
+		// blocks whose sheet size is not the decode's, frames whose pack entry may be the file itself, pieces dropped as uncertain
+		DWORD wrongSize;
+		DWORD ambiguous;
+		DWORD uncertain;
 	};
 	// memoryTwin FALSE: an 8-bit decode whose 32 bpp reading runs past the scratch; it is only captured for the transfer, no memory twin is made over it
 	VOID SeedArt(const VOID* first, LONG pitch, LONG width, LONG height, SeedKind kind, const CHAR* name, const SeedPiece* pieces, DWORD count, const SeedConflict* conflicts, DWORD conflictCount, const SeedSheetStats* sheet, BOOL memoryTwin = TRUE);
