@@ -1401,6 +1401,13 @@ namespace Twin
 
 	ULONGLONG HashBlock(const DWORD* pixels, LONG pitch, LONG width, LONG height, DWORD key, BOOL* solid)
 	{
+		// a caller's geometry can come from a guessed pitch; never let a hash walk off the end of an allocation
+		if (width <= 0 || height <= 0 || pitch < width || IsBadReadPtr(pixels, ((height - 1) * pitch + width) * sizeof(DWORD)))
+		{
+			*solid = TRUE;
+			return 0;
+		}
+
 		DWORD h1 = 2166136261u, h2 = 0x9747B28Cu ^ (DWORD)(width * 31 + height);
 		DWORD first = ((pixels[0] & 0x00FFFFFF) == 0x00FF00FF || (pixels[0] & 0x00FFFFFF) == key) ? 0 : pixels[0] & 0x00FFFFFF;
 		BOOL same = TRUE;
