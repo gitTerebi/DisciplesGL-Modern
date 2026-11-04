@@ -4,6 +4,7 @@
 #include "Config.h"
 #include "GLib.h"
 #include "ImageReplace.h"
+#include "PngLib.h"
 
 #ifndef GL_CURRENT_PROGRAM
 #define GL_CURRENT_PROGRAM 0x8B8D
@@ -79,12 +80,16 @@
 #define UPGRADE_LOGS 32
 #define UNMATCHED_LOGS 16
 #define LOGS_FRAME 4
+#define SHOT_DELAY 15000
+#define SHOT_SCREEN_W 1600
+#define SHOT_SCREEN_H 1200
+#define SHOT_SHEET 2048
 
 namespace Twin
 {
 	enum CmdType { CmdCreate, CmdDestroy, CmdCopy, CmdFill, CmdUpload, CmdPresent, CmdReset, CmdArt };
 
-	enum PresentFlags { PresentMapZoom = 1, PresentBack = 2, PresentZoomed = 4, PresentCheck = 8 };
+	enum PresentFlags { PresentMapZoom = 1, PresentBack = 2, PresentZoomed = 4, PresentCheck = 8, PresentShot = 16 };
 
 	struct Cmd {
 		DWORD type;
@@ -234,6 +239,9 @@ namespace Twin
 		DWORD resetTick;
 		BOOL tileCheck;
 		BOOL tileKeyDown;
+		BOOL tintKeyDown;
+		BOOL shotRequest;
+		DWORD lastUpgrade;
 		DWORD frameNo;
 		DWORD repairsLogged;
 		DWORD frameRepairLogs;
@@ -272,6 +280,8 @@ namespace Twin
 		DWORD thrashLogs;
 		DWORD frameLogs;
 		BOOL checked;
+		DWORD firstTick;
+		BOOL shotTaken;
 	} art;
 
 	struct {
@@ -279,6 +289,7 @@ namespace Twin
 		volatile LONG state;
 		volatile LONG gen;
 		volatile BOOL show;
+		volatile BOOL tint;
 		volatile BOOL glFailed;
 		List* head;
 		List* tail;
@@ -296,6 +307,11 @@ namespace Twin
 		DWORD artDraws;
 		DWORD artFallbacks;
 		DWORD artRejected;
+		DWORD showOpaque;
+		DWORD showBack;
+		DWORD showInvalid;
+		DWORD showOff;
+		DWORD showOther;
 		CheckResult check;
 	} shared = { {}, 0, 0, TRUE, FALSE };
 
@@ -307,6 +323,8 @@ namespace Twin
 		GLint keyedLoc;
 		GLint keyLoc;
 		GLint artLoc;
+		GLint tintLoc;
+		GLint opaqueLoc;
 		GLint scaleLoc;
 		GLuint vao;
 		GLuint vbo;
@@ -336,6 +354,10 @@ namespace Twin
 		DWORD artFallbacks;
 		DWORD artRejected;
 		DWORD rejectLogs;
+		DWORD showOpaque;
+		DWORD showBack;
+		DWORD showInvalid;
+		DWORD showOther;
 		DWORD readFbo;
 		LARGE_INTEGER frequency;
 		struct {
@@ -525,19 +547,22 @@ namespace Twin
 		SetRect(&twin->dirty[0], 0, 0, twin->width, twin->height);
 	}
 
+	VOID Upload(Record* twin, DWORD id, const RECT* rect);
+
 	VOID Append(Record* twin, const RECT* rect)
 	{
-		if (twin->count < DIRTY_MAX)
+		if (twin->count == DIRTY_MAX)
 		{
-			twin->dirty[twin->count++] = *rect;
-			return;
+			// every earlier dirty write is complete, so flushing them now is exact; a bounding box would later wipe art copied in between
+			RECT pending[DIRTY_MAX];
+			DWORD count = twin->count;
+			MemoryCopy(pending, twin->dirty, count * sizeof(RECT));
+			twin->count = 0;
+			for (DWORD i = 0; i < count; ++i)
+				Upload(twin, DWORD(twin - game.twins), &pending[i]);
 		}
 
-		RECT bound = *rect;
-		for (DWORD i = 0; i < twin->count; ++i)
-			UnionRect(&bound, &bound, &twin->dirty[i]);
-		twin->count = 1;
-		twin->dirty[0] = bound;
+		twin->dirty[twin->count++] = *rect;
 	}
 
 	VOID MarkDirty(Record* twin, RECT rect)
@@ -844,7 +869,7 @@ namespace Twin
 		}
 	}
 
-	VOID FlushRegion(Record* twin, DWORD id, const RECT* rect)
+	VOID FlushRegion(Record* twin, DWORD id, const RECT* rect, BOOL whole = FALSE)
 	{
 		DWORD i = 0;
 		while (i < twin->count)
@@ -859,7 +884,7 @@ namespace Twin
 			RECT dirty = twin->dirty[i];
 			twin->dirty[i] = twin->dirty[--twin->count];
 
-			if (Area(&part) * 2 >= Area(&dirty))
+			if (whole || Area(&part) * 2 >= Area(&dirty))
 				Upload(twin, id, &dirty);
 			else
 			{
@@ -982,6 +1007,7 @@ namespace Twin
 			--scale;
 
 		game.scale = scale;
+		game.lastUpgrade = TWIN_NONE;
 
 		CHAR env[8];
 		DWORD length = GetEnvironmentVariable("DGL_TWIN_TILECHECK", env, sizeof(env));
@@ -989,6 +1015,9 @@ namespace Twin
 		QueryPerformanceFrequency(&game.frequency);
 
 		DebugLog("twin scale N=%d screen %dx%d mode %dx%d tile check %s", scale, screenW, screenH, width, height, game.tileCheck ? "on" : "off");
+		DebugLog("twin display config borders allowed %u active %u type %u | background allowed %u enabled %u | interpolation %u upscaling %u x%u | zoomed %u renderer %u gl %08X",
+			config.borders.allowed, config.borders.active, config.borders.type, config.background.allowed, config.background.enabled,
+			config.image.interpolation, config.image.upscaling, config.image.value, Config::IsZoomed(), config.renderer, config.gl.version.value);
 	}
 
 	VOID Release(Record* twin, DWORD id)
@@ -1256,6 +1285,9 @@ namespace Twin
 
 		++art.upgrades;
 		art.px += width * height;
+		game.lastUpgrade = id;
+		if (!art.firstTick)
+			art.firstTick = GetTickCount() | 1;
 		if (!art.checked)
 		{
 			art.checked = TRUE;
@@ -1431,6 +1463,7 @@ namespace Twin
 
 		if (!keyed)
 			Cover(target, &to);
+		FlushRegion(target, dstId, &to, TRUE);
 
 		RECT arts[ART_MAX + UPGRADE_MAX];
 		DWORD artCount = 0;
@@ -1490,6 +1523,7 @@ namespace Twin
 			return;
 
 		Cover(twin, &area);
+		FlushRegion(twin, id, &area, TRUE);
 		CoverArt(twin, &area);
 		DropUpgrades(twin, &area);
 
@@ -1646,11 +1680,16 @@ namespace Twin
 		DWORD artRejected = shared.artRejected;
 		shared.artDraws = shared.artFallbacks = shared.artRejected = 0;
 		CheckResult check = shared.check;
+		DWORD showOpaque = shared.showOpaque, showBack = shared.showBack, showInvalid = shared.showInvalid, showOffCount = shared.showOff, showOther = shared.showOther;
+		shared.showOpaque = shared.showBack = shared.showInvalid = shared.showOff = shared.showOther = 0;
 		Unlock();
 
 		DebugLog("twin art expected %u dup %u matched %u upgrades %u px %u skipped %u notready %u rejected place %u (replay %u) thrash %u blocked %u unmatched %u overflow %u | replayed %u fallbacks %u",
 			art.expected, art.duplicates, art.matched, art.upgrades, art.px, art.skipped, art.notReady, art.rejected, artRejected, art.thrashed, art.blocked, art.unmatched, art.overflow, artReplayed, artFallbacks);
 		art.expected = art.duplicates = art.matched = art.upgrades = art.px = art.skipped = art.notReady = art.rejected = art.thrashed = art.blocked = art.unmatched = art.overflow = 0;
+
+		DebugLog("twin show shown %u (opaque %u, over background %u) hidden: 1x toggle %u, invalid %u, other %u",
+			showOpaque + showBack, showOpaque, showBack, showOffCount, showInvalid, showOther);
 
 		if (check.valid)
 			DebugLog("twin gpu check %ums ago twin %u bad tiles %u/%u px %u art tiles %u (differ %u)", now - check.tick, check.twin, check.bad, check.tiles, check.px, check.art, check.artDiffer);
@@ -1673,6 +1712,8 @@ namespace Twin
 		DWORD now = GetTickCount();
 		if (!game.started)
 		{
+			StateBufferAligned* first = (StateBufferAligned*)screen;
+			DebugLog("twin first present buffer %08X isBack %u isZoomed %u borders %u size %ux%u", screen, first->isBack, first->isZoomed, first->borders, first->size.width, first->size.height);
 			game.started = TRUE;
 			game.logTick = now;
 			game.checkTick = now - CHECK_PERIOD + CHECK_FIRST;
@@ -1697,6 +1738,31 @@ namespace Twin
 						MarkAll(&game.twins[i]);
 		}
 		game.tileKeyDown = down;
+
+		down = (GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F10) & 0x8000);
+		if (down && !game.tintKeyDown)
+		{
+			shared.tint = !shared.tint;
+			DebugLog("twin art tint %s", shared.tint ? "magenta" : "off");
+			for (DWORD i = 0; i < game.top; ++i)
+			{
+				game.twins[i].upCount = 0;
+				game.twins[i].thrashCount = 0;
+			}
+		}
+		game.tintKeyDown = down;
+
+		BOOL shot = game.shotRequest;
+		if (art.firstTick && !art.shotTaken && now - art.firstTick >= SHOT_DELAY)
+		{
+			art.shotTaken = TRUE;
+			shot = TRUE;
+		}
+		if (shot)
+		{
+			game.shotRequest = FALSE;
+			game.checkRequest = TRUE;
+		}
 
 		DWORD id = TWIN_NONE;
 		Record* twin = Find(screen, &id);
@@ -1750,6 +1816,11 @@ namespace Twin
 			cmd->value = checkOffset;
 			cmd->src = artOffset;
 			cmd->extra = artCount;
+			if (shot)
+			{
+				cmd->flags |= PresentShot;
+				cmd->clip.left = game.lastUpgrade;
+			}
 			if (twin)
 			{
 				cmd->x = twin->width;
@@ -1840,6 +1911,7 @@ namespace Twin
 			queued, queuedBytes / 1024, lastUs / 1000, lastUs % 1000, lastCalls);
 
 		game.checkRequest = TRUE;
+		game.shotRequest = TRUE;
 	}
 #pragma endregion
 
@@ -1917,6 +1989,8 @@ namespace Twin
 			"uniform sampler2D tex01;\n"
 			"uniform int keyed;\n"
 			"uniform int art;\n"
+			"uniform int tint;\n"
+			"uniform int opaque;\n"
 			"uniform vec4 key;\n"
 			"in vec2 fTex;\n"
 			"out vec4 FRAG_COLOR;\n"
@@ -1928,6 +2002,10 @@ namespace Twin
 			"		return;\n"
 			"	}\n"
 			"	vec4 c = texture(tex01, fTex);\n"
+			"	if (art != 0 && tint != 0)\n"
+			"		c.rgb *= vec3(1.0, 0.15, 1.0);\n"
+			"	if (opaque != 0 && c.a < 254.5 / 255.0)\n"
+			"		discard;\n"
 			"	if (keyed != 0)\n"
 			"	{\n"
 			"		if (c.a < 0.5 / 255.0 || (c.a > 254.5 / 255.0 && all(lessThan(abs(c.rgb - key.rgb), vec3(0.5 / 255.0)))))\n"
@@ -1958,6 +2036,10 @@ namespace Twin
 			gl.keyedLoc = GLGetUniformLocation(gl.copyProgram, "keyed");
 			gl.keyLoc = GLGetUniformLocation(gl.copyProgram, "key");
 			gl.artLoc = GLGetUniformLocation(gl.copyProgram, "art");
+			gl.tintLoc = GLGetUniformLocation(gl.copyProgram, "tint");
+			gl.opaqueLoc = GLGetUniformLocation(gl.copyProgram, "opaque");
+			GLUniform1i(gl.tintLoc, 0);
+			GLUniform1i(gl.opaqueLoc, 0);
 			GLUniform1i(gl.keyedLoc, 0);
 			GLUniform1i(gl.artLoc, 0);
 		}
@@ -2450,11 +2532,13 @@ namespace Twin
 		TargetTwin(cmd->dst);
 		UseCopy(FALSE, 0);
 		GLUniform1i(gl.artLoc, 1);
+		GLUniform1i(gl.tintLoc, shared.tint ? 1 : 0);
 		GLBindTexture(GL_TEXTURE_2D, texture);
 		AddQuad((FLOAT)(gpu->width * scale), (FLOAT)(gpu->height * scale), (FLOAT)(cmd->rect.left * scale), (FLOAT)(cmd->rect.top * scale), (FLOAT)(cmd->rect.right * scale), (FLOAT)(cmd->rect.bottom * scale),
 			u0, v0, u1, v1);
 		DrawVerts();
 		GLUniform1i(gl.artLoc, 0);
+		GLUniform1i(gl.tintLoc, 0);
 		++gl.artDraws;
 	}
 
@@ -2573,6 +2657,118 @@ namespace Twin
 		Unlock();
 	}
 
+	VOID WritePng(const CHAR* name, const BYTE* pixels, LONG width, LONG height, LONG stride)
+	{
+		if (!pnglib_create_write_struct || width <= 0 || height <= 0)
+			return;
+
+		Stream stream = { NULL, 0, 0 };
+		png_structp png_ptr = pnglib_create_write_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
+		if (!png_ptr)
+			return;
+
+		png_infop info_ptr = pnglib_create_info_struct(png_ptr);
+		if (info_ptr)
+		{
+			BYTE* rgb = (BYTE*)MemoryAlloc(width * height * 3);
+			BYTE** rows = (BYTE**)MemoryAlloc(height * sizeof(BYTE*));
+			if (rgb && rows)
+			{
+				for (LONG y = 0; y < height; ++y)
+				{
+					const BYTE* src = pixels + y * stride;
+					BYTE* dst = rgb + y * width * 3;
+					rows[y] = dst;
+					for (LONG x = 0; x < width; ++x)
+					{
+						*dst++ = src[0];
+						*dst++ = src[1];
+						*dst++ = src[2];
+						src += 4;
+					}
+				}
+
+				pnglib_set_write_fn(png_ptr, &stream, PngLib::WriteDataIntoOutputStream, PngLib::FlushData);
+				pnglib_set_IHDR(png_ptr, info_ptr, width, height, 8, PNG_COLOR_TYPE_RGB, PNG_INTERLACE_NONE, PNG_COMPRESSION_TYPE_DEFAULT, PNG_FILTER_TYPE_DEFAULT);
+				pnglib_write_info(png_ptr, info_ptr);
+				pnglib_write_image(png_ptr, rows);
+				pnglib_write_end(png_ptr, NULL);
+			}
+			if (rgb)
+				MemoryFree(rgb);
+			if (rows)
+				MemoryFree(rows);
+		}
+		pnglib_destroy_write_struct(&png_ptr, &info_ptr);
+
+		if (!stream.data)
+			return;
+
+		CHAR path[MAX_PATH];
+		DWORD length = GetModuleFileName(NULL, path, MAX_PATH);
+		while (length && path[length - 1] != '\\')
+			--length;
+		path[length] = 0;
+		StrCat(path, name);
+
+		BOOL done = FALSE;
+		HANDLE file = CreateFile(path, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+		if (file != INVALID_HANDLE_VALUE)
+		{
+			DWORD written = 0;
+			done = WriteFile(file, stream.data, stream.position, &written, NULL) && written == stream.position;
+			CloseHandle(file);
+		}
+		MemoryFree(stream.data);
+
+		if (done)
+			DebugLog("twin shot written %s %dx%d", name, width, height);
+		else
+			DebugLog("twin shot failed %s", name);
+	}
+
+	VOID ShotTwin(const CHAR* name, DWORD id, LONG maxW, LONG maxH, BOOL centre)
+	{
+		if (!Valid(id))
+		{
+			DebugLog("twin shot skipped %s: no twin %u", name, id);
+			return;
+		}
+
+		Gpu* gpu = &gl.twins[id];
+		LONG fullW = gpu->width * gpu->scale, fullH = gpu->height * gpu->scale;
+		LONG width = min(fullW, maxW), height = min(fullH, maxH);
+		LONG x = centre ? (fullW - width) / 2 : 0;
+		LONG y = centre ? (fullH - height) / 2 : 0;
+
+		BYTE* pixels = (BYTE*)MemoryAlloc(width * height * 4);
+		if (!pixels)
+			return;
+
+		GLBindFramebuffer(GL_READ_FRAMEBUFFER, gpu->fbo);
+		GLPixelStorei(GL_PACK_ALIGNMENT, 4);
+		GLReadPixels(x, y, width, height, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+		GLBindFramebuffer(GL_READ_FRAMEBUFFER, gl.readFbo);
+
+		// twin textures keep 1x row 0 in texel row 0, so the read rows are already top-down
+		WritePng(name, pixels, width, height, width * 4);
+		MemoryFree(pixels);
+	}
+
+	VOID Shots(const Cmd* cmd, const List* list)
+	{
+		if (!pnglib_create_write_struct)
+		{
+			DebugLog("twin shot skipped: png library not loaded");
+			return;
+		}
+
+		if (cmd->flags & PresentCheck)
+			WritePng("twin-1x.png", list->arena + cmd->value, cmd->x, cmd->y, cmd->x * 4);
+		ShotTwin("twin-screen.png", cmd->dst, SHOT_SCREEN_W, SHOT_SCREEN_H, TRUE);
+		ShotTwin("twin-sheet.png", (DWORD)cmd->clip.left, SHOT_SHEET, SHOT_SHEET, FALSE);
+	}
+
 	VOID Replay(const List* list)
 	{
 		DWORD i = 0;
@@ -2619,6 +2815,8 @@ namespace Twin
 				gl.shown.flags = cmd->flags;
 				if (cmd->flags & PresentCheck)
 					Check(cmd, list);
+				if (cmd->flags & PresentShot)
+					Shots(cmd, list);
 				break;
 
 			default:
@@ -2641,8 +2839,23 @@ namespace Twin
 
 	BOOL Show(const Rect* rect, LONG offset, DWORD frameWidth, DWORD frameHeight, GLuint drawFbo)
 	{
-		if (!gl.shown.valid || !Valid(gl.shown.id) || (gl.shown.flags & PresentBack) || rect->width <= 0 || rect->height <= 0 || !frameWidth || !frameHeight)
+		if (!gl.shown.valid || !Valid(gl.shown.id))
+		{
+			++gl.showInvalid;
 			return FALSE;
+		}
+
+		if (rect->width <= 0 || rect->height <= 0 || !frameWidth || !frameHeight)
+		{
+			++gl.showOther;
+			return FALSE;
+		}
+
+		BOOL back = (gl.shown.flags & PresentBack) != 0;
+		if (back)
+			++gl.showBack;
+		else
+			++gl.showOpaque;
 
 		Gpu* gpu = &gl.twins[gl.shown.id];
 		gl.target = TWIN_NONE;
@@ -2671,10 +2884,15 @@ namespace Twin
 			AddShowQuad(&frame, gpu, baseX, baseY, frameWidth, frameHeight);
 
 		UseCopy(FALSE, 0);
+		// with a background image the renderer already blended the 1x frame over it; keep those pixels and only cover what was opaque in 1x
+		if (back)
+			GLUniform1i(gl.opaqueLoc, 1);
 		GLBindTexture(GL_TEXTURE_2D, gpu->texture);
 		GLTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 		GLTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 		DrawVerts();
+		if (back)
+			GLUniform1i(gl.opaqueLoc, 0);
 		GLTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 		GLTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 		return TRUE;
@@ -2729,6 +2947,7 @@ namespace Twin
 
 		BOOL shown = FALSE;
 		DWORD replayed = 0;
+		DWORD showOff = 0;
 		DWORD us = 0;
 		if (InitGL())
 		{
@@ -2738,6 +2957,7 @@ namespace Twin
 			gl.artDraws = 0;
 			gl.artFallbacks = 0;
 			gl.artRejected = 0;
+			gl.showOpaque = gl.showBack = gl.showInvalid = gl.showOther = 0;
 			gl.readFbo = readFbo;
 			GLUseProgram(0);
 			GLBindVertexArray(gl.vao);
@@ -2758,6 +2978,8 @@ namespace Twin
 
 			if (shared.show)
 				shown = Show(rect, offset, frameWidth, frameHeight, drawFbo);
+			else
+				++showOff;
 		}
 
 		GLBindFramebuffer(GL_DRAW_FRAMEBUFFER, drawFbo);
@@ -2790,6 +3012,13 @@ namespace Twin
 			RecycleList(lists);
 			lists = next;
 		}
+
+		shared.showOpaque += gl.showOpaque;
+		shared.showBack += gl.showBack;
+		shared.showInvalid += gl.showInvalid;
+		shared.showOther += gl.showOther;
+		shared.showOff += showOff;
+		gl.showOpaque = gl.showBack = gl.showInvalid = gl.showOther = 0;
 
 		if (replayed)
 		{
