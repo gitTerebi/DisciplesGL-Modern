@@ -15,8 +15,12 @@ namespace Twin
 	VOID OnWrite(const VOID* first, LONG pitch, LONG width, LONG height);
 	VOID OnWriteAll(StateBuffer* buffer);
 	VOID OnPresent(StateBuffer* screen, LONG left, LONG top);
-	VOID BeginArt(LONG frame, const RECT* place, const RECT* clip, BOOL flipped);
-	VOID EndArt();
+	struct ArtPart {
+		LONG dx, dy;
+		LONG sx, sy;
+		LONG w, h;
+	};
+	VOID ExpectArt(LONG frame, BOOL flipped, const RECT* place, const RECT* clip, const ArtPart* parts, DWORD count);
 	VOID LogStats();
 
 	// render thread

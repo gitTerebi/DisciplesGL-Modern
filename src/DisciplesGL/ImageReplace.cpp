@@ -253,10 +253,11 @@ namespace ImageReplace
 	} trace;
 
 	#define ART_LOG 32
+	#define ART_PARTS 64
 
 	struct {
 		DWORD depth;
-		DWORD begins, notReady, noFrame, zoomed;
+		DWORD begins, notReady, noFrame, zoomed, truncated;
 	} art;
 
 	struct {
@@ -1520,17 +1521,17 @@ namespace ImageReplace
 		return index;
 	}
 
-	BOOL BeginArt(const Entry* entry, LONG index, DWORD rec, const POINT* start, const POINT* offset, const POINT* size, const RECT* area)
+	VOID ExpectArt(const Entry* entry, LONG index, DWORD rec, const POINT* start, const POINT* offset, const POINT* size, const RECT* area)
 	{
 		if (index < 0 || !start)
 		{
 			++art.noFrame;
-			return FALSE;
+			return;
 		}
 		if (!ArtReady(index))
 		{
 			++art.notReady;
-			return FALSE;
+			return;
 		}
 
 		const PackFrame* frame = &pack.frames[index];
@@ -1569,16 +1570,40 @@ namespace ImageReplace
 			if (place.left < zoom.right && place.top < zoom.bottom && place.right > zoom.left && place.bottom > zoom.top)
 			{
 				++art.zoomed;
-				return FALSE;
+				return;
 			}
 		}
 
+		Twin::ArtPart parts[ART_PARTS];
+		DWORD count = 0;
+		const BYTE* list = *(const BYTE**)(rec + 8);
+		DWORD total = *(const DWORD*)(rec + 0xC);
+		for (DWORD i = 0; i < total; ++i)
+		{
+			const LONG* part = (const LONG*)(list + i * 24);
+			if (part[0] < offX || part[0] + part[4] > sizeX || part[1] < offY || part[1] + part[5] > sizeY)
+				continue;
+			if (count >= ART_PARTS)
+			{
+				++art.truncated;
+				break;
+			}
+
+			Twin::ArtPart* p = &parts[count++];
+			p->dx = start->x + part[0];
+			p->dy = start->y + part[1];
+			p->sx = part[2];
+			p->sy = part[3];
+			p->w = part[4];
+			p->h = part[5];
+		}
+
 		if (art.begins < ART_LOG)
-			DebugLog("image art name=%s frame=%d place=%d,%d,%d,%d clip=%d,%d,%d,%d flipped=%d", entry->name, index,
-				place.left, place.top, place.right, place.bottom, clip.left, clip.top, clip.right, clip.bottom, entry->flipped);
+			DebugLog("image art name=%s frame=%d place=%d,%d,%d,%d clip=%d,%d,%d,%d flipped=%d parts=%d first=%d,%d,%d,%d,%d,%d", entry->name, index,
+				place.left, place.top, place.right, place.bottom, clip.left, clip.top, clip.right, clip.bottom, entry->flipped, count,
+				count ? parts[0].dx : 0, count ? parts[0].dy : 0, count ? parts[0].sx : 0, count ? parts[0].sy : 0, count ? parts[0].w : 0, count ? parts[0].h : 0);
 		++art.begins;
-		Twin::BeginArt(index, &place, &clip, entry->flipped);
-		return TRUE;
+		Twin::ExpectArt(index, entry->flipped, &place, &clip, parts, count);
 	}
 
 	DWORD StoreImageKey(DWORD value)
@@ -2958,7 +2983,7 @@ namespace ImageReplace
 			stats.builds, stats.draws, stats.unknown, ground.chunkCount, ground.builds, ground.ops, ground.unnamed, ground.unmasked, ground.rejected);
 		DebugLog("image store drawLinks=%d faceLinks=%d faceLoads=%d faceCopies=%d faceMisses=%d faceRejects=%d takes=%d takeLinks=%d takeFrames=%d",
 			storeStats.drawLinks, storeStats.faceLinks, storeStats.faceLoads, storeStats.faceCopies, storeStats.faceMisses, storeStats.faceRejects, storeStats.takes, storeStats.takeLinks, storeStats.takeFrames);
-		DebugLog("image art begins=%d notReady=%d noFrame=%d zoomed=%d", art.begins, art.notReady, art.noFrame, art.zoomed);
+		DebugLog("image art begins=%d notReady=%d noFrame=%d zoomed=%d truncated=%d", art.begins, art.notReady, art.noFrame, art.zoomed, art.truncated);
 		DebugLog("image tables entries=%d/%d full=%d stores=%d/%d archives=%d queue demand=%d prefetch=%d decoded=%d (%d MB) gpu=%d (%d MB of %d MB budget)",
 			entries.count, entries.used, stats.full, stores.count, stores.used, archives.count, demand, prefetch,
 			decodedCount, pack.decoded >> 20, pack.gpuList.count, pack.gpu >> 20, pack.gpuBudget >> 20);
@@ -2968,7 +2993,6 @@ namespace ImageReplace
 	{
 		++stats.draws;
 
-		BOOL began = FALSE;
 		DWORD rec = GetRecord(thisObj);
 		Entry* entry = rec ? Find(rec, FALSE) : NULL;
 		if (!entry || !entry->name[0])
@@ -2978,14 +3002,12 @@ namespace ImageReplace
 			++entry->draws;
 			LONG index = Queue(entry, rec);
 			if (!art.depth && Enabled())
-				began = BeginArt(entry, index, rec, start, offset, size, area);
+				ExpectArt(entry, index, rec, start, offset, size, area);
 		}
 
 		++art.depth;
 		((VOID(__thiscall*)(VOID*, VOID*, const POINT*, const POINT*, const POINT*, const RECT*))sub_Render)(thisObj, renderer, start, offset, size, area);
 		--art.depth;
-		if (began)
-			Twin::EndArt();
 
 		DWORD tick = GetTickCount();
 		BOOL key = (GetAsyncKeyState(VK_F12) & 0x8000) != 0;
