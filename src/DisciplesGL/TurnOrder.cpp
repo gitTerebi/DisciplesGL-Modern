@@ -27,6 +27,7 @@
 #include "stdio.h"
 #include "Config.h"
 #include "Hooks.h"
+#include "ImageReplace.h"
 #include "TurnArt.h"
 #include "TurnOrder.h"
 
@@ -103,6 +104,8 @@ namespace TurnOrder
 		DWORD look;
 		POINT size;
 		POINT faceSize;
+		LONG faceFrame;
+		BOOL faceFlipped;
 		BOOL attacker;
 		BOOL current;
 		BOOL leaving;
@@ -134,6 +137,10 @@ namespace TurnOrder
 	static const COLORREF turnIron = RGB(104, 108, 96);
 	static const COLORREF turnOutline = RGB(18, 16, 12);
 	static const COLORREF turnGold = RGB(232, 200, 64);
+	static const COLORREF turnTeams[] = { RGB(110, 230, 110), RGB(240, 90, 70) };
+	// Interf.ff -IMAGES.OPT: DLG_BATTLE_A.PNG sits at 0,32 of DLG_BATTLE_A_LUNITGROUP, TurnArt's crystal 73,22 at 73,54
+	static const CHAR turnArtFrame[] = "DLG_BATTLE_A_LUNITGROUP";
+	static const RECT turnArtCrystal = { 73, 54, 90, 77 };
 
 	VOID FreeTurnCard(TurnCard* card)
 	{
@@ -170,6 +177,7 @@ namespace TurnOrder
 	{
 		if (turnStrip == obj)
 			turnStrip = NULL;
+		ImageReplace::OnStrip(NULL, 0, 0, 0, NULL, 0);
 
 		((VOID(__thiscall*)(TurnStrip*, BYTE))sub_TurnStripDestructor)(obj, flags & ~1);
 		if (flags & 1)
@@ -329,8 +337,8 @@ namespace TurnOrder
 			return;
 
 		TurnArt::Piece gem = TurnArt::Facet(&TurnArt::crystal, TURN_ORDER_GEM_WIDTH, TURN_ORDER_GEM_HEIGHT, turnOutline);
-		turnGems[0] = TintTurnPiece(&gem, RGB(110, 230, 110));
-		turnGems[1] = TintTurnPiece(&gem, RGB(240, 90, 70));
+		turnGems[0] = TintTurnPiece(&gem, turnTeams[0]);
+		turnGems[1] = TintTurnPiece(&gem, turnTeams[1]);
 		TurnArt::Free(&gem);
 		turnCrystal = TurnArt::Facet(&TurnArt::crystal, TURN_ORDER_CRYSTAL_WIDTH, TURN_ORDER_CRYSTAL_HEIGHT, turnOutline);
 	}
@@ -455,6 +463,8 @@ namespace TurnOrder
 		*(RECT*)(faceData + 0x8) = { 0, 0, size.x, size.y };
 		*(LONG*)(faceData + 0x18) = size.x << 1;
 		((VOID(__stdcall*)(DWORD*, BYTE*))((DWORD*)card->face[1])[1])(card->face + 1, faceData);
+		ImageReplace::TakeFace(pixels, size.x, size.y, &card->faceFlipped);
+		card->faceFrame = -1;
 
 		card->facePixels = (BYTE*)MemoryAlloc(faceWidth * faceHeight * bpp);
 		for (LONG y = 0; y < faceHeight; ++y)
@@ -486,6 +496,21 @@ namespace TurnOrder
 		card->faceSize = { faceWidth, faceHeight };
 	}
 
+	BOOL AddTurnPiece(ImageReplace::StripFace* face, LONG frame, const RECT* part, LONG left, LONG top, LONG width, LONG height, const RECT* bounds, COLORREF tint)
+	{
+		SetRect(&face->rect, left, top, left + width, top + height);
+		if (!IntersectRect(&face->clip, &face->rect, bounds))
+			return FALSE;
+
+		face->frame = frame;
+		face->flipped = FALSE;
+		face->look.part = *part;
+		face->look.tint = tint;
+		face->look.rim = turnOutline;
+		face->look.gem = TRUE;
+		return TRUE;
+	}
+
 	VOID __stdcall TurnStripDraw(DWORD* texture, BYTE* data)
 	{
 		TurnStrip* obj = (TurnStrip*)(texture - 1);
@@ -511,8 +536,13 @@ namespace TurnOrder
 		for (LONG y = 0; y < height; ++y)
 			FillTurnRect(surface + y * pitch, 0, 0, 0, width - 1, 0, key, bpp);
 
+		RECT artPart;
+		LONG artFrame = isTrueColor ? ImageReplace::PartFrame(turnArtFrame, &turnArtCrystal, &artPart) : -1;
+
 		DWORD now = timeGetTime();
 		BOOL moving = FALSE;
+		ImageReplace::StripFace faces[TURN_ORDER_CARDS * 4];
+		DWORD faceCount = 0;
 		for (DWORD i = 0; i < turnCardCount; ++i)
 		{
 			TurnCard* card = &turnCards[i];
@@ -560,6 +590,43 @@ namespace TurnOrder
 				}
 			}
 
+			RECT bounds = { clip, 0, width - TURN_ORDER_INSET + 1, height };
+			BOOL enemy = (card->look & TURN_LOOK_ENEMY) != 0;
+			BOOL gem = artFrame >= 0 && !card->divider && !card->next && turnGems[enemy].pixels;
+			LONG gemLeft = left + 1 + (card->faceSize.x + 4 - TURN_ORDER_GEM_WIDTH) / 2, gemBottom = top + TURN_ORDER_GEM_HEIGHT;
+			if (isTrueColor && !card->divider && !card->next && card->faceFrame >= 0)
+			{
+				LONG faceLeft = left + 3, faceTop = top + TURN_ORDER_TOP + 2;
+				LONG missing = card->hpMax > 0 ? card->faceSize.y * max(0, card->hpMax - card->hp) / card->hpMax : 0;
+				RECT visible = { max(faceLeft, clip), max(faceTop, 0), min(faceLeft + card->faceSize.x, width - TURN_ORDER_INSET + 1), min(faceTop + card->faceSize.y - max(missing, TURN_ORDER_BAND), height) };
+				RECT parts[] = {
+					{ visible.left, max(visible.top, gemBottom), visible.right, visible.bottom },
+					{ visible.left, visible.top, min(visible.right, gemLeft), min(visible.bottom, gemBottom) },
+					{ max(visible.left, gemLeft + TURN_ORDER_GEM_WIDTH), visible.top, visible.right, min(visible.bottom, gemBottom) }
+				};
+				if (gem)
+					parts[0] = visible;
+
+				for (DWORD k = 0; k < (gem ? 1 : sizeof(parts) / sizeof(*parts)); ++k)
+				{
+					if (parts[k].left >= parts[k].right || parts[k].top >= parts[k].bottom)
+						continue;
+
+					ImageReplace::StripFace* face = &faces[faceCount++];
+					face->frame = card->faceFrame;
+					face->flipped = card->faceFlipped;
+					SetRect(&face->rect, faceLeft, faceTop, faceLeft + card->faceSize.x, faceTop + card->faceSize.y);
+					face->clip = parts[k];
+					face->look = ImageReplace::StripLook();
+				}
+			}
+
+			if (gem && AddTurnPiece(&faces[faceCount], artFrame, &artPart, gemLeft, top, TURN_ORDER_GEM_WIDTH, TURN_ORDER_GEM_HEIGHT, &bounds, turnTeams[enemy]))
+				++faceCount;
+			else if (artFrame >= 0 && card->divider && turnCrystal.pixels
+				&& AddTurnPiece(&faces[faceCount], artFrame, &artPart, left, top, TURN_ORDER_CRYSTAL_WIDTH, TURN_ORDER_CRYSTAL_HEIGHT, &bounds, 0))
+				++faceCount;
+
 			LONG textLeft = card->divider ? left : left + 1;
 			LONG textRight = card->divider ? left + cardWidth : left + cardWidth - 1;
 			if (textLeft >= clip && textRight <= width - TURN_ORDER_INSET + 1 && top >= 0 && top + card->size.y <= height)
@@ -584,6 +651,7 @@ namespace TurnOrder
 		// Discipl2.exe v3.01b 0x006775E0 sets the staging colour key from +0x1C after the draw, as 0x00560E31 stores it
 		*(DWORD*)(data + 0x1C) = COLORKEY_CHECK_16;
 		obj->dirty = moving;
+		ImageReplace::OnStrip(NULL, 0, 0, 0, NULL, 0);
 	}
 
 	TurnStrip* CreateTurnStrip(LONG width, LONG height)

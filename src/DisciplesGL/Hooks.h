@@ -426,6 +426,26 @@ namespace Hooks
 		DWORD image_render;
 		DWORD image_names_slot;
 		DWORD image_names;
+		DWORD image_store_load_slot;
+		DWORD image_store_load;
+		DWORD image_store_draw_slot;
+		DWORD image_store_draw;
+		DWORD image_store_free_slot;
+		DWORD image_store_free;
+		DWORD image_free_slot;
+		DWORD image_free;
+		DWORD ground_tile_factory;
+		DWORD ground_border_factory;
+		DWORD ground_race_code;
+		DWORD ground_mask_slot;
+		DWORD ground_mask;
+		DWORD ground_update_slot;
+		DWORD ground_update;
+		DWORD face_load;
+		DWORD map_key_add;
+		DWORD map_key_change;
+		DWORD map_trees_layer;
+		DWORD map_stacks_layer;
 	};
 
 	struct BlendData {

@@ -909,8 +909,8 @@ HRESULT __stdcall OpenDrawSurface::BltFast(DWORD dwX, DWORD dwY, IDrawSurface7* 
 		if (config.bpp32Hooked)
 		{
 			TextReplace::OnBlit(this, dwX, dwY, surface, lpSrcRect, sWidth, surface->colorKey.enabled, surface->colorKey.high);
-			if (ImageReplace::OnBlit(this, dwX, dwY, surface, lpSrcRect, sWidth, surface->colorKey.enabled, surface->colorKey.high))
-				return DD_OK;
+			// a claimed blit still lands in 1x: the game reads the screen back (e.g. the roster hover area) and would get black
+			ImageReplace::OnBlit(this, dwX, dwY, surface, lpSrcRect, sWidth, surface->colorKey.enabled, surface->colorKey.high);
 
 			DWORD* src = (DWORD*)surface->indexBuffer->data + lpSrcRect->top * sWidth + lpSrcRect->left;
 			DWORD* dst = (DWORD*)this->indexBuffer->data + lpDestRect->top * dWidth + lpDestRect->left;

@@ -269,6 +269,7 @@
     <ClCompile Include="TurnOrder.cpp" />
     <ClCompile Include="FasterEndTurn.cpp" />
     <ClCompile Include="TurnSummary.cpp" />
+    <ClCompile Include="MapOrder.cpp" />
     <ClCompile Include="TurnIncome.cpp" />
     <ClCompile Include="TextReplace.cpp" />
     <ClCompile Include="ShopFrame.cpp" />
@@ -315,6 +316,7 @@
     <ClInclude Include="TurnOrder.h" />
     <ClInclude Include="FasterEndTurn.h" />
     <ClInclude Include="TurnSummary.h" />
+    <ClInclude Include="MapOrder.h" />
     <ClInclude Include="TurnIncome.h" />
     <ClInclude Include="TextReplace.h" />
     <ClInclude Include="ShopFrame.h" />
