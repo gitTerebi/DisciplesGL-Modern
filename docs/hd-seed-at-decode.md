@@ -328,6 +328,75 @@ What remains possible, and what the next log shows:
 
 Every Events.ff and Faces.ff sheet, and every sheet with a multi-part frame of the decode's size, now logs its full piece list (`image sheet pieces ... (event portrait, face or multi-part frame of the sheet's size)`, 96 more), with each frame's parts union next to its pack box. That settles case 1 against case 2.
 
+### How the pack was built (repack.py)
+
+`gamenames-v1.galleanpack` was not built by Gallean. It came from a Python script, `repack.py`, which lived uncommitted in the user's temp scratchpad on their PC. It is now committed with its helpers in `tools/repack/` (5a9ffdb), and that copy is the ground truth for names and offsets. What it does:
+
+- Entries are Gallean's assets-v1 WebP blobs, "copied byte for byte and renamed to game names". The DLL team's own upscale (own-v1) fills in what Gallean lacks. Gallean's entries are added first, and `add()` skips a name it already has, so Gallean wins on duplicates.
+- Names come from `game_name()`, a Python copy of the DLL's `GameName()`:
+  ```python
+  if c in ('spell-icon', 'unit-event-portrait'):
+      return unit or None, SPRITE
+  if c == 'unit-face':
+      return unit + 'FACE.PNG', SPRITE
+  if c == 'unit-portrait':
+      return unit + 'FACEB.PNG', SPRITE
+  ```
+  `item-icon`, `building-icon`, `lord-face`, `city-image` and `capital-image` are SPRITE as well. `resolve()` tries the name, then the name with `.PNG` added or removed, against the .ff's stills (the assembled `-IMAGES.OPT` frame names that are no animation frame), anims, and raws (every other file in the archive):
+  ```python
+  cands = [name]
+  cands.append(name[:-4] if name.endswith('.PNG') else name + '.PNG')
+  for n in cands:
+      if n in anims or n in stills or n in raws:
+          return [n]
+  ```
+- Offsets are rewritten:
+  ```python
+  if origin == CENTRE:
+      w, h = dims[min(k, len(dims) - 1)]
+      md['OffsetX'] += w // 2
+      md['OffsetY'] += h // 2
+  elif origin == SPRITE:
+      md['OffsetX'] = md['OffsetY'] = 0
+  ```
+  The manifest keeps Width/Height. `PackName()` reads every entry as `OriginCanvas`.
+
+So a Gallean `unit-event-portrait/<unit>` entry is Gallean's composite portrait (`GamePortraitSource.cs:82-88`, `GameImages.TryGetCompositeSprite`, `SpriteOperations.Composite`). Every frame of the file `<unit>` (or `<unit>.PNG`) is laid on one canvas as wide and tall as the largest frame. The entry is filed under the game's still or file name (for example `G000UU0013`) with its offset set to 0. The same SPRITE zeroing applies to spell icons, unit faces (`FACE.PNG`) and unit portraits (`FACEB.PNG`).
+
+What Gallean's source says about those offsets (`/home/user/GalleanDev/Gallean`, 0.12.2): `SpriteOperations.Composite` returns the full canvas with offset 0,0 and does not crop. `GameImages.TryGetSprite` goes through `ToFullCanvasSprite`, which is also the full canvas at 0,0. `ClipToCanvas`, which crops to the non-transparent box and keeps the box's place as the offset, runs only for anchored sprites (`ToAnchoredSprite`: cursors, bags, tombstones, mountains, world objects; these are CENTRE in the repack and convert correctly) and for positioned animations. The Packer's filters do not trim these categories. If the pack's assets-v1 was built from this Gallean version, the zeroing lost nothing: each SPRITE entry is the frame's (or the file's) full canvas, and 0,0 is its real place. The faces agree: `G000UU5017FACEB.PNG` 130x142 and the other faces seed through `StoreFrame`, which requires the entry to be the file's size, so their entries are not crops. Nothing in the logs shows an event portrait's entry size yet, so the DLL now handles both readings by geometry (below).
+
+### Zeroed offsets: where 0,0 cannot be the place
+
+`SheetPieces` places a frame's 4K at `place = sheet - canvas + offset`, with the entry's offset as stored. For an entry at 0,0 this means the entry's top-left is the canvas origin. If such an entry were a crop with its real offset `u` (the box's place in the canvas) set to 0, every part would sample the entry at its own canvas position instead of at canvas minus `u`. That is the content that belongs `u` further right and down. The pieces stay in order, so the card reassembles a coherent 4K portrait, shifted up and left by `u` inside the 1x silhouette. The key-alpha cut keeps the 1x outline, and the shift moves the face within it. Where a part samples past the entry's right or bottom edge, `GL_CLAMP_TO_EDGE` smears the edge texels into streaks; the strips at those edges are each `u` wide or tall. The 4K for the first `u` columns and rows is never shown. This is a uniform shift with edge streaks. It is not a reordering of bands into sheet order, which is what an identity reading (the entry over the sheet at 0,0) would produce. Which of the two the screenshot shows tells them apart.
+
+48908cf's outside check had a related problem. A full-canvas entry at 0,0 whose parts union does not cover the whole canvas reaches outside the union, so that check left it 1x. That is the reading Gallean's source gives for event portraits, and for every frame whose parts the game's packer trimmed.
+
+`DeriveOffset` (called from `SheetPieces`) now handles this. Its input is a still in the gamenames pack whose entry is at 0,0, where either the union of its parts does not start at 0,0, or the entry has a SPRITE-origin name and is smaller than that union. SPRITE-origin names are everything in Events.ff or Faces.ff, `G000SSnnnn` spell icons, and `...FACE.PNG` and `...FACEB.PNG`. For an Events.ff entry named like the file, the union and the canvas are those of every frame of the file, since the entry is their composite. The outside check then uses the same union.
+
+| Entry | Taken as | Log |
+|---|---|---|
+| the whole canvas (the largest frame's for a composite) | Gallean's full-canvas sprite or composite: 0,0 is real; exempt from the outside check | `image pack offset full canvas` |
+| the size of the parts union | the union: offset = union origin | `image pack offset derived ... the entry has the parts union's size` |
+| smaller than the union | the composite cropped to what is not transparent: offset = origin of the 1x decode's non-transparent box, when that box has the entry's size | `image pack offset derived ... 1x key box x,y wxh` |
+| smaller, and the box is another size, or two parts of a frame overlap | unplaceable: the frame stays 1x | `image pack offset left 1x` |
+| smaller, and the 8-bit decode is not at hand | stays 1x this time, retried at the next decode | `image pack offset left 1x ... 8-bit indices are not at hand` |
+| larger than the union, not the canvas | not derived; the outside check leaves it 1x | `ENTRY OUTSIDE THE FRAME'S PARTS` |
+
+The non-transparent box comes from the game's own 1x alpha key, not from matching pixels. `KeyBox` reads the 8-bit indices of the latest `StoreDraw` decode, which is this file's whole sheet (`KeyIndices`: same archive and record, format byte 0, the decode's size). A pixel is transparent where its index is the block's transparent index or a brush colour. This is Gallean's `GetPaletteOpacity`: opacity is the block's algorithm byte, 0 for `#F8xxF8`-class brush colours and for the transparent index. Each part's opaque pixels are placed at their canvas position and clipped to the canvas, as `BuildImage`, `Composite` and `ClipToCanvas` do. That box is exactly the box Gallean's crop would keep, because it is computed from the same 1x pixels by the same rule. Two checks make it safe:
+
+- The box must have the entry's 1x Width/Height.
+- A frame whose parts overlap is refused, because its later part would overwrite the earlier one and the union of opaque parts would not be the frame.
+
+Frames whose union starts at 0,0 and which are not SPRITE-origin names are never touched, so entries genuinely at 0,0 stay as they were. Animation frames are not touched either. Faces are not sheets: they seed through `StoreFrame`, which needs the entry to be the file's size, and nothing there changed.
+
+Logs:
+
+- `image pack offset derived|full canvas|left 1x: <entry> #<pack frame> entry WxH at 0,0 (offset zeroed by the repack) | <file> frame <name> canvas WxH, parts union x,y wxh[, 1x key box x,y wxh] | offset x,y: <how>`. This is one line per entry the first time it is met, 128 in all. The result is kept per pack frame and file.
+- `image sheet pieces ... frame [n]`: `ZEROED OFFSET DERIVED: placed at x,y`, `full-canvas entry, 0,0 is its place` or `ZEROED OFFSET NOT DERIVABLE: left 1x`. For an event portrait's composite, the union shown is that of every frame of the file.
+- `image pack offsets zeroed by the repack, since start` (every 5 s, after `image sheet checks`): the counts for each case.
+
+Repack-side fix (proposed, not applied): in `repack.py`, keep Gallean's offsets for SPRITE origins instead of zeroing them (`elif origin == SPRITE: pass`). For Gallean's full-canvas sprites they are 0 anyway, and a crop would keep its real place. `tools/repack/bbox.py` already compares each pack box with the parts union, and `verify.py` computes the non-transparent 1x box, so the tooling can check every SPRITE entry: its box must be the frame's canvas at 0,0 or a crop inside the union.
+
 ### Sheets with 0 pieces
 
 `G000UU0019HMOVA2A00.PNG` 577x590 (`BatUnits.ff`) is the attack aura layer (`A2`) of unit 0019, and every frame in it is additive. The same holds for `MRKCURSMALLA.PNG`, `DEATH_NEUTRAL_S10.PNG` and `G000UU9999DYIN8.PNG`. Their lines say `every frame is additive (aura or glow), which is not seeded`. `FOG.PNG` is not in the pack. All of this is by design (see Sheet construction).
@@ -513,6 +582,8 @@ Ground in seed mode therefore keeps `GroundArt`/`DrawGround` (`CmdGround`), exac
 | `twin off: ...` | once | twins are off: `Twin.Mode=off`, or no 4K pack |
 | `image sheet pieces <file> ...` | first 20 sheet seeds, then sheets with uncertain pieces or file-named frames read differently (64), then Events.ff, Faces.ff and multi-part frames of the sheet's size (96) | frames with their parts union, pack entries and the full piece list (see The unit card portrait) |
 | `image sheet checks since start` | every 5 s | pieces left 1x as uncertain, and why |
+| `image pack offset derived` / `full canvas` / `left 1x` | first 128 entries (32 more for a missing 8-bit decode) | a gamenames entry at 0,0 that cannot start there: entry size, parts union, key box, the offset used and how it was derived (see Zeroed offsets) |
+| `image pack offsets zeroed by the repack, since start` | every 5 s | entries placed at the union, at the key box, full-canvas entries kept, left 1x |
 | `twin game-thread cost 5000ms` | every 5 s | present interval histogram, ms per present by category, total |
 | `twin hitch` | each present interval of 50 ms or more (20 per 5 s) | the frame's twin time by category, the seed sub-steps, log lines written on the game thread and their time, slowest call, seeds, uploads, base uploads, copies, ground blits |
 | `image pack duplicate name` | first 32, at load | a name the pack holds twice: the kept and the dropped image's size and offset |

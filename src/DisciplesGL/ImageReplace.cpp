@@ -3425,8 +3425,14 @@ namespace ImageReplace
 		BYTE readingsDiffer;
 		// the pack entry's box lies outside the union of the frame's parts in its canvas, so it is not this frame (left 1x)
 		BYTE outsideParts;
+		// DeriveResult: the entry's offset was zeroed by the repack and is taken from the parts (or the 1x key) instead; see DeriveOffset
+		BYTE derived;
+		// an event portrait's entry, the composite of every frame of the file: bounds is the union of all their parts
+		BYTE composite;
 		WORD parts;
 		RECT bounds;
+		// the offset the frame was placed with (the entry's, or the derived one)
+		LONG ox, oy;
 	};
 
 	SheetFrameInfo sheetFrames[SHEET_FRAME_INFO];
@@ -3434,8 +3440,267 @@ namespace ImageReplace
 
 	struct {
 		DWORD pieceLogs, uncertainLogs;
-		DWORD wrongSize, fileNamed, fileNamedDiffer, notFrame, overlaps, duplicates, dropped, unchecked, forcedLogs;
+		DWORD wrongSize, fileNamed, fileNamedDiffer, notFrame, offsetLost, overlaps, duplicates, dropped, unchecked, forcedLogs;
 	} sheetCheck;
+
+	// Pack entries whose crop offset the repack lost. tools/repack/repack.py copies Gallean's assets-v1 entries under game names and, for the categories it files
+	// with a SPRITE origin (item-icon, spell-icon, unit-event-portrait, building-icon, unit-face, unit-portrait, lord-face, city-image, capital-image), sets OffsetX
+	// and OffsetY to 0. Read in canvas layout, such an entry sits at the canvas origin. Where the entry is a crop of the frame (or, for an event portrait, of the
+	// composite of every frame of the file), that 0,0 is wrong, and every piece samples the 4K the union's origin away from its own place. The place is taken
+	// back from geometry only: the parts union, the canvas, or the non-transparent box of the game's own 1x decode (its key), never a comparison of pixels
+	enum DeriveResult { DeriveNone, DerivePlaced, DeriveFullCanvas, DeriveUnplaced };
+
+	#define DERIVED_LIMIT 256
+	#define DERIVED_LOGS 128
+
+	struct DerivedOffset {
+		LONG frame;
+		DWORD fileId;
+		LONG ox, oy;
+		BYTE result;
+	};
+
+	struct {
+		DerivedOffset list[DERIVED_LIMIT];
+		DWORD count, next;
+		DWORD placedUnion, placedKey, fullCanvas, unplaced, noKey, logs, noKeyLogs;
+	} derived;
+
+	const CHAR* const deriveNames[] = { "-", "derived", "full canvas", "left 1x" };
+
+	BOOL KeyIndices(const Archive* a, DWORD fileId, LONG w, LONG h, const BYTE** data, LONG* pitch);
+
+	// names Gallean files as SPRITE-origin categories, whose offsets the repack zeroed: spell icons (G000SSnnnn), unit faces and portraits (...FACE.PNG, ...FACEB.PNG),
+	// and every entry used by a frame of Events.ff (event portraits) or Faces.ff
+	BOOL ZeroedName(const Archive* a, const CHAR* entry)
+	{
+		DWORD pathLength = StrLength(a->path);
+		if ((pathLength >= 10 && !StrCompareInsensitive(a->path + pathLength - 10, "\\Events.ff")) || (pathLength >= 9 && !StrCompareInsensitive(a->path + pathLength - 9, "\\Faces.ff")))
+			return TRUE;
+		DWORD length = StrLength(entry);
+		if (length == 10 && !StrCompareNum(entry, "G000SS", 6))
+			return TRUE;
+		return (length > 8 && !StrCompareInsensitive(entry + length - 8, "FACE.PNG")) || (length > 9 && !StrCompareInsensitive(entry + length - 9, "FACEB.PNG"));
+	}
+
+	// The non-transparent box, in the canvas, of the frames Gallean puts into one entry, from the game's own 1x key: a pixel is transparent where its index is the
+	// block's transparent index or a brush colour (ImagesExtractor.GetPaletteOpacity: opacity is the block's algorithm byte, 0 for brush colours and the transparent
+	// index; additive algorithms 300/400 are skipped by the caller). Parts sit at their canvas place (BuildImage), clipped to the canvas (Composite, ClipToCanvas).
+	// only: one frame, or NULL for every frame of the file (an event portrait's composite). 1 with *box (empty when nothing is opaque), 0 when the 8-bit decode
+	// of this file is not at hand, -1 when two parts of one frame overlap: the later one overwrites the earlier one's pixels, so the union of opaque parts is not the frame
+	LONG KeyBox(const Archive* a, DWORD fileId, LONG w, LONG h, const DWORD* offsets, DWORD blocks, const CHAR* only, LONG canvasW, LONG canvasH, RECT* box)
+	{
+		const BYTE* data;
+		LONG pitch;
+		if (!KeyIndices(a, fileId, w, h, &data, &pitch))
+			return 0;
+
+		LONG minX = canvasW, minY = canvasH, maxX = -1, maxY = -1;
+		const BYTE* end = a->images + a->imagesSize;
+		for (DWORD b = 0; b < blocks; ++b)
+		{
+			if (offsets[b] > a->imagesSize || a->imagesSize - offsets[b] < 1 + 2 + 4 + 4 + 1024 + 4)
+				continue;
+			const BYTE* base = a->images + offsets[b];
+			LONG sizeX = *(const LONG*)(base + 3), sizeY = *(const LONG*)(base + 7);
+			if ((sizeX || sizeY) && (sizeX != w || sizeY != h))
+				continue;
+
+			BYTE opaque[256];
+			SHORT algorithm = *(const SHORT*)(base + 1);
+			const BYTE* palette = base + 11;
+			for (DWORD i = 0; i < 256; ++i)
+			{
+				const BYTE* c = palette + i * 4;
+				BOOL brush = (c[0] & 0xF8) == 0xF8 && (c[1] & 0xF8) == 0 && (c[2] & 0xF8) == 0xF8;
+				if (algorithm <= 255)
+					opaque[i] = (BYTE)((BYTE)algorithm && !brush);
+				else if (algorithm == 300 || algorithm == 400)
+					opaque[i] = (BYTE)(i != 0);
+				else
+					opaque[i] = TRUE;
+			}
+			opaque[base[0]] = FALSE;
+
+			const BYTE* p = base + 1 + 2 + 4 + 4 + 1024;
+			DWORD frames = *(const DWORD*)p;
+			p += 4;
+			for (DWORD f = 0; f < frames; ++f)
+			{
+				const BYTE* next;
+				const CHAR* name = TextAt(p, end, &next);
+				if (!name || next + 12 > end)
+					break;
+				DWORD parts = *(const DWORD*)next;
+				p = next + 12;
+				if (parts > (DWORD)(end - p) / 24)
+					break;
+				const LONG* part = (const LONG*)p;
+				p += parts * 24;
+				if (only && StrCompareInsensitive(name, only))
+					continue;
+
+				for (DWORD i = 0; i < parts; ++i)
+				{
+					const LONG* q = part + i * 6;
+					RECT r = { q[0], q[1], q[0] + q[4], q[1] + q[5] };
+					for (DWORD k = i + 1; k < parts; ++k)
+					{
+						const LONG* o = part + k * 6;
+						RECT s = { o[0], o[1], o[0] + o[4], o[1] + o[5] }, both;
+						if (IntersectRect(&both, &r, &s))
+							return -1;
+					}
+				}
+
+				for (DWORD i = 0; i < parts; ++i, part += 6)
+				{
+					LONG cx = part[0], cy = part[1], sx = part[2], sy = part[3], pw = part[4], ph = part[5];
+					if (pw <= 0 || ph <= 0 || sx < 0 || sy < 0 || sx + pw > w || sy + ph > h)
+						continue;
+					LONG y0 = max(0L, -cy), y1 = min(ph, canvasH - cy), x0 = max(0L, -cx), x1 = min(pw, canvasW - cx);
+					for (LONG y = y0; y < y1; ++y)
+					{
+						const BYTE* row = data + (sy + y) * pitch + sx;
+						for (LONG x = x0; x < x1; ++x)
+						{
+							if (!opaque[row[x]])
+								continue;
+							LONG X = cx + x, Y = cy + y;
+							if (X < minX)
+								minX = X;
+							if (X > maxX)
+								maxX = X;
+							if (Y < minY)
+								minY = Y;
+							if (Y > maxY)
+								maxY = Y;
+						}
+					}
+				}
+			}
+		}
+
+		if (maxX < minX || maxY < minY)
+			SetRectEmpty(box);
+		else
+			SetRect(box, minX, minY, maxX + 1, maxY + 1);
+		return 1;
+	}
+
+	// For a still whose gamenames entry sits at 0,0 where its frame cannot start: the union of the frame's parts (every frame of the file for an event portrait's
+	// composite) does not start at 0,0, or the entry is a SPRITE-origin name smaller than that union. Then, from geometry only:
+	// - the entry is the whole canvas: Gallean's full-canvas sprite or composite (GameImages.ToFullCanvasSprite, SpriteOperations.Composite), so 0,0 is its real place;
+	// - the entry is the union's size: it is the union, at the union's origin;
+	// - the entry is smaller than the union (transparent edges trimmed): its place is the origin of the non-transparent box of the 1x decode, when that box has the
+	//   entry's size; otherwise, or when the decode is not at hand, the frame stays 1x;
+	// - the entry is larger than the union but not the canvas: left to the outside check (another image of that name).
+	// One line per entry is logged the first time; the result is kept per pack frame and file
+	BYTE DeriveOffset(const Archive* a, DWORD fileId, const CHAR* label, LONG w, LONG h, const DWORD* offsets, DWORD blocks, LONG frame, const CHAR* entryName, const CHAR* frameName,
+		BOOL composite, const RECT* parts, LONG canvasW, LONG canvasH, LONG* ox, LONG* oy)
+	{
+		const PackFrame* pf = &pack.frames[frame];
+		if (pf->ox || pf->oy || IsRectEmpty(parts))
+			return DeriveNone;
+		LONG uw = parts->right - parts->left, uh = parts->bottom - parts->top;
+		BOOL inside = pf->w <= uw && pf->h <= uh;
+		BOOL canvas = pf->w == canvasW && pf->h == canvasH && (parts->left || parts->top || uw != canvasW || uh != canvasH);
+		BOOL trimmedSprite = inside && (pf->w < uw || pf->h < uh) && ZeroedName(a, entryName);
+		if (!canvas && !parts->left && !parts->top && !trimmedSprite)
+			return DeriveNone;
+
+		for (DWORD i = 0; i < derived.count; ++i)
+		{
+			const DerivedOffset* d = &derived.list[i];
+			if (d->frame == frame && d->fileId == fileId)
+			{
+				*ox = d->ox;
+				*oy = d->oy;
+				return d->result;
+			}
+		}
+
+		DerivedOffset d = { frame, fileId, 0, 0, DeriveNone };
+		const CHAR* how;
+		RECT key = { 0, 0, 0, 0 };
+		LONG keyResult = 2;
+		if (canvas)
+		{
+			d.result = DeriveFullCanvas;
+			how = "the entry is the whole canvas (Gallean's full-canvas sprite or composite), so 0,0 is its real place";
+			++derived.fullCanvas;
+		}
+		else if (pf->w == uw && pf->h == uh)
+		{
+			d.ox = parts->left;
+			d.oy = parts->top;
+			d.result = DerivePlaced;
+			how = "the entry has the parts union's size, so it is the union: offset = union origin";
+			++derived.placedUnion;
+		}
+		else if (inside)
+		{
+			keyResult = KeyBox(a, fileId, w, h, offsets, blocks, composite ? NULL : frameName, canvasW, canvasH, &key);
+			if (!keyResult)
+			{
+				// not kept: the next decode of this file may have its 8-bit indices at hand
+				++derived.noKey;
+				if (derived.noKeyLogs < DERIVED_LOGS / 4)
+				{
+					++derived.noKeyLogs;
+					DebugLog("image pack offset left 1x: %.48s #%d entry %dx%d at 0,0 (offset zeroed by the repack) | %.40s %s %.48s canvas %dx%d, parts union %d,%d %dx%d | smaller than the union and the 1x decode's 8-bit indices are not at hand, so its trimmed box cannot be placed",
+						entryName, frame, pf->w, pf->h, label, composite ? "every frame of the file (event portrait composite), seeded frame" : "frame", frameName, canvasW, canvasH, parts->left, parts->top, uw, uh);
+				}
+				*ox = *oy = 0;
+				return DeriveUnplaced;
+			}
+			if (keyResult < 0)
+			{
+				d.result = DeriveUnplaced;
+				how = "smaller than the union, and two parts of one frame overlap, so the 1x key cannot give the composite's box: left 1x";
+				++derived.unplaced;
+			}
+			else if (key.right - key.left == pf->w && key.bottom - key.top == pf->h)
+			{
+				d.ox = key.left;
+				d.oy = key.top;
+				d.result = DerivePlaced;
+				how = "smaller than the union (transparent edges trimmed): offset = origin of the 1x decode's non-transparent box (block's transparent index and brush colours), which has the entry's size";
+				++derived.placedKey;
+			}
+			else
+			{
+				d.result = DeriveUnplaced;
+				how = "smaller than the union, and the 1x decode's non-transparent box is not the entry's size: left 1x";
+				++derived.unplaced;
+			}
+		}
+		else
+			return DeriveNone;
+
+		if (derived.count < DERIVED_LIMIT)
+			derived.list[derived.count++] = d;
+		else
+		{
+			derived.list[derived.next] = d;
+			derived.next = (derived.next + 1) % DERIVED_LIMIT;
+		}
+
+		if (derived.logs < DERIVED_LOGS)
+		{
+			++derived.logs;
+			CHAR keyText[64] = "";
+			if (keyResult == 1)
+				StrPrint(keyText, ", 1x key box %d,%d %dx%d", key.left, key.top, key.right - key.left, key.bottom - key.top);
+			DebugLog("image pack offset %s: %.48s #%d entry %dx%d at 0,0 (offset zeroed by the repack) | %.40s %s %.48s canvas %dx%d, parts union %d,%d %dx%d%s | offset %d,%d: %s",
+				deriveNames[d.result], entryName, frame, pf->w, pf->h, label, composite ? "every frame of the file (event portrait composite), seeded frame" : "frame", frameName, canvasW, canvasH,
+				parts->left, parts->top, uw, uh, keyText, d.ox, d.oy, how);
+		}
+
+		*ox = d.ox;
+		*oy = d.oy;
+		return d.result;
+	}
 
 	// the same name with or without .PNG
 	BOOL SameStem(const CHAR* a, const CHAR* b)
@@ -3465,16 +3730,23 @@ namespace ImageReplace
 	// the full piece list, so a misplacement can be read from the log: sheet rect -> pack frame, its part's rect in the frame canvas, the frame box placed in the sheet
 	VOID SheetPieceLog(const CHAR* label, DWORD fileId, LONG w, LONG h, DWORD count, const Twin::SeedSheetStats* stats, const CHAR* why)
 	{
-		DebugLog("image sheet pieces %.40s file %u %dx%d (%s): frames %u, pieces %u, dropped as uncertain %u (block of another size %u, frames whose pack entry reaches outside their parts %u) | frames whose pack entry is named like the file %u, seeded in canvas layout | pack %s",
-			label, fileId, w, h, why, sheetFrameCount, count, stats->uncertain, stats->wrongSize, stats->notFrame, stats->fileNamed, pack.gameNames ? "gamenames" : "assets");
+		DebugLog("image sheet pieces %.40s file %u %dx%d (%s): frames %u, pieces %u, dropped as uncertain %u (block of another size %u, frames whose pack entry reaches outside their parts %u, frames whose zeroed offset could not be derived %u) | frames whose pack entry is named like the file %u, seeded in canvas layout | pack %s",
+			label, fileId, w, h, why, sheetFrameCount, count, stats->uncertain, stats->wrongSize, stats->notFrame, stats->offsetLost, stats->fileNamed, pack.gameNames ? "gamenames" : "assets");
 		for (DWORD f = 0; f < sheetFrameCount && f < 12; ++f)
 		{
 			const SheetFrameInfo* i = &sheetFrames[f];
 			const PackFrame* pf = i->frame >= 0 ? &pack.frames[i->frame] : NULL;
-			DebugLog("image sheet pieces %.40s frame [%u] %.48s canvas %dx%d, %u parts covering %d,%d %dx%d of it -> pack %.48s%s #%d %dx%d offset %d,%d origin %s%s%s", label, f, i->name, i->cw, i->ch,
-				i->parts, i->bounds.left, i->bounds.top, i->bounds.right - i->bounds.left, i->bounds.bottom - i->bounds.top,
+			CHAR derivedText[80] = "";
+			if (i->derived == DerivePlaced)
+				StrPrint(derivedText, " | ZEROED OFFSET DERIVED: placed at %d,%d", i->ox, i->oy);
+			else if (i->derived == DeriveFullCanvas)
+				StrCopy(derivedText, " | full-canvas entry, 0,0 is its place");
+			else if (i->derived == DeriveUnplaced)
+				StrCopy(derivedText, " | ZEROED OFFSET NOT DERIVABLE: left 1x");
+			DebugLog("image sheet pieces %.40s frame [%u] %.48s canvas %dx%d, %u parts %s %d,%d %dx%d of it -> pack %.48s%s #%d %dx%d offset %d,%d origin %s%s%s%s", label, f, i->name, i->cw, i->ch,
+				i->parts, i->composite ? "with the file's other frames (event portrait composite) covering" : "covering", i->bounds.left, i->bounds.top, i->bounds.right - i->bounds.left, i->bounds.bottom - i->bounds.top,
 				i->anim ? pack.names + i->anim->name : "-", i->exact ? "" : " (name variant)", i->frame, pf ? pf->w : 0, pf ? pf->h : 0, pf ? pf->ox : 0, pf ? pf->oy : 0,
-				originNames[i->origin < 3 ? i->origin : 0], i->outsideParts ? " | ENTRY OUTSIDE THE FRAME'S PARTS: not this frame, left 1x" : "", !i->fileNamed ? "" : i->readingsDiffer ? " | named like the file, canvas reading (an identity reading would differ)" : " | named like the file, both readings agree");
+				originNames[i->origin < 3 ? i->origin : 0], derivedText, i->outsideParts ? " | ENTRY OUTSIDE THE FRAME'S PARTS: not this frame, left 1x" : "", !i->fileNamed ? "" : i->readingsDiffer ? " | named like the file, canvas reading (an identity reading would differ)" : " | named like the file, both readings agree");
 		}
 		CHAR text[1100];
 		CHAR* at = text;
@@ -3527,7 +3799,51 @@ namespace ImageReplace
 		DWORD fileNamedDiffer = 0;
 		// event portraits, faces and every sheet with a multi-part frame of the decode's size get their full piece list, beyond the first 20 sheets
 		DWORD pathLength = StrLength(a->path);
-		BOOL forceLog = (pathLength >= 10 && !StrCompareInsensitive(a->path + pathLength - 10, "\\Events.ff")) || (pathLength >= 9 && !StrCompareInsensitive(a->path + pathLength - 9, "\\Faces.ff"));
+		BOOL events = pathLength >= 10 && !StrCompareInsensitive(a->path + pathLength - 10, "\\Events.ff");
+		BOOL forceLog = events || (pathLength >= 9 && !StrCompareInsensitive(a->path + pathLength - 9, "\\Faces.ff"));
+
+		// an event portrait's entry is Gallean's composite of every frame of the file (GamePortraitSource.GetUnitEventPortrait, GameImages.TryGetCompositeSprite):
+		// the frames laid on one canvas as wide and tall as the largest frame's. Its place is read against the union of all those frames' parts
+		RECT fileBounds = { 0, 0, 0, 0 };
+		LONG fileCanvasW = 0, fileCanvasH = 0;
+		if (events && pack.gameNames)
+		{
+			for (DWORD b = 0; b < blocks; ++b)
+			{
+				if (offsets[b] > a->imagesSize || a->imagesSize - offsets[b] < 1 + 2 + 4 + 4 + 1024 + 4)
+					continue;
+				LONG sizeX = *(const LONG*)(a->images + offsets[b] + 3), sizeY = *(const LONG*)(a->images + offsets[b] + 7);
+				if ((sizeX || sizeY) && (sizeX != w || sizeY != h))
+					continue;
+				const BYTE* p = a->images + offsets[b] + 1 + 2 + 4 + 4 + 1024;
+				DWORD frames = *(const DWORD*)p;
+				p += 4;
+				for (DWORD f = 0; f < frames; ++f)
+				{
+					const BYTE* next;
+					if (!TextAt(p, end, &next) || next + 12 > end)
+						break;
+					DWORD parts = *(const DWORD*)next;
+					fileCanvasW = max(fileCanvasW, *(const LONG*)(next + 4));
+					fileCanvasH = max(fileCanvasH, *(const LONG*)(next + 8));
+					p = next + 12;
+					if (parts > (DWORD)(end - p) / 24)
+						break;
+					const LONG* part = (const LONG*)p;
+					p += parts * 24;
+					for (DWORD i = 0; i < parts; ++i, part += 6)
+					{
+						RECT r = { part[0], part[1], part[0] + part[4], part[1] + part[5] };
+						if (r.right <= r.left || r.bottom <= r.top)
+							continue;
+						if (IsRectEmpty(&fileBounds))
+							fileBounds = r;
+						else
+							UnionRect(&fileBounds, &fileBounds, &r);
+					}
+				}
+			}
+		}
 
 		for (DWORD b = 0; b < blocks; ++b)
 		{
@@ -3590,14 +3906,7 @@ namespace ImageReplace
 				// canvas bounds as its box (G000MG0116 64x54 at 124,123 of 320x320), which a raw file cannot have. So these frames are placed like any other; the log only marks them,
 				// and whether an identity reading (the entry over the file at 0,0, as PlainFrame reads a plain file) would have placed any part differently
 				BOOL fileNamed = !exact || (label && SameStem(pack.names + anim->name, label));
-				BOOL differ = FALSE;
-				for (DWORD i = 0; i < parts && fileNamed && !differ; ++i)
-					differ = part[i * 6 + 2] - part[i * 6] + ox != 0 || part[i * 6 + 3] - part[i * 6 + 1] + oy != 0;
 
-				// the entry is the frame's content box in its canvas (Gallean builds the frame from its parts and the pack crops it to what is not transparent), so it lies
-				// inside the union of the parts' canvas rects. One that reaches outside is another image of that name (another archive, or a raw file): its pieces would
-				// sample the wrong 4K, so the frame stays 1x. Geometry only, no pixels. Only for stills looked up by their own name in the gamenames pack: an animation frame's
-				// entry may be cropped to the whole animation's bounds, which no log has shown yet, and an asset-pack entry is the full canvas
 				RECT bounds = { 0, 0, 0, 0 };
 				for (DWORD i = 0; i < parts; ++i)
 				{
@@ -3609,12 +3918,45 @@ namespace ImageReplace
 					else
 						UnionRect(&bounds, &bounds, &r);
 				}
-				BOOL outsideParts = pack.gameNames && !link && origin != OriginSprite && !IsRectEmpty(&bounds) &&
-					(ox < bounds.left || oy < bounds.top || ox + pf->w > bounds.right || oy + pf->h > bounds.bottom);
+
+				// the repack zeroed the offsets of SPRITE-origin entries; where 0,0 cannot be the entry's place, it is taken back from the parts (see DeriveOffset).
+				// An Events.ff entry named like the file is the composite of every frame of the file, so it is read against all of them
+				BOOL composite = events && fileNamed && !IsRectEmpty(&fileBounds);
+				const RECT* checkBounds = composite ? &fileBounds : &bounds;
+				BYTE derivedResult = DeriveNone;
+				if (pack.gameNames && !link && origin == OriginCanvas)
+				{
+					LONG dx = 0, dy = 0;
+					derivedResult = DeriveOffset(a, fileId, label, w, h, offsets, blocks, frame, pack.names + anim->name, name, composite, checkBounds,
+						composite ? fileCanvasW : cw, composite ? fileCanvasH : ch, &dx, &dy);
+					if (derivedResult == DerivePlaced)
+					{
+						ox = dx;
+						oy = dy;
+					}
+				}
+				BOOL offsetLost = derivedResult == DeriveUnplaced;
+
+				BOOL differ = FALSE;
+				for (DWORD i = 0; i < parts && fileNamed && !differ; ++i)
+					differ = part[i * 6 + 2] - part[i * 6] + ox != 0 || part[i * 6 + 3] - part[i * 6 + 1] + oy != 0;
+
+				// the entry is the frame's content box in its canvas (Gallean builds the frame from its parts and the pack crops it to what is not transparent), so it lies
+				// inside the union of the parts' canvas rects. One that reaches outside is another image of that name (another archive, or a raw file): its pieces would
+				// sample the wrong 4K, so the frame stays 1x. Geometry only, no pixels. Only for stills looked up by their own name in the gamenames pack: an animation frame's
+				// entry may be cropped to the whole animation's bounds, which no log has shown yet, and an asset-pack entry is the full canvas.
+				// A full-canvas entry at 0,0 (Gallean's full-canvas sprite or composite) holds the parts too, and an event portrait's composite covers every frame of the file
+				BOOL outsideParts = pack.gameNames && !link && origin != OriginSprite && !IsRectEmpty(checkBounds) && derivedResult != DeriveFullCanvas && !offsetLost &&
+					(ox < checkBounds->left || oy < checkBounds->top || ox + pf->w > checkBounds->right || oy + pf->h > checkBounds->bottom);
 				if (outsideParts)
 				{
 					++stats.notFrame;
 					++sheetCheck.notFrame;
+				}
+				if (offsetLost)
+				{
+					++stats.offsetLost;
+					++sheetCheck.offsetLost;
 				}
 				if (parts > 1 && cw == w && ch == h)
 					forceLog = TRUE;
@@ -3632,8 +3974,12 @@ namespace ImageReplace
 					info->fileNamed = (BYTE)fileNamed;
 					info->readingsDiffer = (BYTE)differ;
 					info->outsideParts = (BYTE)outsideParts;
+					info->derived = derivedResult;
+					info->composite = (BYTE)composite;
 					info->parts = (WORD)min(parts, 0xFFFFu);
-					info->bounds = bounds;
+					info->bounds = *checkBounds;
+					info->ox = ox;
+					info->oy = oy;
 				}
 				if (fileNamed)
 				{
@@ -3698,7 +4044,7 @@ namespace ImageReplace
 					sheetCanvas[count].x = cx;
 					sheetCanvas[count].y = cy;
 					sheetFrameOf[count] = frameOf;
-					sheetDrop[count] = (BYTE)outsideParts;
+					sheetDrop[count] = (BYTE)(outsideParts || offsetLost);
 					shared[count++] = FALSE;
 				}
 			}
@@ -3792,6 +4138,8 @@ namespace ImageReplace
 			return "its frames are additive or not in the pack";
 		if (stats->notFrame)
 			return "its pack entry reaches outside the frame's parts, so it is another image of that name: left 1x";
+		if (stats->offsetLost)
+			return "its pack entry's offset was zeroed by the repack and neither the parts nor the 1x key place it: left 1x";
 		if (stats->wrongSize)
 			return "its -IMAGES.OPT block is of another sheet size";
 		if (stats->uncertain)
@@ -3883,6 +4231,8 @@ namespace ImageReplace
 			ground.chunkCount, ground.builds, ground.published, storeStats.prefetchLoads, storeStats.prefetchFrames);
 		DebugLog("image sheet checks since start: pieces left 1x as uncertain %u | blocks of another sheet size %u, frames whose pack entry is named like the sheet file %u (an identity reading would differ for %u; all seeded in canvas layout), frames whose pack entry reaches outside their parts (another image of the name) %u, overlapping pieces with different 4K %u, one block at two places of a frame %u, sheets too big to check %u",
 			sheetCheck.dropped, sheetCheck.wrongSize, sheetCheck.fileNamed, sheetCheck.fileNamedDiffer, sheetCheck.notFrame, sheetCheck.overlaps, sheetCheck.duplicates, sheetCheck.unchecked);
+		DebugLog("image pack offsets zeroed by the repack, since start: entries placed at their parts union %u, at the 1x key's non-transparent box %u, full-canvas entries kept at 0,0 %u, left 1x %u (frames seeded without them %u), decodes without 8-bit indices at hand %u",
+			derived.placedUnion, derived.placedKey, derived.fullCanvas, derived.unplaced, sheetCheck.offsetLost, derived.noKey);
 		LogRecords();
 	}
 
@@ -4332,6 +4682,22 @@ namespace ImageReplace
 		DWORD captureSeq;
 		DWORD decodes, indices, matched, partial, stale;
 	} loader;
+
+	// the 8-bit indices of the latest StoreDraw decode, when it is this file's whole sheet: StoreDrawn sets the loader before the sheet seed, and LoaderDecode names
+	// a blit from it. Its rows are the pitch field in bytes (format byte 0). Used only for the key's non-transparent box (KeyBox)
+	BOOL KeyIndices(const Archive* a, DWORD fileId, LONG w, LONG h, const BYTE** data, LONG* pitch)
+	{
+		if (loader.archive != a || !loader.file || loader.file->id != fileId || loader.format || !loader.data || loader.pitchField < w || w <= 0 || h <= 0)
+			return FALSE;
+		if (loader.rect.right - loader.rect.left != w || loader.rect.bottom - loader.rect.top != h || game.frameNo - loader.frameNo > LOADER_FRAMES)
+			return FALSE;
+		const BYTE* origin = loader.data + loader.rect.top * loader.pitchField + loader.rect.left;
+		if (IsBadReadPtr(origin, (h - 1) * loader.pitchField + w))
+			return FALSE;
+		*data = origin;
+		*pitch = loader.pitchField;
+		return TRUE;
+	}
 
 	BOOL LoaderDecode(const BYTE* src, LONG srcPitch, LONG width, LONG height, RecordName* out, BOOL withPieces)
 	{

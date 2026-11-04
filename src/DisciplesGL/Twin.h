@@ -82,6 +82,8 @@ namespace Twin
 		// frames whose pack entry reaches outside the union of their parts in the canvas: another image of that name, left 1x
 		DWORD notFrame;
 		DWORD uncertain;
+		// frames whose pack entry lost its crop offset in the repack and whose place the parts and the 1x key cannot give: left 1x
+		DWORD offsetLost;
 	};
 	// memoryTwin FALSE: an 8-bit decode whose 32 bpp reading runs past the scratch; it is only captured for the transfer, no memory twin is made over it
 	VOID SeedArt(const VOID* first, LONG pitch, LONG width, LONG height, SeedKind kind, const CHAR* name, const SeedPiece* pieces, DWORD count, const SeedConflict* conflicts, DWORD conflictCount, const SeedSheetStats* sheet, BOOL memoryTwin = TRUE);

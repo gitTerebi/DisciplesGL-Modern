@@ -4577,6 +4577,8 @@ namespace Twin
 			return "no frame name of the sheet is in the pack";
 		if (sheet->unmapped + sheet->additive == sheet->frames)
 			return "its frames are additive or not in the pack";
+		if (sheet->offsetLost)
+			return "its pack entry's offset was zeroed by the repack and could not be derived (see image pack offset)";
 		if (sheet->uncertain || sheet->wrongSize)
 			return "no piece could be placed with certainty (see image sheet uncertain)";
 		return "every part falls outside the sheet";
