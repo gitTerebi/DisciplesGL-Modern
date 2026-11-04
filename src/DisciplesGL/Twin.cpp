@@ -56,7 +56,7 @@
 #define POOL_KEEP (8 * 1024 * 1024)
 #define LOG_PERIOD 5000
 #define CHECK_FIRST 3000
-#define CHECK_PERIOD 10000
+#define CHECK_PERIOD 5000
 #define LOG_TWINS 64
 #define LOG_FAILS 16
 #define TILE 16
@@ -66,9 +66,15 @@
 #define REPAIR_TOP 3
 #define ART_MAX 16
 #define UPGRADE_MAX 128
-#define MAX_EXPECT 8192
-#define MAX_IMAGES 2048
-#define EXPECT_BUCKETS 4096
+#define MAX_EXPECT 32768
+#define MAX_IMAGES 8192
+#define EXPECT_BUCKETS 8192
+#define THRASH_MAX 32
+#define THRASH_WINDOW 60
+#define THRASH_LIMIT 8
+#define THRASH_BLOCK 300
+#define REJECT_LOGS 16
+#define THRASH_LOGS 16
 #define EXPECT_SCAN 256
 #define UPGRADE_LOGS 32
 #define UNMATCHED_LOGS 16
@@ -140,6 +146,24 @@ namespace Twin
 		RECT clip;
 	};
 
+	struct CheckResult {
+		BOOL valid;
+		DWORD tick;
+		DWORD twin;
+		DWORD bad;
+		DWORD tiles;
+		DWORD px;
+		DWORD art;
+		DWORD artDiffer;
+	};
+
+	struct Thrash {
+		RECT rect;
+		DWORD first;
+		DWORD count;
+		DWORD until;
+	};
+
 	struct Record {
 		StateBuffer* owner;
 		BYTE* base;
@@ -155,6 +179,8 @@ namespace Twin
 		RECT art[ART_MAX];
 		DWORD upCount;
 		Upgrade up[UPGRADE_MAX];
+		DWORD thrashCount;
+		Thrash thrash[THRASH_MAX];
 		DWORD count;
 		RECT dirty[DIRTY_MAX];
 	};
@@ -235,10 +261,17 @@ namespace Twin
 		DWORD notReady;
 		DWORD unmatched;
 		DWORD overflow;
+		DWORD duplicates;
+		DWORD rejected;
+		DWORD thrashed;
+		DWORD blocked;
 		DWORD px;
 		DWORD upgradeLogs;
 		DWORD unmatchedLogs;
+		DWORD rejectLogs;
+		DWORD thrashLogs;
 		DWORD frameLogs;
+		BOOL checked;
 	} art;
 
 	struct {
@@ -262,6 +295,8 @@ namespace Twin
 		DWORD lastReplayUs;
 		DWORD artDraws;
 		DWORD artFallbacks;
+		DWORD artRejected;
+		CheckResult check;
 	} shared = { {}, 0, 0, TRUE, FALSE };
 
 	struct {
@@ -299,6 +334,8 @@ namespace Twin
 		DWORD drawCalls;
 		DWORD artDraws;
 		DWORD artFallbacks;
+		DWORD artRejected;
+		DWORD rejectLogs;
 		DWORD readFbo;
 		LARGE_INTEGER frequency;
 		struct {
@@ -900,6 +937,7 @@ namespace Twin
 		}
 		twin->artCount = 0;
 		twin->upCount = 0;
+		twin->thrashCount = 0;
 		MarkAll(twin);
 	}
 
@@ -981,6 +1019,7 @@ namespace Twin
 		twin->keyed = FALSE;
 		twin->artCount = 0;
 		twin->upCount = 0;
+		twin->thrashCount = 0;
 
 		while (game.top && !game.twins[game.top - 1].owner)
 			--game.top;
@@ -1003,6 +1042,7 @@ namespace Twin
 		}
 
 		DWORD imageIndex = art.imageCount++;
+		DWORD added = 0;
 		Image* image = &art.images[imageIndex];
 		image->frame = frame;
 		image->flipped = flipped;
@@ -1024,6 +1064,21 @@ namespace Twin
 				break;
 			}
 
+			DWORD* bucket = &art.bucket[ExpectBucket(part->dx, part->dy)];
+			BOOL duplicate = FALSE;
+			for (DWORD next = *bucket; next && !duplicate; next = art.expect[next - 1].next)
+			{
+				const Expect* old = &art.expect[next - 1];
+				const Image* oldImage = &art.images[old->image];
+				duplicate = !old->used && old->dx == part->dx && old->dy == part->dy && old->sx == part->sx && old->sy == part->sy && old->w == part->w && old->h == part->h
+					&& oldImage->frame == frame && !oldImage->flipped == !flipped;
+			}
+			if (duplicate)
+			{
+				++art.duplicates;
+				continue;
+			}
+
 			DWORD index = art.count++;
 			Expect* e = &art.expect[index];
 			e->dx = part->dx;
@@ -1034,11 +1089,14 @@ namespace Twin
 			e->h = part->h;
 			e->image = imageIndex;
 			e->used = FALSE;
-			DWORD* bucket = &art.bucket[ExpectBucket(e->dx, e->dy)];
 			e->next = *bucket;
 			*bucket = index + 1;
 			++art.expected;
+			++added;
 		}
+
+		if (!added && imageIndex == art.imageCount - 1)
+			--art.imageCount;
 	}
 
 	BOOL Inside(const Expect* e, LONG x, LONG y, LONG w, LONG h, LONG sx, LONG sy)
@@ -1087,6 +1145,20 @@ namespace Twin
 
 		RECT map = { e->dx - image->place.left + sheet.left - e->sx, e->dy - image->place.top + sheet.top - e->sy, placeW, placeH };
 
+		LONG cx = e->dx - image->place.left, cy = e->dy - image->place.top;
+		if (placeW < 2 || placeH < 2 || cx < -1 || cy < -1 || cx + e->w > placeW + 1 || cy + e->h > placeH + 1)
+		{
+			++art.rejected;
+			if (art.rejectLogs < REJECT_LOGS && art.frameLogs < LOGS_FRAME)
+			{
+				++art.rejectLogs;
+				++art.frameLogs;
+				DebugLog("twin rejected place frame=%d src=%p sheet=%d,%d %dx%d dst=%d,%d canvas=%d,%d of %dx%d at frame %u", image->frame, source->owner,
+					e->sx, e->sy, e->w, e->h, x, y, cx, cy, placeW, placeH, game.frameNo);
+			}
+			return;
+		}
+
 		FlushRegion(source, id, &sheet);
 		Verify(source, id, &sheet, NULL, 0, FALSE);
 
@@ -1103,6 +1175,52 @@ namespace Twin
 		if (!ImageReplace::ArtReady(image->frame))
 		{
 			++art.notReady;
+			return;
+		}
+
+		Thrash* thrash = NULL;
+		for (DWORD i = 0; i < source->thrashCount && !thrash; ++i)
+			if (EqualRect(&source->thrash[i].rect, &sheet))
+				thrash = &source->thrash[i];
+		if (!thrash)
+		{
+			if (source->thrashCount < THRASH_MAX)
+				thrash = &source->thrash[source->thrashCount++];
+			else
+			{
+				thrash = &source->thrash[0];
+				for (DWORD i = 1; i < THRASH_MAX; ++i)
+					if (source->thrash[i].until <= game.frameNo && (thrash->until > game.frameNo || source->thrash[i].first < thrash->first))
+						thrash = &source->thrash[i];
+			}
+			thrash->rect = sheet;
+			thrash->first = game.frameNo;
+			thrash->count = 0;
+			thrash->until = 0;
+		}
+
+		if (thrash->until > game.frameNo)
+		{
+			++art.blocked;
+			return;
+		}
+
+		if (game.frameNo - thrash->first >= THRASH_WINDOW)
+		{
+			thrash->first = game.frameNo;
+			thrash->count = 0;
+		}
+
+		if (++thrash->count > THRASH_LIMIT)
+		{
+			thrash->until = game.frameNo + THRASH_BLOCK;
+			++art.thrashed;
+			if (art.thrashLogs < THRASH_LOGS)
+			{
+				++art.thrashLogs;
+				DebugLog("twin thrash frame=%d src=%p sheet=%d,%d %dx%d upgraded %u times in %u frames, blocked for %u frames at frame %u", image->frame, source->owner,
+					sheet.left, sheet.top, sheet.right - sheet.left, sheet.bottom - sheet.top, thrash->count - 1, game.frameNo - thrash->first + 1, THRASH_BLOCK, game.frameNo);
+			}
 			return;
 		}
 
@@ -1138,6 +1256,11 @@ namespace Twin
 
 		++art.upgrades;
 		art.px += width * height;
+		if (!art.checked)
+		{
+			art.checked = TRUE;
+			game.checkRequest = TRUE;
+		}
 
 		if (art.upgradeLogs < UPGRADE_LOGS && art.frameLogs < LOGS_FRAME)
 		{
@@ -1520,12 +1643,19 @@ namespace Twin
 		Lock();
 		DWORD artReplayed = shared.artDraws;
 		DWORD artFallbacks = shared.artFallbacks;
-		shared.artDraws = shared.artFallbacks = 0;
+		DWORD artRejected = shared.artRejected;
+		shared.artDraws = shared.artFallbacks = shared.artRejected = 0;
+		CheckResult check = shared.check;
 		Unlock();
 
-		DebugLog("twin art expected %u matched %u upgrades %u px %u skipped %u notready %u unmatched %u overflow %u | replayed %u fallbacks %u",
-			art.expected, art.matched, art.upgrades, art.px, art.skipped, art.notReady, art.unmatched, art.overflow, artReplayed, artFallbacks);
-		art.expected = art.matched = art.upgrades = art.px = art.skipped = art.notReady = art.unmatched = art.overflow = 0;
+		DebugLog("twin art expected %u dup %u matched %u upgrades %u px %u skipped %u notready %u rejected place %u (replay %u) thrash %u blocked %u unmatched %u overflow %u | replayed %u fallbacks %u",
+			art.expected, art.duplicates, art.matched, art.upgrades, art.px, art.skipped, art.notReady, art.rejected, artRejected, art.thrashed, art.blocked, art.unmatched, art.overflow, artReplayed, artFallbacks);
+		art.expected = art.duplicates = art.matched = art.upgrades = art.px = art.skipped = art.notReady = art.rejected = art.thrashed = art.blocked = art.unmatched = art.overflow = 0;
+
+		if (check.valid)
+			DebugLog("twin gpu check %ums ago twin %u bad tiles %u/%u px %u art tiles %u (differ %u)", now - check.tick, check.twin, check.bad, check.tiles, check.px, check.art, check.artDiffer);
+		else
+			DebugLog("twin gpu check none yet");
 
 		game.frames = 0;
 		game.queuedMax = 0;
@@ -2274,9 +2404,29 @@ namespace Twin
 		Gpu* gpu = &gl.twins[cmd->dst];
 		GLuint texture = 0;
 		LONG width = 0, height = 0;
-		if (!ImageReplace::ArtTexture((LONG)cmd->value, &texture, &width, &height) || !texture)
+		const RECT* map = &cmd->clip;
+		FLOAT placeW = (FLOAT)map->right, placeH = (FLOAT)map->bottom;
+		BOOL ready = ImageReplace::ArtTexture((LONG)cmd->value, &texture, &width, &height) && texture;
+		if (ready)
 		{
+			FLOAT aspect = width > 0 && height > 0 ? (placeW * height) / (placeH * width) : 0.0f;
+			if (aspect < 0.98f || aspect > 1.02f)
+			{
+				ready = FALSE;
+				++gl.artRejected;
+				if (gl.rejectLogs < REJECT_LOGS)
+				{
+					++gl.rejectLogs;
+					DebugLog("twin rejected aspect frame=%d place %dx%d texture %dx%d twin %u sheet=%d,%d %dx%d", (LONG)cmd->value, map->right, map->bottom, width, height,
+						cmd->dst, cmd->rect.left, cmd->rect.top, cmd->rect.right - cmd->rect.left, cmd->rect.bottom - cmd->rect.top);
+				}
+			}
+		}
+		else
 			++gl.artFallbacks;
+
+		if (!ready)
+		{
 			GLBindTexture(GL_TEXTURE_2D, gl.stage);
 			GLPixelStorei(GL_UNPACK_ALIGNMENT, 4);
 			LONG shelf[3] = { 0, 0, 0 };
@@ -2286,8 +2436,6 @@ namespace Twin
 			return;
 		}
 
-		const RECT* map = &cmd->clip;
-		FLOAT placeW = (FLOAT)map->right, placeH = (FLOAT)map->bottom;
 		FLOAT u0 = map->left / placeW;
 		FLOAT u1 = (map->left + cmd->rect.right - cmd->rect.left) / placeW;
 		FLOAT v0 = map->top / placeH;
@@ -2412,6 +2560,17 @@ namespace Twin
 			ptr += StrPrint(ptr, " (%d,%d,%u)", worst[k].x, worst[k].y, worst[k].count);
 
 		DebugLog("twin check twin %u %dx%d N %d bad tiles %u/%u px %u art tiles %u (differ %u) worst%s", cmd->dst, width, height, gpu->scale, badTiles, tilesX * tilesY - artTiles, badPixels, artTiles, artBad, badTiles ? text : " none");
+
+		Lock();
+		shared.check.valid = TRUE;
+		shared.check.tick = GetTickCount();
+		shared.check.twin = cmd->dst;
+		shared.check.bad = badTiles;
+		shared.check.tiles = tilesX * tilesY - artTiles;
+		shared.check.px = badPixels;
+		shared.check.art = artTiles;
+		shared.check.artDiffer = artBad;
+		Unlock();
 	}
 
 	VOID Replay(const List* list)
@@ -2578,6 +2737,7 @@ namespace Twin
 			gl.drawCalls = 0;
 			gl.artDraws = 0;
 			gl.artFallbacks = 0;
+			gl.artRejected = 0;
 			gl.readFbo = readFbo;
 			GLUseProgram(0);
 			GLBindVertexArray(gl.vao);
@@ -2636,6 +2796,7 @@ namespace Twin
 			shared.replays += replayed;
 			shared.artDraws += gl.artDraws;
 			shared.artFallbacks += gl.artFallbacks;
+			shared.artRejected += gl.artRejected;
 			shared.drawCalls += gl.drawCalls;
 			shared.lastDrawCalls = gl.drawCalls;
 			++shared.draws;
