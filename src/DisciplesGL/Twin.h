@@ -14,8 +14,13 @@ namespace Twin
 	VOID OnFill(StateBuffer* dst, const RECT* rect, DWORD color);
 	VOID OnWrite(const VOID* first, LONG pitch, LONG width, LONG height);
 	VOID OnWriteAll(StateBuffer* buffer);
-	enum PixelMode { PixelKeyed, PixelAverage, PixelAdd, PixelSub, PixelEmpty };
+	enum PixelMode { PixelKeyed, PixelAverage, PixelAdd, PixelSub, PixelEmpty, PixelCopy, PixelBlend, PixelKeyedCopy, PixelTint };
+	enum PixelFlag { PixelMirror = 0x10000 };
 	VOID OnPixelCopy(PixelMode mode, const DWORD* src, LONG srcPitch, const DWORD* dst, LONG dstPitch, LONG width, LONG height, DWORD key, DWORD param);
+	VOID OnFillRect(const DWORD* first, LONG pitch, LONG width, LONG height, DWORD color);
+	VOID OnTintRect(const DWORD* first, LONG pitch, LONG width, LONG height, DWORD color, DWORD weight);
+	VOID OnBlendRow(const DWORD* src, const DWORD* dst, LONG length, const BYTE* mask, BOOL keyed, DWORD key);
+	VOID OnLighter(const DWORD* first, LONG pitch, LONG width, LONG height, DWORD key, BOOL lighten);
 	VOID OnPresent(StateBuffer* screen, LONG left, LONG top);
 	struct ArtPart {
 		LONG dx, dy;

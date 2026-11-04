@@ -2211,18 +2211,18 @@ namespace Hooks
 		return Blend_SSE(pix, r | (g << 8) | (b << 16), msk, _mm_setzero_si128(), _mm_set1_epi16(0xFF));
 	}
 
-	VOID TwinRows(const BlendData* items, DWORD count)
+	VOID TwinRows(const BlendData* items, DWORD count, BOOL keyed, DWORD key)
 	{
 		for (; count; --count, ++items)
 			if (items->length)
-				Twin::OnWrite(items->dstData, items->length, items->length, 1);
+				Twin::OnBlendRow(items->srcData, items->dstData, items->length, items->mskData, keyed, key);
 	}
 
 	VOID __stdcall Pixel_BlitBlend(BlendData blendItem)
 	{
 		TextReplace::TracePixel("blend", blendItem.dstData, blendItem.srcData, blendItem.length, 1, 0, _ReturnAddress());
 		TextReplace::OnPixelRows(&blendItem, 1);
-		TwinRows(&blendItem, 1);
+		TwinRows(&blendItem, 1, FALSE, 0);
 
 		for (; blendItem.length; --blendItem.length, ++blendItem.srcData, ++blendItem.dstData, ++blendItem.mskData)
 			*blendItem.dstData = Blend(*blendItem.dstData, *blendItem.srcData, *blendItem.mskData);
@@ -2232,7 +2232,7 @@ namespace Hooks
 	{
 		TextReplace::TracePixel("blend", blendItem.dstData, blendItem.srcData, blendItem.length, 1, 0, _ReturnAddress());
 		TextReplace::OnPixelRows(&blendItem, 1);
-		TwinRows(&blendItem, 1);
+		TwinRows(&blendItem, 1, FALSE, 0);
 
 		__m128i zero = _mm_setzero_si128();
 		__m128i and1 = _mm_set1_epi16(0xFF);
@@ -2244,7 +2244,7 @@ namespace Hooks
 	{
 		TextReplace::TracePixel("blendkey", count ? blendItem->dstData : NULL, count ? blendItem->srcData : NULL, count ? blendItem->length : 0, count, 0, _ReturnAddress());
 		TextReplace::OnPixelRows(blendItem, count);
-		TwinRows(blendItem, count);
+		TwinRows(blendItem, count, TRUE, Convert565toRGB(colorKey));
 
 		if (count)
 		{
@@ -2279,7 +2279,7 @@ namespace Hooks
 	{
 		TextReplace::TracePixel("blendkey", count ? blendItem->dstData : NULL, count ? blendItem->srcData : NULL, count ? blendItem->length : 0, count, 0, _ReturnAddress());
 		TextReplace::OnPixelRows(blendItem, count);
-		TwinRows(blendItem, count);
+		TwinRows(blendItem, count, TRUE, Convert565toRGB(colorKey));
 
 		if (count)
 		{
@@ -2963,7 +2963,7 @@ namespace Hooks
 
 		colorKey = Convert565toRGB(colorKey);
 		pitch /= 2;
-		Twin::OnWrite(data, pitch, size->cx, size->cy);
+		Twin::OnLighter(data, pitch, size->cx, size->cy, colorKey, flag);
 		pitch -= size->cx;
 
 		LONG height = size->cy;
@@ -3214,7 +3214,7 @@ namespace Hooks
 		{
 			TextReplace::OnFillRect(obj->data, rect);
 			ImageReplace::OnGroundFill(obj, color == COLORKEY_CHECK_16 ? 0 : Convert565toRGB(color) | ALPHA_COMPONENT, rect);
-			Twin::OnWrite((DWORD*)obj->data + rect->top * (obj->pitch >> 1) + rect->left, obj->pitch >> 1, rect->right - rect->left, rect->bottom - rect->top);
+			Twin::OnFillRect((DWORD*)obj->data + rect->top * (obj->pitch >> 1) + rect->left, obj->pitch >> 1, rect->right - rect->left, rect->bottom - rect->top, Convert565toRGB(color));
 		}
 
 		LONG width = rect->right - rect->left;
@@ -3608,7 +3608,7 @@ namespace Hooks
 			colorFill = Convert565toRGB(colorFill);
 
 			DWORD* dst = (DWORD*)data + pt.y * sizePitch->cx + pt.x;
-			Twin::OnWrite(dst, sizePitch->cx, width, 1);
+			Twin::OnFillRect(dst, sizePitch->cx, width, 1, colorFill);
 			do
 				*dst++ = colorFill;
 			while (--width);
@@ -3626,7 +3626,7 @@ namespace Hooks
 			colorFill = Convert565toRGB(colorFill);
 
 			DWORD* dst = (DWORD*)data + pt.y * sizePitch->cx + pt.x;
-			Twin::OnWrite(dst, sizePitch->cx, 1, height);
+			Twin::OnFillRect(dst, sizePitch->cx, 1, height, colorFill);
 			do
 			{
 				*dst = colorFill;
@@ -3743,7 +3743,7 @@ namespace Hooks
 
 			DWORD* srcData = *((DWORD**)thisObj[11] + 1);
 			DWORD* dstData = (DWORD*)obj->data;
-			Twin::OnWrite(dstData, dstPitch, size->cx, size->cy);
+			Twin::OnPixelCopy(isBlend ? Twin::PixelTint : Twin::PixelKeyedCopy, srcData, srcPitch, dstData, dstPitch, size->cx, size->cy, COLORKEY_CHECK, isBlend ? blend : 0);
 
 			if (!isBlend)
 			{
@@ -3828,7 +3828,7 @@ namespace Hooks
 
 			DWORD* srcData = *((DWORD**)thisObj[11] + 1);
 			DWORD* dstData = (DWORD*)obj->data;
-			Twin::OnWrite(dstData, dstPitch, size->cx, size->cy);
+			Twin::OnPixelCopy(isBlend ? Twin::PixelTint : Twin::PixelKeyedCopy, srcData, srcPitch, dstData, dstPitch, size->cx, size->cy, COLORKEY_CHECK, isBlend ? blend : 0);
 
 			if (!isBlend)
 			{
@@ -3879,6 +3879,33 @@ namespace Hooks
 		*(BYTE*)&thisObj[9] = 0;
 	}
 
+	DWORD FaceColor(const PixObject* pix)
+	{
+		if (!pix->exists)
+			return ALPHA_COMPONENT;
+		return config.renderer == RendererGDI ? _byteswap_ulong(_rotl(pix->color, 8)) : pix->color;
+	}
+
+	VOID TwinFace(const DWORD* dstData, LONG dstPitch, const DWORD* srcData, LONG srcPitch, LONG top, LONG bottom, LONG width, BYTE isMirror, DWORD flag, DWORD minIdx, const PixObject* pixData_1, const PixObject* pixData_2, const DWORD* mskData, LONG mskPitch)
+	{
+		const DWORD* first = dstData + top * dstPitch;
+		LONG rows = bottom - top;
+		DWORD mirror = isMirror ? Twin::PixelMirror : 0;
+		Twin::OnPixelCopy(Twin::PixelCopy, srcData + top * srcPitch, srcPitch, first, dstPitch, width, rows, 0, mirror);
+
+		DWORD weight = (flag + 1) & 0xFF;
+		if (!weight)
+			return;
+
+		if (mskData)
+			Twin::OnPixelCopy(Twin::PixelBlend, mskData + top * mskPitch, mskPitch, first, dstPitch, width, rows, 0, weight | mirror);
+		else if (pixData_1->exists)
+			Twin::OnTintRect(first, dstPitch, width, rows, FaceColor(pixData_1), weight);
+
+		if (pixData_2->exists && minIdx < (DWORD)rows)
+			Twin::OnTintRect(first + minIdx * dstPitch, dstPitch, width, rows - minIdx, FaceColor(pixData_2), weight);
+	}
+
 	VOID __stdcall DrawFaces(DWORD* dstData, LONG dstPitch, DWORD* srcData, LONG srcPitch, LONG top, LONG bottom, LONG width, BYTE isMirror, DWORD flag, DWORD minIdx, PixObject* pixData_1, PixObject* pixData_2, DWORD* mskData, LONG mskPitch)
 	{
 		ImageReplace::OnFaceCopy(srcData, srcPitch, dstData, top, bottom, width, isMirror, (flag & 0xFF) && (!((flag + 1) & 0xFF) || (!mskData && !pixData_1->exists && (!pixData_2->exists || minIdx >= (DWORD)(bottom - top)))));
@@ -3886,7 +3913,7 @@ namespace Hooks
 		if (!flag)
 			return;
 
-		Twin::OnWrite(dstData + top * dstPitch, dstPitch, width, bottom - top);
+		TwinFace(dstData, dstPitch, srcData, srcPitch, top, bottom, width, isMirror, flag, minIdx, pixData_1, pixData_2, mskData, mskPitch);
 		srcData += top * srcPitch;
 		dstData += top * dstPitch + (isMirror ? width - 1 : 0);
 
@@ -3963,7 +3990,7 @@ namespace Hooks
 		if (!flag)
 			return;
 
-		Twin::OnWrite(dstData + top * dstPitch, dstPitch, width, bottom - top);
+		TwinFace(dstData, dstPitch, srcData, srcPitch, top, bottom, width, isMirror, flag, minIdx, pixData_1, pixData_2, mskData, mskPitch);
 		srcData += top * srcPitch;
 		dstData += top * dstPitch + (isMirror ? width - 1 : 0);
 
@@ -4042,7 +4069,7 @@ namespace Hooks
 	{
 		DWORD pitch = obj->pitch >> 1;
 		color = Convert565toRGB(color);
-		Twin::OnWrite((DWORD*)obj->data + loc->y * pitch + loc->x, pitch, count, 1);
+		Twin::OnFillRect((DWORD*)obj->data + loc->y * pitch + loc->x, pitch, count, 1, color);
 
 		for (DWORD* data = (DWORD*)obj->data + loc->y * pitch + loc->x; count; ++data, --count)
 			*data = color;
@@ -4063,6 +4090,11 @@ namespace Hooks
 		}
 	}
 
+	VOID __stdcall TwinPoint(const DWORD* at, DWORD color)
+	{
+		Twin::OnFillRect(at, 1, 1, 1, color);
+	}
+
 	DWORD back_00538413;
 	VOID __declspec(naked) hook_005383F7()
 	{
@@ -4075,6 +4107,16 @@ namespace Hooks
 			mov eax, [ecx]
 			mov ecx, [ebp-0x1C]
 			mov [eax*0x4+esi], ecx
+
+			pushfd
+			pushad
+			lea edx, [eax*0x4+esi]
+			push ecx
+			push edx
+			call TwinPoint
+			popad
+			popfd
+
 			inc edi
 
 			jmp back_00538413

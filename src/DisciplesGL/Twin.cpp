@@ -42,6 +42,12 @@
 #ifndef GL_TEXTURE2
 #define GL_TEXTURE2 0x84C2
 #endif
+#ifndef GL_R8
+#define GL_R8 0x8229
+#endif
+#ifndef GL_RED
+#define GL_RED 0x1903
+#endif
 #ifndef GL_FUNC_ADD
 #define GL_FUNC_ADD 0x8006
 #endif
@@ -85,8 +91,9 @@
 #define GROUND_LOGS 8
 #define SCREEN_LOGS 64
 #define SHOW_LOGS 32
-#define SYNC_MAX 8
-#define PIXEL_MODES 5
+#define SYNC_MAX 64
+#define PIXEL_MODES 9
+#define MASK_SIZE 2048
 #define UNMATCHED_LOGS 16
 #define LOGS_FRAME 4
 #define SHOT_DELAY 15000
@@ -98,7 +105,7 @@ typedef VOID(__stdcall* GLBLENDEQUATION)(GLenum mode);
 
 namespace Twin
 {
-	enum CmdType { CmdCreate, CmdDestroy, CmdCopy, CmdFill, CmdUpload, CmdPresent, CmdReset, CmdArt, CmdGround, CmdPixel };
+	enum CmdType { CmdCreate, CmdDestroy, CmdCopy, CmdFill, CmdUpload, CmdPresent, CmdReset, CmdArt, CmdGround, CmdPixel, CmdTint, CmdMask, CmdLighter };
 
 	enum PresentFlags { PresentMapZoom = 1, PresentBack = 2, PresentZoomed = 4, PresentCheck = 8, PresentShot = 16 };
 
@@ -257,6 +264,13 @@ namespace Twin
 		DWORD pixelArt;
 		DWORD pixelUntwinned;
 		DWORD pixelSelf;
+		DWORD fillRects;
+		DWORD fillMerged;
+		DWORD tints;
+		DWORD blendRows;
+		DWORD blendMerged;
+		DWORD lighters;
+		DWORD pixelFallbacks;
 		DWORD presentNoTwin;
 		DWORD presentLogTick;
 		DWORD screenLogs;
@@ -360,6 +374,16 @@ namespace Twin
 		GLint tintLoc;
 		GLint emptyLoc;
 		GLint weightLoc;
+		GLint fillLoc;
+		GLint tintedLoc;
+		GLint lighterLoc;
+		GLint solidLoc;
+		GLuint maskProgram;
+		GLint maskKeyedLoc;
+		GLint maskKeyLoc;
+		GLint maskFrameLoc;
+		GLint maskExtentLoc;
+		GLuint maskTexture;
 		GLBLENDEQUATION blendEquation;
 		GLint opaqueLoc;
 		GLint scaleLoc;
@@ -1050,9 +1074,31 @@ namespace Twin
 		game.syncCount = 0;
 	}
 
+	VOID DrainSyncIn(Record* twin, const RECT* rect)
+	{
+		RECT part;
+		for (DWORD i = 0; i < game.syncCount; ++i)
+			if (game.syncs[i].owner == twin->owner && IntersectRect(&part, &game.syncs[i].rect, rect))
+			{
+				DrainSync();
+				return;
+			}
+	}
+
 	VOID DeferSync(Record* twin, DWORD id, const RECT* rect)
 	{
-		// the hook writes 1x right after this call, so the mirror can only take the real pixels at the next entry point
+		// the hook writes 1x right after its Twin calls, and some hooks send several calls before writing, so pixel calls leave the queue alone and other entry points drain it
+		if (game.syncCount)
+		{
+			RECT* last = &game.syncs[game.syncCount - 1].rect;
+			if (game.syncs[game.syncCount - 1].owner == twin->owner && (Contains(last, rect) ||
+				(last->left == rect->left && last->right == rect->right && last->bottom == rect->top)))
+			{
+				UnionRect(last, last, rect);
+				return;
+			}
+		}
+
 		if (game.syncCount == SYNC_MAX)
 			DrainSync();
 		game.syncs[game.syncCount].owner = twin->owner;
@@ -1061,9 +1107,10 @@ namespace Twin
 		++game.syncCount;
 	}
 
-	VOID Sync()
+	VOID Sync(BOOL drain = TRUE)
 	{
-		DrainSync();
+		if (drain)
+			DrainSync();
 
 		LONG gen = shared.gen;
 		if (gen == game.seenGen)
@@ -1328,7 +1375,7 @@ namespace Twin
 		link->lastUse = ++art.useClock;
 	}
 
-	BOOL ArtCopy(Record* target, DWORD dstId, const RECT* to, Record* source, DWORD srcId, const RECT* from, Expect* e, LONG x, LONG y, BOOL keyed, DWORD key, BOOL half)
+	BOOL ArtCopy(Record* target, DWORD dstId, const RECT* to, Record* source, DWORD srcId, const RECT* from, Expect* e, LONG x, LONG y, BOOL keyed, DWORD key, BOOL half, BOOL remember = TRUE)
 	{
 		e->used = TRUE;
 		while (art.head < art.count && art.expect[art.head].used)
@@ -1355,7 +1402,8 @@ namespace Twin
 		if (!RecordArt(target, dstId, to, srcId, from, image->frame, image->flipped, &image->place, keyed, key, FALSE, half))
 			return FALSE;
 
-		Remember(source, from, image->frame, image->flipped, &image->place, to);
+		if (remember)
+			Remember(source, from, image->frame, image->flipped, &image->place, to);
 		return TRUE;
 	}
 
@@ -1671,6 +1719,8 @@ namespace Twin
 			MarkDirty(target, whole);
 	}
 
+	VOID FillTwin(Record* twin, DWORD id, const RECT* rect, DWORD color);
+
 	VOID OnFill(StateBuffer* dst, const RECT* rect, DWORD color)
 	{
 		if (!Active())
@@ -1688,6 +1738,12 @@ namespace Twin
 			area = *rect;
 		else
 			SetRect(&area, 0, 0, twin->width, twin->height);
+		FillTwin(twin, id, &area, color);
+	}
+
+	VOID FillTwin(Record* twin, DWORD id, const RECT* rect, DWORD color)
+	{
+		RECT area = *rect;
 		if (!Clip(twin, &area))
 			return;
 
@@ -1695,6 +1751,23 @@ namespace Twin
 		FlushRegion(twin, id, &area, TRUE);
 		CoverArt(twin, &area);
 		DropLinks(twin, &area);
+		MirrorFill(twin, &area, color);
+
+		DWORD flags = twin->keyed && color == twin->key ? 1 : 0;
+		List* list = game.list;
+		if (list && list->count)
+		{
+			Cmd* last = &list->cmds[list->count - 1];
+			if (last->type == CmdFill && last->dst == id && last->value == color && last->flags == flags &&
+				((last->rect.top == area.top && last->rect.bottom == area.bottom && (last->rect.right == area.left || last->rect.left == area.right)) ||
+				(last->rect.left == area.left && last->rect.right == area.right && (last->rect.bottom == area.top || last->rect.top == area.bottom)) ||
+				Contains(&last->rect, &area)))
+			{
+				UnionRect(&last->rect, &last->rect, &area);
+				++game.fillMerged;
+				return;
+			}
+		}
 
 		Cmd* cmd = Emit(CmdFill);
 		if (!cmd)
@@ -1702,11 +1775,10 @@ namespace Twin
 			MarkDirty(twin, area);
 			return;
 		}
-		MirrorFill(twin, &area, color);
 		cmd->dst = id;
 		cmd->rect = area;
 		cmd->value = color;
-		cmd->flags = twin->keyed && color == twin->key ? 1 : 0;
+		cmd->flags = flags;
 
 		++game.list->counters.fills;
 	}
@@ -1777,7 +1849,7 @@ namespace Twin
 		if (!dst || !src || width <= 0 || height <= 0 || (DWORD)mode >= PIXEL_MODES || !Active())
 			return;
 
-		Sync();
+		Sync(FALSE);
 
 		DWORD dstId;
 		Record* target = FindAddress(dst, &dstId);
@@ -1804,10 +1876,12 @@ namespace Twin
 			return;
 		}
 		RECT from = { sx, sy, sx + width, sy + height };
+		DrainSyncIn(source, &from);
 
-		if (mode == PixelAverage && (param & 0xFF) >= 255)
+		BOOL mirror = (param & PixelMirror) != 0;
+		if ((mode == PixelAverage && (param & 0xFF) >= 255) || mode == PixelKeyedCopy || (mode == PixelCopy && !mirror))
 		{
-			CopyTwins(target, dstId, dx, dy, source, srcId, &from, TRUE, key);
+			CopyTwins(target, dstId, dx, dy, source, srcId, &from, mode != PixelCopy, key);
 			return;
 		}
 
@@ -1837,6 +1911,18 @@ namespace Twin
 			}
 		}
 
+		if (mode == PixelCopy && art.count)
+		{
+			Expect* e = Match(dx, dy, width, height, sx, sy);
+			if (e && e->dx == dx && e->dy == dy && ArtCopy(target, dstId, &to, source, srcId, &from, e, dx, dy, FALSE, 0, FALSE, FALSE))
+			{
+				++game.pixelArt;
+				AddArt(target, &to);
+				DeferSync(target, dstId, &to);
+				return;
+			}
+		}
+
 		Cmd* cmd = Emit(CmdPixel);
 		if (!cmd)
 		{
@@ -1852,7 +1938,7 @@ namespace Twin
 		cmd->flags = mode;
 		cmd->extra = param;
 
-		if (mode != PixelAdd && mode != PixelSub)
+		if (mode != PixelAdd && mode != PixelSub && mode != PixelBlend)
 		{
 			RECT part;
 			for (DWORD i = 0; i < source->artCount; ++i)
@@ -1862,11 +1948,195 @@ namespace Twin
 					AddArt(target, &part);
 				}
 
-			// the smooth half-coverage and rounded blends differ from the 1x dither and floor on purpose, so the GPU check treats them like art
-			AddArt(target, &to);
 		}
 
+		// the smooth half coverage and rounded blends differ from the 1x dither and floor on purpose, so the GPU check treats them like art
+		if (mode != PixelAdd && mode != PixelSub && mode != PixelCopy)
+			AddArt(target, &to);
+
 		DeferSync(target, dstId, &to);
+	}
+
+	Record* PixelTarget(const VOID* first, LONG pitch, LONG width, LONG height, DWORD* id, RECT* rect)
+	{
+		Record* twin = FindAddress(first, id);
+		if (!twin)
+			return NULL;
+
+		LONG x, y;
+		if (!PixelPos(twin, first, pitch, width, height, &x, &y))
+		{
+			++game.pixelFallbacks;
+			OnWrite(first, pitch, width, height);
+			return NULL;
+		}
+
+		SetRect(rect, x, y, x + width, y + height);
+		return twin;
+	}
+
+	VOID OnFillRect(const DWORD* first, LONG pitch, LONG width, LONG height, DWORD color)
+	{
+		if (!first || width <= 0 || height <= 0 || !Active())
+			return;
+
+		Sync();
+
+		DWORD id;
+		RECT rect;
+		Record* twin = PixelTarget(first, pitch, width, height, &id, &rect);
+		if (!twin)
+			return;
+
+		++game.fillRects;
+		FillTwin(twin, id, &rect, color);
+	}
+
+	VOID OnTintRect(const DWORD* first, LONG pitch, LONG width, LONG height, DWORD color, DWORD weight)
+	{
+		if (!first || width <= 0 || height <= 0 || !weight || !Active())
+			return;
+
+		Sync(FALSE);
+
+		DWORD id;
+		RECT rect;
+		Record* twin = PixelTarget(first, pitch, width, height, &id, &rect);
+		if (!twin)
+			return;
+
+		FlushRegion(twin, id, &rect, TRUE);
+		DropLinks(twin, &rect);
+
+		Cmd* cmd = Emit(CmdTint);
+		if (!cmd)
+		{
+			MarkDirty(twin, rect);
+			return;
+		}
+		cmd->dst = id;
+		cmd->rect = rect;
+		cmd->value = color;
+		cmd->extra = weight;
+
+		++game.tints;
+		AddArt(twin, &rect);
+		DeferSync(twin, id, &rect);
+	}
+
+	VOID OnBlendRow(const DWORD* src, const DWORD* dst, LONG length, const BYTE* mask, BOOL keyed, DWORD key)
+	{
+		if (!src || !dst || !mask || length <= 0 || !Active())
+			return;
+
+		Sync(FALSE);
+
+		DWORD dstId;
+		Record* target = FindAddress(dst, &dstId);
+		if (!target)
+			return;
+
+		LONG dx, dy;
+		if (!PixelPos(target, dst, target->pitch, length, 1, &dx, &dy))
+		{
+			++game.pixelFallbacks;
+			OnWrite(dst, target->pitch, length, 1);
+			return;
+		}
+		RECT to = { dx, dy, dx + length, dy + 1 };
+
+		DWORD srcId;
+		Record* source = FindAddress(src, &srcId);
+		LONG sx, sy;
+		if (!source || source == target || !PixelPos(source, src, source->pitch, length, 1, &sx, &sy))
+		{
+			++game.pixelUntwinned;
+			MarkDirty(target, to);
+			return;
+		}
+		RECT from = { sx, sy, sx + length, sy + 1 };
+
+		++game.blendRows;
+		DrainSyncIn(source, &from);
+		FlushRegion(source, srcId, &from);
+		Verify(source, srcId, &from, NULL, 0, FALSE);
+		FlushRegion(target, dstId, &to, TRUE);
+		DropLinks(target, &to);
+
+		List* list = game.list;
+		if (list && list->count)
+		{
+			Cmd* last = &list->cmds[list->count - 1];
+			LONG lastH = last->rect.bottom - last->rect.top;
+			if (last->type == CmdMask && last->dst == dstId && last->src == srcId && last->flags == (DWORD)(keyed ? 1 : 0) && (!keyed || last->value == key) &&
+				last->x == dx && last->y + lastH == dy && last->rect.left == sx && last->rect.right == sx + length && last->rect.bottom == sy &&
+				lastH < MASK_SIZE && length <= MASK_SIZE && last->extra + (DWORD)(length * lastH) == list->size)
+			{
+				DWORD offset;
+				BYTE* bytes = Reserve(length, &offset);
+				if (bytes)
+				{
+					MemoryCopy(bytes, mask, length);
+					++last->rect.bottom;
+					++game.blendMerged;
+					AddArt(target, &to);
+					DeferSync(target, dstId, &to);
+					return;
+				}
+			}
+		}
+
+		DWORD offset;
+		BYTE* bytes = length <= MASK_SIZE ? Reserve(length, &offset) : NULL;
+		Cmd* cmd = bytes ? Emit(CmdMask) : NULL;
+		if (!cmd)
+		{
+			MarkDirty(target, to);
+			return;
+		}
+		MemoryCopy(bytes, mask, length);
+		cmd->dst = dstId;
+		cmd->src = srcId;
+		cmd->rect = from;
+		cmd->x = dx;
+		cmd->y = dy;
+		cmd->value = key;
+		cmd->flags = keyed ? 1 : 0;
+		cmd->extra = offset;
+
+		AddArt(target, &to);
+		DeferSync(target, dstId, &to);
+	}
+
+	VOID OnLighter(const DWORD* first, LONG pitch, LONG width, LONG height, DWORD key, BOOL lighten)
+	{
+		if (!first || width <= 0 || height <= 0 || !Active())
+			return;
+
+		Sync(FALSE);
+
+		DWORD id;
+		RECT rect;
+		Record* twin = PixelTarget(first, pitch, width, height, &id, &rect);
+		if (!twin)
+			return;
+
+		FlushRegion(twin, id, &rect, TRUE);
+		DropLinks(twin, &rect);
+
+		Cmd* cmd = Emit(CmdLighter);
+		if (!cmd)
+		{
+			MarkDirty(twin, rect);
+			return;
+		}
+		cmd->dst = id;
+		cmd->rect = rect;
+		cmd->value = key;
+		cmd->flags = lighten ? 1 : 0;
+
+		++game.lighters;
+		DeferSync(twin, id, &rect);
 	}
 
 	VOID AddCounters(Counters* dst, const Counters* src)
@@ -1970,11 +2240,14 @@ namespace Twin
 			art.expected, art.duplicates, art.matched, art.draws, art.px, art.notReady, art.rejected, artRejected, art.unmatched, art.overflow, artReplayed, artCalls, artFallbacks);
 		art.expected = art.duplicates = art.matched = art.draws = art.px = art.notReady = art.rejected = art.unmatched = art.overflow = 0;
 
-		DebugLog("twin pixel ops keyed %u average %u add %u sub %u empty %u | art %u untwinned src %u self %u | replayed %u calls %u",
+		DebugLog("twin pixel ops keyed %u average %u add %u sub %u empty %u copy %u blend %u keyedcopy %u tint %u | fill rects %u (merged %u) tint rects %u blend rows %u (merged %u) lighter %u | art %u untwinned src %u self %u fallbacks %u | replayed %u calls %u",
 			game.pixelOps[PixelKeyed], game.pixelOps[PixelAverage], game.pixelOps[PixelAdd], game.pixelOps[PixelSub], game.pixelOps[PixelEmpty],
-			game.pixelArt, game.pixelUntwinned, game.pixelSelf, pixelReplayed, pixelCalls);
+			game.pixelOps[PixelCopy], game.pixelOps[PixelBlend], game.pixelOps[PixelKeyedCopy], game.pixelOps[PixelTint],
+			game.fillRects, game.fillMerged, game.tints, game.blendRows, game.blendMerged, game.lighters,
+			game.pixelArt, game.pixelUntwinned, game.pixelSelf, game.pixelFallbacks, pixelReplayed, pixelCalls);
 		MemoryZero(game.pixelOps, sizeof(game.pixelOps));
-		game.pixelArt = game.pixelUntwinned = game.pixelSelf = 0;
+		game.pixelArt = game.pixelUntwinned = game.pixelSelf = game.pixelFallbacks = 0;
+		game.fillRects = game.fillMerged = game.tints = game.blendRows = game.blendMerged = game.lighters = 0;
 
 		DebugLog("twin art cache hits %u misses %u cached draws %u | ground arts %u replayed %u fallbacks %u no twin %u",
 			art.cacheHits, art.cacheMisses, art.cachedDraws, art.groundArts, groundReplayed, groundFallbacks, art.groundNoTwin);
@@ -2286,12 +2559,25 @@ namespace Twin
 			"uniform int art;\n"
 			"uniform int tint;\n"
 			"uniform int empty;\n"
+			"uniform int fill;\n"
+			"uniform int tinted;\n"
+			"uniform int lighter;\n"
 			"uniform vec2 weight;\n"
 			"uniform vec4 key;\n"
+			"uniform vec4 solid;\n"
 			"in vec2 fTex;\n"
 			"out vec4 FRAG_COLOR;\n"
+			"bool isKey(vec4 c)\n"
+			"{\n"
+			"	return c.a < 0.5 / 255.0 || (c.a > 254.5 / 255.0 && all(lessThan(abs(c.rgb - key.rgb), vec3(0.5 / 255.0))));\n"
+			"}\n"
 			"void main()\n"
 			"{\n"
+			"	if (fill != 0)\n"
+			"	{\n"
+			"		FRAG_COLOR = solid;\n"
+			"		return;\n"
+			"	}\n"
 			"	if (art != 0 && (fTex.x < 0.0 || fTex.y < 0.0 || fTex.x > 1.0 || fTex.y > 1.0))\n"
 			"		discard;\n"
 			"	vec4 c = texture(tex01, fTex);\n"
@@ -2299,7 +2585,7 @@ namespace Twin
 			"		c.rgb *= vec3(1.0, 0.15, 1.0);\n"
 			"	if (keyed != 0)\n"
 			"	{\n"
-			"		if (c.a < 0.5 / 255.0 || (c.a > 254.5 / 255.0 && all(lessThan(abs(c.rgb - key.rgb), vec3(0.5 / 255.0)))))\n"
+			"		if (isKey(c))\n"
 			"			discard;\n"
 			"		if (c.a > 253.5 / 255.0)\n"
 			"			c.a = 1.0;\n"
@@ -2311,7 +2597,43 @@ namespace Twin
 			"		if (c.a > 253.5 / 255.0)\n"
 			"			c.a = 1.0;\n"
 			"	}\n"
+			"	if (tinted != 0)\n"
+			"		c = vec4(mix(c.rgb, solid.rgb, 0.5), 1.0);\n"
+			"	if (lighter != 0)\n"
+			"	{\n"
+			"		if (isKey(c))\n"
+			"			c = vec4(0.0);\n"
+			"		else if (lighter == 2)\n"
+			"			c = (c.r + c.g + c.b) * 255.0 > 56.5 ? vec4(min(c.rgb * 2.0, vec3(1.0)), 1.0) : vec4(0.0);\n"
+			"	}\n"
 			"	FRAG_COLOR = c * weight.x;\n"
+			"}\n";
+
+		// dst copy on unit 2 for the destination key test; the 1x mask on unit 1 is sampled linearly so 4K edges are smooth
+		const CHAR* maskFragment =
+			"uniform sampler2D tex01;\n"
+			"uniform sampler2D tex02;\n"
+			"uniform sampler2D tex03;\n"
+			"uniform int keyed;\n"
+			"uniform vec4 key;\n"
+			"uniform vec4 frame;\n"
+			"uniform vec4 extent;\n"
+			"in vec2 fTex;\n"
+			"out vec4 FRAG_COLOR;\n"
+			"void main()\n"
+			"{\n"
+			"	vec2 local = (gl_FragCoord.xy - frame.xy) / frame.zw;\n"
+			"	float m = texture(tex02, clamp(local * extent.xy, vec2(0.5 / 2048.0), extent.xy - vec2(0.5 / 2048.0))).r * 255.0;\n"
+			"	if (m < 0.5)\n"
+			"		discard;\n"
+			"	if (keyed != 0)\n"
+			"	{\n"
+			"		vec4 d = texture(tex03, local * extent.zw);\n"
+			"		if (d.a < 0.5 / 255.0 || (d.a > 254.5 / 255.0 && all(lessThan(abs(d.rgb - key.rgb), vec3(0.5 / 255.0)))))\n"
+			"			discard;\n"
+			"	}\n"
+			"	vec4 c = texture(tex01, fTex);\n"
+			"	FRAG_COLOR = c * (m > 254.5 ? 1.0 : (m + 1.0) / 256.0);\n"
 			"}\n";
 
 		const CHAR* checkFragment =
@@ -2338,6 +2660,13 @@ namespace Twin
 			gl.tintLoc = GLGetUniformLocation(gl.copyProgram, "tint");
 			gl.emptyLoc = GLGetUniformLocation(gl.copyProgram, "empty");
 			gl.weightLoc = GLGetUniformLocation(gl.copyProgram, "weight");
+			gl.fillLoc = GLGetUniformLocation(gl.copyProgram, "fill");
+			gl.tintedLoc = GLGetUniformLocation(gl.copyProgram, "tinted");
+			gl.lighterLoc = GLGetUniformLocation(gl.copyProgram, "lighter");
+			gl.solidLoc = GLGetUniformLocation(gl.copyProgram, "solid");
+			GLUniform1i(gl.fillLoc, 0);
+			GLUniform1i(gl.tintedLoc, 0);
+			GLUniform1i(gl.lighterLoc, 0);
 			GLUniform1i(gl.tintLoc, 0);
 			GLUniform1i(gl.emptyLoc, 0);
 			GLUniform2f(gl.weightLoc, 1.0f, 0.0f);
@@ -2393,6 +2722,19 @@ namespace Twin
 			GLUniform1i(gl.opaqueLoc, 0);
 		}
 
+		gl.maskProgram = Link(vertex, maskFragment);
+		if (gl.maskProgram)
+		{
+			GLUseProgram(gl.maskProgram);
+			GLUniform1i(GLGetUniformLocation(gl.maskProgram, "tex01"), 0);
+			GLUniform1i(GLGetUniformLocation(gl.maskProgram, "tex02"), 1);
+			GLUniform1i(GLGetUniformLocation(gl.maskProgram, "tex03"), 2);
+			gl.maskKeyedLoc = GLGetUniformLocation(gl.maskProgram, "keyed");
+			gl.maskKeyLoc = GLGetUniformLocation(gl.maskProgram, "key");
+			gl.maskFrameLoc = GLGetUniformLocation(gl.maskProgram, "frame");
+			gl.maskExtentLoc = GLGetUniformLocation(gl.maskProgram, "extent");
+		}
+
 		gl.checkProgram = Link(vertex, checkFragment);
 		if (gl.checkProgram)
 		{
@@ -2415,7 +2757,7 @@ namespace Twin
 		SetNearest(GL_NEAREST);
 		GLTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, STAGE_SIZE, STAGE_SIZE, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
 
-		gl.ready = gl.copyProgram && gl.checkProgram && gl.showProgram && gl.vao && gl.vbo && gl.stage;
+		gl.ready = gl.copyProgram && gl.checkProgram && gl.showProgram && gl.maskProgram && gl.vao && gl.vbo && gl.stage;
 		gl.failed = !gl.ready;
 		shared.glFailed = gl.failed;
 		gl.keyed = FALSE;
@@ -2568,25 +2910,6 @@ namespace Twin
 		GLClear(GL_COLOR_BUFFER_BIT);
 	}
 
-	VOID ReplayFill(const Cmd* cmd)
-	{
-		if (!Valid(cmd->dst))
-			return;
-
-		Gpu* gpu = &gl.twins[cmd->dst];
-		TargetTwin(cmd->dst);
-
-		DWORD color = cmd->value;
-		GLEnable(GL_SCISSOR_TEST);
-		glScissor(cmd->rect.left * gpu->scale, cmd->rect.top * gpu->scale, (cmd->rect.right - cmd->rect.left) * gpu->scale, (cmd->rect.bottom - cmd->rect.top) * gpu->scale);
-		if (cmd->flags)
-			GLClearColor(0.0f, 0.0f, 0.0f, 0.0f);
-		else
-			GLClearColor((color & 0xFF) / 255.0f, ((color >> 8) & 0xFF) / 255.0f, ((color >> 16) & 0xFF) / 255.0f, color >= ALPHA_COMPONENT ? 1.0f : 254.0f / 255.0f);
-		GLClear(GL_COLOR_BUFFER_BIT);
-		GLDisable(GL_SCISSOR_TEST);
-		++gl.drawCalls;
-	}
 
 	BOOL EnsureTarget(GLuint* texture, GLuint* fbo, LONG* curW, LONG* curH, LONG width, LONG height)
 	{
@@ -3091,13 +3414,20 @@ namespace Twin
 			const Cmd* cmd = &list->cmds[i];
 			LONG w = cmd->rect.right - cmd->rect.left;
 			LONG h = cmd->rect.bottom - cmd->rect.top;
+			FLOAT u0 = (FLOAT)cmd->rect.left / src->width, u1 = (FLOAT)cmd->rect.right / src->width;
+			if ((mode == PixelCopy || mode == PixelBlend) && (cmd->extra & PixelMirror))
+			{
+				FLOAT u = u0;
+				u0 = u1;
+				u1 = u;
+			}
 			AddQuad(tw, th, (FLOAT)(cmd->x * scale), (FLOAT)(cmd->y * scale), (FLOAT)((cmd->x + w) * scale), (FLOAT)((cmd->y + h) * scale),
-				(FLOAT)cmd->rect.left / src->width, (FLOAT)cmd->rect.top / src->height, (FLOAT)cmd->rect.right / src->width, (FLOAT)cmd->rect.bottom / src->height);
+				u0, (FLOAT)cmd->rect.top / src->height, u1, (FLOAT)cmd->rect.bottom / src->height);
 		}
 
 		DWORD param = first->extra & 0xFF;
 		FLOAT weight = 1.0f;
-		BOOL keyed = FALSE, empty = FALSE;
+		BOOL keyed = FALSE, empty = FALSE, tinted = FALSE, blend = TRUE;
 		switch (mode)
 		{
 		case PixelAverage:
@@ -3113,6 +3443,17 @@ namespace Twin
 			empty = TRUE;
 			weight = 0.5f;
 			break;
+		case PixelCopy:
+			blend = FALSE;
+			break;
+		case PixelTint:
+			keyed = TRUE;
+			tinted = TRUE;
+			blend = FALSE;
+			break;
+		case PixelBlend:
+			weight = (first->extra & 0xFFFF) / 256.0f;
+			break;
 		default:
 			break;
 		}
@@ -3121,11 +3462,18 @@ namespace Twin
 		UseCopy(keyed, first->value);
 		if (empty)
 			GLUniform1i(gl.emptyLoc, 1);
+		if (tinted)
+		{
+			DWORD color = first->extra;
+			GLUniform1i(gl.tintedLoc, 1);
+			GLUniform4f(gl.solidLoc, (color & 0xFF) / 255.0f, ((color >> 8) & 0xFF) / 255.0f, ((color >> 16) & 0xFF) / 255.0f, 1.0f);
+		}
 		if (weight != 1.0f)
 			GLUniform2f(gl.weightLoc, weight, 0.0f);
 		GLBindTexture(GL_TEXTURE_2D, src->texture);
 
-		GLEnable(GL_BLEND);
+		if (blend)
+			GLEnable(GL_BLEND);
 		if (mode == PixelAdd || mode == PixelSub)
 		{
 			glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_FALSE);
@@ -3147,10 +3495,172 @@ namespace Twin
 		GLDisable(GL_BLEND);
 		if (empty)
 			GLUniform1i(gl.emptyLoc, 0);
+		if (tinted)
+			GLUniform1i(gl.tintedLoc, 0);
 		if (weight != 1.0f)
 			GLUniform2f(gl.weightLoc, 1.0f, 0.0f);
 		gl.vertCount = 0;
 		return end;
+	}
+
+	VOID SolidColor(DWORD color, FLOAT alpha, BOOL premultiply)
+	{
+		FLOAT k = premultiply ? alpha : 1.0f;
+		GLUniform4f(gl.solidLoc, (color & 0xFF) / 255.0f * k, ((color >> 8) & 0xFF) / 255.0f * k, ((color >> 16) & 0xFF) / 255.0f * k, alpha);
+	}
+
+	DWORD ReplayFills(const List* list, DWORD index, BOOL tint)
+	{
+		const Cmd* first = &list->cmds[index];
+		DWORD end = index + 1;
+		while (end < list->count)
+		{
+			const Cmd* cmd = &list->cmds[end];
+			if (cmd->type != first->type || cmd->dst != first->dst || cmd->value != first->value || cmd->flags != first->flags || cmd->extra != first->extra)
+				break;
+			++end;
+		}
+
+		if (!Valid(first->dst))
+			return end;
+
+		Gpu* gpu = &gl.twins[first->dst];
+		LONG scale = gpu->scale;
+		FLOAT tw = (FLOAT)(gpu->width * scale), th = (FLOAT)(gpu->height * scale);
+		gl.vertCount = 0;
+		for (DWORD i = index; i < end; ++i)
+		{
+			const RECT* r = &list->cmds[i].rect;
+			AddQuad(tw, th, (FLOAT)(r->left * scale), (FLOAT)(r->top * scale), (FLOAT)(r->right * scale), (FLOAT)(r->bottom * scale), 0.0f, 0.0f, 0.0f, 0.0f);
+		}
+
+		TargetTwin(first->dst);
+		UseCopy(FALSE, 0);
+		GLUniform1i(gl.fillLoc, 1);
+		DWORD color = first->value;
+		if (tint)
+		{
+			SolidColor(color, first->extra / 256.0f, TRUE);
+			Blend(TRUE);
+		}
+		else if (first->flags)
+			GLUniform4f(gl.solidLoc, 0.0f, 0.0f, 0.0f, 0.0f);
+		else
+			SolidColor(color, color >= ALPHA_COMPONENT ? 1.0f : 254.0f / 255.0f, FALSE);
+		DrawVerts();
+		if (tint)
+			Blend(FALSE);
+		GLUniform1i(gl.fillLoc, 0);
+		gl.vertCount = 0;
+		return end;
+	}
+
+	BOOL ToScratch(Gpu* gpu, const RECT* rect, FLOAT* extentW, FLOAT* extentH)
+	{
+		LONG scale = gpu->scale;
+		LONG width = (rect->right - rect->left) * scale;
+		LONG height = (rect->bottom - rect->top) * scale;
+		if (!EnsureTarget(&gl.scratch, &gl.scratchFbo, &gl.scratchW, &gl.scratchH, max(gl.scratchW, width), max(gl.scratchH, height)))
+			return FALSE;
+
+		Target(TARGET_SCRATCH, gl.scratchFbo, gl.scratchW, gl.scratchH);
+		UseCopy(FALSE, 0);
+		GLBindTexture(GL_TEXTURE_2D, gpu->texture);
+		gl.vertCount = 0;
+		AddQuad((FLOAT)gl.scratchW, (FLOAT)gl.scratchH, 0.0f, 0.0f, (FLOAT)width, (FLOAT)height,
+			(FLOAT)rect->left / gpu->width, (FLOAT)rect->top / gpu->height, (FLOAT)rect->right / gpu->width, (FLOAT)rect->bottom / gpu->height);
+		DrawVerts();
+
+		*extentW = (FLOAT)width / gl.scratchW;
+		*extentH = (FLOAT)height / gl.scratchH;
+		return TRUE;
+	}
+
+	VOID KeyUniform(GLint location, DWORD key)
+	{
+		GLUniform4f(location, (key & 0xFF) / 255.0f, ((key >> 8) & 0xFF) / 255.0f, ((key >> 16) & 0xFF) / 255.0f, 1.0f);
+	}
+
+	VOID ReplayLighter(const Cmd* cmd)
+	{
+		if (!Valid(cmd->dst))
+			return;
+
+		Gpu* gpu = &gl.twins[cmd->dst];
+		FLOAT ew, eh;
+		if (!ToScratch(gpu, &cmd->rect, &ew, &eh))
+			return;
+
+		LONG scale = gpu->scale;
+		TargetTwin(cmd->dst);
+		UseCopy(FALSE, 0);
+		KeyUniform(gl.keyLoc, cmd->value);
+		gl.key = cmd->value;
+		GLUniform1i(gl.lighterLoc, cmd->flags ? 2 : 1);
+		GLBindTexture(GL_TEXTURE_2D, gl.scratch);
+		gl.vertCount = 0;
+		AddQuad((FLOAT)(gpu->width * scale), (FLOAT)(gpu->height * scale), (FLOAT)(cmd->rect.left * scale), (FLOAT)(cmd->rect.top * scale), (FLOAT)(cmd->rect.right * scale), (FLOAT)(cmd->rect.bottom * scale),
+			0.0f, 0.0f, ew, eh);
+		DrawVerts();
+		GLUniform1i(gl.lighterLoc, 0);
+		++gl.pixelCalls;
+	}
+
+	VOID ReplayMask(const Cmd* cmd, const List* list)
+	{
+		if (!Valid(cmd->src) || !Valid(cmd->dst))
+			return;
+
+		Gpu* src = &gl.twins[cmd->src];
+		Gpu* dst = &gl.twins[cmd->dst];
+		LONG scale = dst->scale;
+		LONG width = cmd->rect.right - cmd->rect.left;
+		LONG height = cmd->rect.bottom - cmd->rect.top;
+		RECT to = { cmd->x, cmd->y, cmd->x + width, cmd->y + height };
+
+		FLOAT ew = 0.0f, eh = 0.0f;
+		if (cmd->flags && !ToScratch(dst, &to, &ew, &eh))
+			return;
+
+		if (!gl.maskTexture)
+		{
+			GLGenTextures(1, &gl.maskTexture);
+			GLActiveTexture(GL_TEXTURE1);
+			GLBindTexture(GL_TEXTURE_2D, gl.maskTexture);
+			SetNearest(GL_LINEAR);
+			GLTexImage2D(GL_TEXTURE_2D, 0, GL_R8, MASK_SIZE, MASK_SIZE, 0, GL_RED, GL_UNSIGNED_BYTE, NULL);
+		}
+
+		GLActiveTexture(GL_TEXTURE1);
+		GLBindTexture(GL_TEXTURE_2D, gl.maskTexture);
+		GLPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+		GLPixelStorei(GL_UNPACK_ROW_LENGTH, width);
+		GLTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, GL_RED, GL_UNSIGNED_BYTE, list->arena + cmd->extra);
+		GLPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+		GLPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+		if (cmd->flags)
+		{
+			GLActiveTexture(GL_TEXTURE2);
+			GLBindTexture(GL_TEXTURE_2D, gl.scratch);
+		}
+		GLActiveTexture(GL_TEXTURE0);
+		GLBindTexture(GL_TEXTURE_2D, src->texture);
+
+		TargetTwin(cmd->dst);
+		gl.program = gl.maskProgram;
+		GLUseProgram(gl.maskProgram);
+		GLUniform1i(gl.maskKeyedLoc, cmd->flags ? 1 : 0);
+		KeyUniform(gl.maskKeyLoc, cmd->value);
+		GLUniform4f(gl.maskFrameLoc, (FLOAT)(to.left * scale), (FLOAT)(to.top * scale), (FLOAT)(width * scale), (FLOAT)(height * scale));
+		GLUniform4f(gl.maskExtentLoc, (FLOAT)width / MASK_SIZE, (FLOAT)height / MASK_SIZE, ew, eh);
+
+		gl.vertCount = 0;
+		AddQuad((FLOAT)(dst->width * scale), (FLOAT)(dst->height * scale), (FLOAT)(to.left * scale), (FLOAT)(to.top * scale), (FLOAT)(to.right * scale), (FLOAT)(to.bottom * scale),
+			(FLOAT)cmd->rect.left / src->width, (FLOAT)cmd->rect.top / src->height, (FLOAT)cmd->rect.right / src->width, (FLOAT)cmd->rect.bottom / src->height);
+		Blend(TRUE);
+		DrawVerts();
+		Blend(FALSE);
+		++gl.pixelCalls;
 	}
 
 	VOID ReplayGround(const Cmd* cmd, const List* list)
@@ -3330,7 +3840,19 @@ namespace Twin
 				break;
 
 			case CmdFill:
-				ReplayFill(cmd);
+				i = ReplayFills(list, i, FALSE);
+				continue;
+
+			case CmdTint:
+				i = ReplayFills(list, i, TRUE);
+				continue;
+
+			case CmdMask:
+				ReplayMask(cmd, list);
+				break;
+
+			case CmdLighter:
+				ReplayLighter(cmd);
 				break;
 
 			case CmdUpload:
@@ -3661,6 +4183,9 @@ namespace Twin
 			GLDeleteProgram(gl.copyProgram);
 			GLDeleteProgram(gl.checkProgram);
 			GLDeleteProgram(gl.showProgram);
+			GLDeleteProgram(gl.maskProgram);
+			if (gl.maskTexture)
+				GLDeleteTextures(1, &gl.maskTexture);
 		}
 
 		if (gl.checkData)
