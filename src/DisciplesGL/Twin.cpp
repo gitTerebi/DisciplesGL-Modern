@@ -94,7 +94,10 @@
 #define INDEX_SAVE_PERIOD 60000
 #define INDEX_LOGS 32
 #define MEMORY_BUDGET (256LL * 1024 * 1024)
-#define MEMORY_LOGS 32
+#define MEMORY_LOGS 16
+#define MEMORY_ART_LOGS 16
+#define FRAME_SLOTS 65536
+#define HASH_LOGS 32
 #define GROUND_LOGS 8
 #define SCREEN_LOGS 64
 #define SHOW_LOGS 32
@@ -159,6 +162,13 @@ namespace Twin
 		LONG cx;
 		LONG cy;
 		DWORD lastUse;
+	};
+
+	struct ArtPlan {
+		LONG frame;
+		BOOL flipped;
+		RECT place;
+		BOOL cached;
 	};
 
 	struct IndexEntry {
@@ -328,11 +338,44 @@ namespace Twin
 	} index;
 
 	struct {
+		LONG frame[FRAME_SLOTS];
+		DWORD learned[FRAME_SLOTS];
+		DWORD skipped;
+		DWORD slowHashes;
+		DWORD hashLogs;
+		volatile LONG saving;
+	} learn;
+
+	struct {
+		ULONGLONG cycles;
+		const CHAR* name;
+		ULONGLONG tsc;
+		LONGLONG qpc;
+	} slow;
+
+	struct Timed {
+		const CHAR* name;
+		ULONGLONG start;
+		Timed(const CHAR* label) : name(label), start(__rdtsc()) {}
+		~Timed()
+		{
+			ULONGLONG cycles = __rdtsc() - start;
+			if (cycles > slow.cycles)
+			{
+				slow.cycles = cycles;
+				slow.name = name;
+			}
+		}
+	};
+
+	struct {
 		DWORD count;
 		LONGLONG bytes;
 		DWORD created;
 		DWORD evictions;
 		DWORD logs;
+		DWORD artLogs;
+		DWORD refused;
 	} memory;
 
 	struct {
@@ -1253,10 +1296,22 @@ namespace Twin
 		return ((DWORD)x * 73856093u ^ (DWORD)y * 19349663u) & (EXPECT_BUCKETS - 1);
 	}
 
+	DWORD* FrameLearned(LONG frame, BOOL create);
+
 	VOID ExpectArt(LONG frame, BOOL flipped, const RECT* place, const RECT* clip, const ArtPart* parts, DWORD count)
 	{
 		if (!Active() || !place || !parts || !count)
 			return;
+
+		// expectations only teach the index now; once every part of this frame is known there is nothing to learn
+		DWORD* learned = FrameLearned(frame, FALSE);
+		if (learned && *learned >= count)
+		{
+			++learn.skipped;
+			return;
+		}
+
+		Timed timed("ExpectArt");
 
 		if (art.imageCount >= MAX_IMAGES || art.count >= MAX_EXPECT)
 		{
@@ -1385,6 +1440,14 @@ namespace Twin
 			game.checkRequest = TRUE;
 		}
 
+		if (game.twins[srcId].memory && memory.artLogs < MEMORY_ART_LOGS)
+		{
+			++memory.artLogs;
+			DebugLog("twin art from memory twin %u base=%p frame=%d sheet=%d,%d %dx%d dst=%p %d,%d canvas=%d,%d of %dx%d%s%s at frame %u", srcId, game.twins[srcId].base, frame,
+				from->left, from->top, to->right - to->left, to->bottom - to->top, target->owner, to->left, to->top, to->left - place->left, to->top - place->top,
+				place->right - place->left, place->bottom - place->top, flipped ? " flipped" : "", keyed ? " keyed" : "", game.frameNo);
+		}
+
 		if (art.artLogs < ART_LOGS && art.frameLogs < LOGS_FRAME)
 		{
 			++art.artLogs;
@@ -1399,6 +1462,31 @@ namespace Twin
 	BOOL PixelPos(const Record* twin, const VOID* ptr, LONG pitch, LONG width, LONG height, LONG* x, LONG* y);
 	VOID CreateTwin(StateBuffer* buffer, LONG width, LONG height);
 
+	DWORD* FrameLearned(LONG frame, BOOL create)
+	{
+		DWORD mask = FRAME_SLOTS - 1;
+		for (DWORD slot = ((DWORD)frame * 2654435761u) & mask, probes = 0; probes < FRAME_SLOTS; slot = (slot + 1) & mask, ++probes)
+		{
+			if (learn.learned[slot] && learn.frame[slot] == frame)
+				return &learn.learned[slot];
+			if (!learn.learned[slot])
+			{
+				if (!create)
+					return NULL;
+				learn.frame[slot] = frame;
+				return &learn.learned[slot];
+			}
+		}
+		return NULL;
+	}
+
+	VOID CountLearned(LONG frame)
+	{
+		DWORD* count = FrameLearned(frame, TRUE);
+		if (count)
+			++*count;
+	}
+
 	ULONGLONG HashBlock(const DWORD* pixels, LONG pitch, LONG width, LONG height, DWORD key, BOOL* solid)
 	{
 		// a caller's geometry can come from a guessed pitch; never let a hash walk off the end of an allocation
@@ -1407,6 +1495,11 @@ namespace Twin
 			*solid = TRUE;
 			return 0;
 		}
+
+		LARGE_INTEGER start;
+		BOOL timed = width * height >= 64 * 64;
+		if (timed)
+			QueryPerformanceCounter(&start);
 
 		DWORD h1 = 2166136261u, h2 = 0x9747B28Cu ^ (DWORD)(width * 31 + height);
 		DWORD first = ((pixels[0] & 0x00FFFFFF) == 0x00FF00FF || (pixels[0] & 0x00FFFFFF) == key) ? 0 : pixels[0] & 0x00FFFFFF;
@@ -1423,6 +1516,22 @@ namespace Twin
 				h1 = (h1 ^ c) * 16777619u;
 				h2 = (h2 ^ c) * 0x5BD1E995u;
 				h2 ^= h2 >> 15;
+			}
+		}
+
+		if (timed && game.frequency.QuadPart)
+		{
+			LARGE_INTEGER end;
+			QueryPerformanceCounter(&end);
+			DWORD us = DWORD((end.QuadPart - start.QuadPart) * 1000000 / game.frequency.QuadPart);
+			if (us > 500)
+			{
+				++learn.slowHashes;
+				if (learn.hashLogs < HASH_LOGS)
+				{
+					++learn.hashLogs;
+					DebugLog("twin slow hash %dx%d took %u us at frame %u", width, height, us, game.frameNo);
+				}
 			}
 		}
 
@@ -1536,8 +1645,8 @@ namespace Twin
 		BOOL conflict;
 		while (loaded < count && ReadFile(file, &entry, sizeof(entry), &read, NULL) && read == sizeof(entry))
 		{
-			if (entry.width >= INDEX_MIN_SIZE && entry.height >= INDEX_MIN_SIZE && entry.canvasW >= 2 && entry.canvasH >= 2)
-				IndexInsert(&entry, &conflict);
+			if (entry.width >= INDEX_MIN_SIZE && entry.height >= INDEX_MIN_SIZE && entry.canvasW >= 2 && entry.canvasH >= 2 && IndexInsert(&entry, &conflict) && !conflict)
+				CountLearned(entry.frame);
 			++loaded;
 		}
 		CloseHandle(file);
@@ -1594,6 +1703,13 @@ namespace Twin
 			Unlock();
 		}
 		DebugLog("twin index %s %u entries", done ? "saved" : "save failed for", count);
+	}
+
+	DWORD __stdcall SaveWorker(LPVOID)
+	{
+		SaveIndex();
+		InterlockedExchange(&learn.saving, 0);
+		return 0;
 	}
 
 	VOID AddRegion(Record* source, const RECT* rect, LONG frame, BOOL flipped, LONG placeW, LONG placeH, LONG cx, LONG cy)
@@ -1672,6 +1788,8 @@ namespace Twin
 		IndexEntry* kept = IndexInsert(&entry, &conflict);
 		if (!kept)
 			return FALSE;
+		if (conflict || kept->frame == entry.frame)
+			CountLearned(entry.frame);
 		if (conflict)
 			++index.conflicts;
 		else if (kept->frame == entry.frame)
@@ -1694,7 +1812,7 @@ namespace Twin
 		return TRUE;
 	}
 
-	BOOL IdentifyArt(Record* target, DWORD dstId, const RECT* to, Record* source, DWORD srcId, const RECT* from, LONG x, LONG y, const RECT* srcRect, BOOL keyed, DWORD key, BOOL half, BOOL mirror)
+	BOOL IdentifyArt(Record* target, DWORD dstId, const RECT* to, Record* source, DWORD srcId, const RECT* from, LONG x, LONG y, const RECT* srcRect, BOOL keyed, DWORD key, BOOL half, BOOL mirror, ArtPlan* plan = NULL)
 	{
 		LONG width = from->right - from->left;
 		LONG height = from->bottom - from->top;
@@ -1759,6 +1877,14 @@ namespace Twin
 		place.top = to->top - found.cy;
 		place.right = place.left + found.placeW;
 		place.bottom = place.top + found.placeH;
+		if (plan)
+		{
+			plan->frame = found.frame;
+			plan->flipped = flipped;
+			plan->place = place;
+			plan->cached = region != NULL;
+			return TRUE;
+		}
 		return RecordArt(target, dstId, to, srcId, from, found.frame, flipped, &place, keyed, key, region != NULL, half);
 	}
 
@@ -1766,6 +1892,7 @@ namespace Twin
 
 	VOID LearnArt(const VOID* data, LONG pitch, const RECT* rect, LONG frame, const RECT* canvas, LONG canvasWidth, LONG canvasHeight, BOOL flipped)
 	{
+		Timed timed("LearnArt");
 		if (!Active() || !data || !rect || !canvas || frame < 0 || pitch <= 0)
 			return;
 
@@ -1813,6 +1940,7 @@ namespace Twin
 		IndexEntry* kept = IndexInsert(&entry, &conflict);
 		if (!kept)
 			return;
+		CountLearned(frame);
 		if (conflict)
 			++index.conflicts;
 		else if (kept->frame == frame)
@@ -1867,6 +1995,17 @@ namespace Twin
 		if (!ImageReplace::FindMemory(ptr, &base, &pitch, &width, &height, &frame, &flipped) || !base || width <= 0 || height <= 0 || pitch < width)
 			return NULL;
 
+		if (IsBadReadPtr(base, ((height - 1) * pitch + width) * sizeof(DWORD)))
+		{
+			++memory.refused;
+			if (memory.logs < MEMORY_LOGS)
+			{
+				++memory.logs;
+				DebugLog("twin memory twin refused base=%p pitch %d %dx%d: not readable", base, pitch, width, height);
+			}
+			return NULL;
+		}
+
 		LONGLONG bytes = (LONGLONG)width * height * sizeof(DWORD) * game.scale * game.scale;
 		EvictMemory(bytes);
 
@@ -1889,15 +2028,20 @@ namespace Twin
 		++memory.created;
 		memory.bytes += bytes;
 
+		// upload now, before the operation that adopted it records anything that reads the twin
+		RECT whole = { 0, 0, width, height };
+		DWORD uploads = game.list ? game.list->counters.uploads : 0;
+		FlushRegion(twin, *id, &whole, TRUE);
+		BOOL uploaded = game.list && game.list->counters.uploads > uploads;
+
 		if (memory.logs < MEMORY_LOGS)
 		{
 			++memory.logs;
-			DebugLog("twin memory twin %u base=%p pitch %d %dx%d frame %d%s", *id, base, pitch, width, height, frame, flipped ? " flipped" : "");
+			DebugLog("twin memory twin %u base=%p pitch %d %dx%d frame %d%s upload %s", *id, base, pitch, width, height, frame, flipped ? " flipped" : "", uploaded ? "recorded" : "MISSING");
 		}
 
 		if (frame >= 0)
 		{
-			RECT whole = { 0, 0, width, height };
 			RECT canvas = whole;
 			LearnBlock(base, pitch, &whole, frame, &canvas, width, height, flipped);
 		}
@@ -1908,6 +2052,7 @@ namespace Twin
 
 	VOID OnMemoryFree(const VOID* data)
 	{
+		Timed timed("OnMemoryFree");
 		if (!data)
 			return;
 
@@ -1936,6 +2081,7 @@ namespace Twin
 
 	VOID OnCreate(StateBuffer* buffer, LONG width, LONG height)
 	{
+		Timed timed("OnCreate");
 		if (!Active() || !buffer || !buffer->data || width <= 0 || height <= 0)
 			return;
 
@@ -2017,6 +2163,7 @@ namespace Twin
 
 	VOID GroundArt(const VOID* data, LONG pitch, const RECT* rect, const VOID* ops, DWORD bytes)
 	{
+		Timed timed("GroundArt");
 		if (!Active() || !data || !rect || !ops || !bytes)
 			return;
 
@@ -2089,6 +2236,7 @@ namespace Twin
 
 	VOID OnRelease(StateBuffer* buffer)
 	{
+		Timed timed("OnRelease");
 		DrainSync();
 
 		DWORD id;
@@ -2101,6 +2249,7 @@ namespace Twin
 
 	VOID OnCopy(StateBuffer* dst, LONG x, LONG y, StateBuffer* src, const RECT* srcRect, BOOL keyed, DWORD key)
 	{
+		Timed timed("OnCopy");
 		if (!Active() || !srcRect)
 			return;
 
@@ -2155,9 +2304,12 @@ namespace Twin
 		FlushRegion(source, srcId, &from);
 		Verify(source, srcId, &from, NULL, 0, FALSE);
 
+		FlushRegion(target, dstId, &to, TRUE);
+		ArtPlan plan;
+		BOOL hasArt = IdentifyArt(target, dstId, &to, source, srcId, &from, x, y, srcRect, keyed, key, FALSE, FALSE, &plan);
+		if (hasArt && keyed)
 		{
-			FlushRegion(target, dstId, &to, TRUE);
-			if (IdentifyArt(target, dstId, &to, source, srcId, &from, x, y, srcRect, keyed, key, FALSE, FALSE))
+			if (RecordArt(target, dstId, &to, srcId, &from, plan.frame, plan.flipped, &plan.place, keyed, key, plan.cached, FALSE))
 			{
 				MirrorCopy(target, &to, source, &from, keyed, key);
 				if (target != source)
@@ -2165,6 +2317,7 @@ namespace Twin
 				AddArt(target, &to);
 				return;
 			}
+			hasArt = FALSE;
 		}
 
 		if (!keyed)
@@ -2201,6 +2354,10 @@ namespace Twin
 		if (keyed)
 			++game.list->counters.keyed;
 
+		// an unkeyed copy replaces the whole rect, so the 1x copy goes first and the art lands on top; transparent art then shows the source, not stale destination
+		if (hasArt && RecordArt(target, dstId, &to, srcId, &from, plan.frame, plan.flipped, &plan.place, keyed, key, plan.cached, FALSE))
+			AddArt(target, &to);
+
 		if (!EqualRect(&from, srcRect))
 			MarkDirty(target, whole);
 	}
@@ -2209,6 +2366,7 @@ namespace Twin
 
 	VOID OnFill(StateBuffer* dst, const RECT* rect, DWORD color)
 	{
+		Timed timed("OnFill");
 		if (!Active())
 			return;
 
@@ -2271,6 +2429,7 @@ namespace Twin
 
 	VOID OnWrite(const VOID* first, LONG pitch, LONG width, LONG height)
 	{
+		Timed timed("OnWrite");
 		if (!first || width <= 0 || height <= 0 || !Active())
 			return;
 
@@ -2311,6 +2470,7 @@ namespace Twin
 
 	VOID OnWriteAll(StateBuffer* buffer)
 	{
+		Timed timed("OnWriteAll");
 		if (!Active())
 			return;
 
@@ -2332,6 +2492,7 @@ namespace Twin
 
 	VOID OnPixelCopy(PixelMode mode, const DWORD* src, LONG srcPitch, const DWORD* dst, LONG dstPitch, LONG width, LONG height, DWORD key, DWORD param)
 	{
+		Timed timed("OnPixelCopy");
 		if (!dst || !src || width <= 0 || height <= 0 || (DWORD)mode >= PIXEL_MODES || !Active())
 			return;
 
@@ -2396,16 +2557,8 @@ namespace Twin
 			}
 		}
 
-		if (mode == PixelCopy)
-		{
-			if (IdentifyArt(target, dstId, &to, source, srcId, &from, dx, dy, &from, FALSE, 0, FALSE, TRUE))
-			{
-				++game.pixelArt;
-				AddArt(target, &to);
-				DeferSync(target, dstId, &to);
-				return;
-			}
-		}
+		ArtPlan plan;
+		BOOL hasArt = mode == PixelCopy && IdentifyArt(target, dstId, &to, source, srcId, &from, dx, dy, &from, FALSE, 0, FALSE, TRUE, &plan);
 
 		Cmd* cmd = Emit(CmdPixel);
 		if (!cmd)
@@ -2438,6 +2591,12 @@ namespace Twin
 		if (mode != PixelAdd && mode != PixelSub && mode != PixelCopy)
 			AddArt(target, &to);
 
+		if (hasArt && RecordArt(target, dstId, &to, srcId, &from, plan.frame, plan.flipped, &plan.place, FALSE, 0, plan.cached, FALSE))
+		{
+			++game.pixelArt;
+			AddArt(target, &to);
+		}
+
 		DeferSync(target, dstId, &to);
 	}
 
@@ -2461,6 +2620,7 @@ namespace Twin
 
 	VOID OnFillRect(const DWORD* first, LONG pitch, LONG width, LONG height, DWORD color)
 	{
+		Timed timed("OnFillRect");
 		if (!first || width <= 0 || height <= 0 || !Active())
 			return;
 
@@ -2478,6 +2638,7 @@ namespace Twin
 
 	VOID OnTintRect(const DWORD* first, LONG pitch, LONG width, LONG height, DWORD color, DWORD weight)
 	{
+		Timed timed("OnTintRect");
 		if (!first || width <= 0 || height <= 0 || !weight || !Active())
 			return;
 
@@ -2510,6 +2671,7 @@ namespace Twin
 
 	VOID OnBlendRow(const DWORD* src, const DWORD* dst, LONG length, const BYTE* mask, BOOL keyed, DWORD key)
 	{
+		Timed timed("OnBlendRow");
 		if (!src || !dst || !mask || length <= 0 || !Active())
 			return;
 
@@ -2594,6 +2756,7 @@ namespace Twin
 
 	VOID OnLighter(const DWORD* first, LONG pitch, LONG width, LONG height, DWORD key, BOOL lighten)
 	{
+		Timed timed("OnLighter");
 		if (!first || width <= 0 || height <= 0 || !Active())
 			return;
 
@@ -2725,9 +2888,26 @@ namespace Twin
 		art.expected = art.duplicates = art.matched = art.draws = art.px = art.notReady = art.overflow = 0;
 		index.regionHits = index.lookups = index.hits = index.misses = index.learnedExpect = index.learnedSource = index.conflicts = index.rejected = 0;
 
+		LARGE_INTEGER qpc;
+		QueryPerformanceCounter(&qpc);
+		ULONGLONG tsc = __rdtsc();
+		DWORD slowUs = 0;
+		if (slow.qpc && qpc.QuadPart > slow.qpc && game.frequency.QuadPart)
+		{
+			ULONGLONG elapsedUs = (ULONGLONG)(qpc.QuadPart - slow.qpc) * 1000000 / game.frequency.QuadPart;
+			if (elapsedUs)
+				slowUs = DWORD(slow.cycles * elapsedUs / max(tsc - slow.tsc, 1ULL));
+		}
+		DebugLog("twin slowest game-thread call %s %u us | expectation calls skipped as learned %u | slow hashes %u", slow.name ? slow.name : "none", slowUs, learn.skipped, learn.slowHashes);
+		slow.cycles = 0;
+		slow.name = NULL;
+		slow.tsc = tsc;
+		slow.qpc = qpc.QuadPart;
+		learn.skipped = learn.slowHashes = 0;
+
 		DWORD memoryMb10 = DWORD(memory.bytes * 10 / (1024 * 1024));
-		DebugLog("twin memory twins %u (%u.%u MB, created %u, evicted %u)", memory.count, memoryMb10 / 10, memoryMb10 % 10, memory.created, memory.evictions);
-		memory.created = memory.evictions = 0;
+		DebugLog("twin memory twins %u (%u.%u MB, created %u, evicted %u, refused %u)", memory.count, memoryMb10 / 10, memoryMb10 % 10, memory.created, memory.evictions, memory.refused);
+		memory.created = memory.evictions = memory.refused = 0;
 
 		DebugLog("twin pixel ops keyed %u average %u add %u sub %u empty %u copy %u blend %u keyedcopy %u tint %u | fill rects %u (merged %u) tint rects %u blend rows %u (merged %u) lighter %u | art %u untwinned src %u self %u fallbacks %u | replayed %u calls %u",
 			game.pixelOps[PixelKeyed], game.pixelOps[PixelAverage], game.pixelOps[PixelAdd], game.pixelOps[PixelSub], game.pixelOps[PixelEmpty],
@@ -2758,6 +2938,7 @@ namespace Twin
 
 	VOID OnPresent(StateBuffer* screen, LONG left, LONG top)
 	{
+		Timed timed("OnPresent");
 		if (!Active())
 			return;
 
@@ -2942,10 +3123,14 @@ namespace Twin
 		if (now - game.logTick >= LOG_PERIOD)
 			LogInterval(now);
 
-		if (index.dirty && now - index.saveTick >= INDEX_SAVE_PERIOD)
+		if (index.dirty && now - index.saveTick >= INDEX_SAVE_PERIOD && !InterlockedCompareExchange(&learn.saving, 1, 0))
 		{
 			index.saveTick = now;
-			SaveIndex();
+			HANDLE thread = CreateThread(NULL, 0, SaveWorker, NULL, 0, NULL);
+			if (thread)
+				CloseHandle(thread);
+			else
+				InterlockedExchange(&learn.saving, 0);
 		}
 	}
 
