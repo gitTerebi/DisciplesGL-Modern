@@ -26,5 +26,5 @@ namespace ImageReplace
 	BOOL ArtTexture(LONG frame, GLuint* id, LONG* width, LONG* height);
 	BOOL ArtReady(LONG frame);
 	BOOL GroundReady(DWORD chunk);
-	BOOL DrawGround(DWORD chunk, LONG width, LONG height);
+	BOOL DrawGround(const VOID* ops, DWORD bytes, LONG width, LONG height);
 }

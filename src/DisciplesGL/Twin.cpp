@@ -237,7 +237,7 @@ namespace Twin
 		BOOL tileKeyDown;
 		BOOL tintKeyDown;
 		DWORD presentNoTwin;
-		DWORD presentLogs;
+		DWORD presentLogTick;
 		DWORD screenLogs;
 		BOOL shotRequest;
 		DWORD lastArtSource;
@@ -1403,9 +1403,9 @@ namespace Twin
 		}
 	}
 
-	VOID GroundArt(const VOID* data, LONG pitch, const RECT* rect, DWORD chunk)
+	VOID GroundArt(const VOID* data, LONG pitch, const RECT* rect, const VOID* ops, DWORD bytes)
 	{
-		if (!Active() || !data || !rect)
+		if (!Active() || !data || !rect || !ops || !bytes)
 			return;
 
 		Sync();
@@ -1418,7 +1418,7 @@ namespace Twin
 			if (art.groundLogs < GROUND_LOGS)
 			{
 				++art.groundLogs;
-				DebugLog("twin ground no twin data=%p pitch %d rect %d,%d %dx%d chunk %u%s", data, pitch, rect->left, rect->top, rect->right - rect->left, rect->bottom - rect->top, chunk,
+				DebugLog("twin ground no twin data=%p pitch %d rect %d,%d %dx%d%s", data, pitch, rect->left, rect->top, rect->right - rect->left, rect->bottom - rect->top,
 					twin ? " (pitch differs from its twin)" : "");
 			}
 			return;
@@ -1448,8 +1448,13 @@ namespace Twin
 			}
 		}
 
+		DWORD opsOffset;
+		BYTE* opsCopy = Reserve(bytes, &opsOffset);
+		if (opsCopy)
+			MemoryCopy(opsCopy, ops, bytes);
+
 		DWORD offset;
-		DWORD* pixels = (DWORD*)Reserve(width * height * sizeof(DWORD), &offset);
+		DWORD* pixels = opsCopy ? (DWORD*)Reserve(width * height * sizeof(DWORD), &offset) : NULL;
 		Cmd* cmd = pixels ? Emit(CmdGround) : NULL;
 		if (!cmd)
 		{
@@ -1461,7 +1466,8 @@ namespace Twin
 		cmd->dst = id;
 		cmd->src = offset;
 		cmd->rect = area;
-		cmd->value = chunk;
+		cmd->value = opsOffset;
+		cmd->extra = bytes;
 
 		DropLinks(twin, &area);
 		CoverArt(twin, &area);
@@ -1851,10 +1857,10 @@ namespace Twin
 		if (!twin)
 		{
 			++game.presentNoTwin;
-			if (game.presentLogs < GROUND_LOGS)
+			if (!game.presentLogTick || now - game.presentLogTick >= 1000)
 			{
-				++game.presentLogs;
-				DebugLog("twin present without twin buffer=%p data=%p at frame %u", screen, screen ? screen->data : NULL, game.frameNo);
+				game.presentLogTick = now | 1;
+				DebugLog("twin present without twin buffer=%p data=%p at frame %u (%u so far this interval)", screen, screen ? screen->data : NULL, game.frameNo, game.presentNoTwin);
 			}
 		}
 		if (twin)
@@ -2812,7 +2818,7 @@ namespace Twin
 		GLEnable(GL_SCISSOR_TEST);
 		glScissor(cmd->rect.left * scale, cmd->rect.top * scale, width * scale, height * scale);
 
-		BOOL drawn = ImageReplace::DrawGround(cmd->value, width, height);
+		BOOL drawn = ImageReplace::DrawGround(list->arena + cmd->value, cmd->extra, width, height);
 
 		gl.target = TWIN_NONE;
 		gl.program = 0;

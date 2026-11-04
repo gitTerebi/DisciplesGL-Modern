@@ -397,7 +397,7 @@ BOOL NewRenderer::RenderInner(BOOL ready, BOOL force, StateBufferAligned** lpSta
 		BOOL textUpChanged = TextReplace::Prepare(stateBuffer, textUpActive);
 		textUpChanged |= ImageReplace::Prepare(stateBuffer, textUpActive);
 		textUpChanged |= Twin::Prepare();
-		if (this->pixelBuffer->Update(lpStateBuffer, ready, TRUE) || state.flags || stateChanged || mapZoomChanged || textUpChanged)
+		if (this->pixelBuffer->Update(lpStateBuffer, ready && !Twin::Active(), TRUE) || state.flags || stateChanged || mapZoomChanged || textUpChanged)
 		{
 			BOOL clearBackTransition = this->backStatus && !stateBuffer->isBack;
 			BOOL zoomChanged = this->zoomStatus != stateBuffer->isZoomed;
@@ -733,7 +733,7 @@ BOOL NewRenderer::RenderInner(BOOL ready, BOOL force, StateBufferAligned** lpSta
 		BOOL textChanged = TextReplace::Prepare(stateBuffer, textActive);
 		textChanged |= ImageReplace::Prepare(stateBuffer, textActive);
 		textChanged |= Twin::Prepare();
-		if (this->pixelBuffer->Update(lpStateBuffer, ready) || state.flags || stateChanged || mapZoomChanged || textChanged)
+		if (this->pixelBuffer->Update(lpStateBuffer, ready && !Twin::Active()) || state.flags || stateChanged || mapZoomChanged || textChanged)
 		{
 			if (this->isVSync != config.image.vSync)
 			{

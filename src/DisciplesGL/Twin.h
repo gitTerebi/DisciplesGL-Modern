@@ -21,7 +21,7 @@ namespace Twin
 		LONG w, h;
 	};
 	VOID ExpectArt(LONG frame, BOOL flipped, const RECT* place, const RECT* clip, const ArtPart* parts, DWORD count);
-	VOID GroundArt(const VOID* data, LONG pitch, const RECT* rect, DWORD chunk);
+	VOID GroundArt(const VOID* data, LONG pitch, const RECT* rect, const VOID* ops, DWORD bytes);
 	VOID LogStats();
 
 	// render thread

@@ -299,7 +299,6 @@ namespace ImageReplace
 
 	struct {
 		BOOL initialized;
-		CRITICAL_SECTION cs;
 		volatile LONG frameNo;
 	} game;
 
@@ -318,7 +317,6 @@ namespace ImageReplace
 
 	#define GROUND_OBJECTS 4096
 	#define GROUND_CHUNKS 64
-	#define GROUND_ID_SHIFT 6
 	#define GROUND_OPS 512
 	#define GROUND_LOG 16
 	#define GROUND_UNRESOLVED -2
@@ -343,11 +341,13 @@ namespace ImageReplace
 		BOOL valid;
 		DWORD color, version, count;
 		GroundOp ops[GROUND_OPS];
-		DWORD pubColor, pubVersion, pubCount;
-		LONG w, h;
-		GroundOp pub[GROUND_OPS];
 		LONG pitch;
 		BOOL pending;
+	};
+
+	struct GroundBlob {
+		DWORD count, color;
+		GroundOp ops[GROUND_OPS];
 	};
 
 	struct GroundMask {
@@ -370,7 +370,6 @@ namespace ImageReplace
 	struct {
 		GLuint program;
 		GLint mode, two;
-		GroundOp ops[GROUND_OPS];
 	} groundGL;
 
 	BOOL TakeFlag()
@@ -1427,7 +1426,6 @@ namespace ImageReplace
 	VOID StartPack()
 	{
 		InitializeCriticalSection(&requests.cs);
-		InitializeCriticalSection(&game.cs);
 		game.initialized = TRUE;
 		pack.wake = CreateEvent(NULL, FALSE, FALSE, NULL);
 		pack.space = CreateEvent(NULL, FALSE, FALSE, NULL);
@@ -2121,25 +2119,19 @@ namespace ImageReplace
 
 	VOID SendGround(GroundChunk* c)
 	{
-		EnterCriticalSection(&game.cs);
-		MemoryCopy(c->pub, c->ops, c->count * sizeof(GroundOp));
-		c->pubCount = c->count;
-		c->pubColor = c->color;
-		c->pubVersion = c->version;
-		c->w = c->cw;
-		c->h = c->ch;
-		LeaveCriticalSection(&game.cs);
+		static GroundBlob blob;
+		blob.count = c->count;
+		blob.color = c->color;
+		MemoryCopy(blob.ops, c->ops, c->count * sizeof(GroundOp));
 		++ground.published;
 		c->pending = FALSE;
 
-		DWORD index = c - ground.chunks;
 		if (ground.arts < GROUND_LOG)
-			DebugLog("image ground art chunk=%d data=%08X size=%dx%d ops=%d", index, c->data, c->cw, c->ch, c->count);
+			DebugLog("image ground art chunk=%d data=%08X size=%dx%d ops=%d", c - ground.chunks, c->data, c->cw, c->ch, c->count);
 		++ground.arts;
 
-		// the id carries the published version so a replay that runs after a newer publish keeps 1x instead of drawing the newer ops
 		RECT rect = { 0, 0, c->cw, c->ch };
-		Twin::GroundArt(c->data, c->pitch, &rect, (c->pubVersion << GROUND_ID_SHIFT) | index);
+		Twin::GroundArt(c->data, c->pitch, &rect, &blob, sizeof(blob) - sizeof(blob.ops) + c->count * sizeof(GroundOp));
 	}
 
 	VOID RetryGround()
@@ -2505,23 +2497,20 @@ namespace ImageReplace
 		return TRUE;
 	}
 
-	BOOL DrawGround(DWORD chunk, LONG width, LONG height)
+	BOOL DrawGround(const VOID* ops, DWORD bytes, LONG width, LONG height)
 	{
-		if (!game.initialized || width <= 0 || height <= 0 || !InitGL())
+		const GroundBlob* blob = (const GroundBlob*)ops;
+		DWORD header = sizeof(GroundBlob) - sizeof(blob->ops);
+		if (!game.initialized || !ops || bytes < header || width <= 0 || height <= 0)
 			return FALSE;
 
-		GroundChunk* c = &ground.chunks[chunk & (GROUND_CHUNKS - 1)];
-		EnterCriticalSection(&game.cs);
-		DWORD count = (c->pubVersion << GROUND_ID_SHIFT) == (chunk & ~(DWORD)(GROUND_CHUNKS - 1)) ? c->pubCount : 0;
-		DWORD color = c->pubColor;
-		MemoryCopy(groundGL.ops, c->pub, count * sizeof(GroundOp));
-		LeaveCriticalSection(&game.cs);
-		if (!count)
+		DWORD count = blob->count, color = blob->color;
+		if (!count || count > GROUND_OPS || bytes < header + count * sizeof(GroundOp) || !InitGL())
 			return FALSE;
 
 		for (DWORD i = 0; i < count; ++i)
 		{
-			const GroundOp* op = &groundGL.ops[i];
+			const GroundOp* op = &blob->ops[i];
 			LONG list[] = { op->tex, op->mask1, op->mask2 };
 			for (DWORD k = 0; k < 3; ++k)
 				if (list[k] >= 0 && pack.texs[list[k]].state != TexUploaded)
@@ -2545,7 +2534,7 @@ namespace ImageReplace
 
 		for (DWORD i = 0; i < count; ++i)
 		{
-			const GroundOp* op = &groundGL.ops[i];
+			const GroundOp* op = &blob->ops[i];
 			LONG l = max(view[0] + op->left * view[2] / width, box[0]);
 			LONG t = max(view[1] + op->top * view[3] / height, box[1]);
 			LONG r = min(view[0] + op->right * view[2] / width, box[0] + box[2]);
