@@ -111,6 +111,7 @@ BOOL __stdcall DllMain(HMODULE hModule, DWORD fdwReason, LPVOID lpReserved)
 			Window::SetCaptureKeys(FALSE);
 		}
 
+		DebugLogFlush();
 		break;
 	}
 

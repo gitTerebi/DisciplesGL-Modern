@@ -15,6 +15,13 @@ namespace Twin
 		explicit Cost(DWORD kind);
 		~Cost();
 	};
+	// sub-steps of the seed work on the game thread, for the hitch line; exclusive like Cost: an inner step charges its own time, not the outer one's
+	enum SeedStepKind { StepNone, StepWait, StepPieces, StepCapture, StepGuard, StepBase, StepStack, StepResolve, SeedStepKinds };
+	struct SeedStep {
+		DWORD prev;
+		explicit SeedStep(DWORD kind);
+		~SeedStep();
+	};
 	// [Twin] Diagnostics=1: per-copy write notes and caller scans, copy-in and arrival records, coverage tables, copy traces
 	BOOL Diagnostics();
 	// a ground tile or border blit: the map view is being drawn, which scrolling does every frame
@@ -69,9 +76,11 @@ namespace Twin
 		DWORD additive;
 		DWORD outside;
 		DWORD shared;
-		// blocks whose sheet size is not the decode's, frames whose pack entry may be the file itself, pieces dropped as uncertain
+		// blocks whose sheet size is not the decode's, frames whose pack entry is named like the sheet file (seeded in canvas layout like the rest), pieces dropped as uncertain
 		DWORD wrongSize;
-		DWORD ambiguous;
+		DWORD fileNamed;
+		// frames whose pack entry reaches outside the union of their parts in the canvas: another image of that name, left 1x
+		DWORD notFrame;
 		DWORD uncertain;
 	};
 	// memoryTwin FALSE: an 8-bit decode whose 32 bpp reading runs past the scratch; it is only captured for the transfer, no memory twin is made over it

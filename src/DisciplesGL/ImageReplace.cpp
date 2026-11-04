@@ -1028,10 +1028,29 @@ namespace ImageReplace
 
 	const PackAnim* FindAnim(const CHAR* name);
 
+	// names the pack holds more than once (two archives with an image of the same name): only the first is reachable, and a frame of the other archive would take its 4K
+	struct {
+		DWORD count, logs;
+	} packDuplicates;
+
 	BOOL InsertAnim(const CHAR* game, const CHAR* id, DWORD idLength, DWORD first, DWORD count, Origin origin)
 	{
-		if (pack.animCount >= ANIM_SIZE * 3 / 4 || FindAnim(game))
+		if (pack.animCount >= ANIM_SIZE * 3 / 4)
 			return FALSE;
+		const PackAnim* existing = FindAnim(game);
+		if (existing)
+		{
+			++packDuplicates.count;
+			if (packDuplicates.logs < 32 && count && first < pack.frameCount + 1)
+			{
+				++packDuplicates.logs;
+				const PackFrame* kept = &pack.frames[existing->first];
+				const PackFrame* other = &pack.frames[first];
+				DebugLog("image pack duplicate name %.48s: kept %u frames, first %dx%d at %d,%d; dropped %u frames, first %dx%d at %d,%d", game, existing->count, kept->w, kept->h, kept->ox, kept->oy,
+					count, other->w, other->h, other->ox, other->oy);
+			}
+			return FALSE;
+		}
 
 		DWORD name, idName;
 		if (!AddName(game, StrLength(game), &name) || !AddName(id, idLength, &idName))
@@ -1268,8 +1287,8 @@ namespace ImageReplace
 			return FALSE;
 		MemoryZero(pack.texs, pack.frameCount * sizeof(Tex));
 
-		DebugLog("image pack loaded: %s, %d animations, %d frames in %d ms", pack.gameNames ? "gamenames-v1.galleanpack (game names, canvas origin)" : "assets-v1.galleanpack (asset ids)",
-			pack.animCount, pack.frameCount, GetTickCount() - tick);
+		DebugLog("image pack loaded: %s, %d animations, %d frames in %d ms, %u duplicate names dropped", pack.gameNames ? "gamenames-v1.galleanpack (game names, canvas origin)" : "assets-v1.galleanpack (asset ids)",
+			pack.animCount, pack.frameCount, GetTickCount() - tick, packDuplicates.count);
 		return TRUE;
 	}
 
@@ -3390,6 +3409,7 @@ namespace ImageReplace
 	#define SHEET_FRAME_INFO 64
 	#define SHEET_PIECE_LOGS 20
 	#define SHEET_UNCERTAIN_LOGS 64
+	#define SHEET_FORCED_LOGS 96
 	#define SHEET_OVERLAP_LIMIT 1024
 
 	struct SheetFrameInfo {
@@ -3399,7 +3419,14 @@ namespace ImageReplace
 		LONG cw, ch;
 		BYTE origin;
 		BYTE exact;
-		BYTE ambiguous;
+		// the pack entry is named like the sheet file; it holds the frame's canvas all the same (see SheetPieces), so this only marks it in the log
+		BYTE fileNamed;
+		// a file-named frame whose parts would take other 4K if the entry were read as the file itself (identity), so the log can tell the readings apart
+		BYTE readingsDiffer;
+		// the pack entry's box lies outside the union of the frame's parts in its canvas, so it is not this frame (left 1x)
+		BYTE outsideParts;
+		WORD parts;
+		RECT bounds;
 	};
 
 	SheetFrameInfo sheetFrames[SHEET_FRAME_INFO];
@@ -3407,7 +3434,7 @@ namespace ImageReplace
 
 	struct {
 		DWORD pieceLogs, uncertainLogs;
-		DWORD wrongSize, ambiguous, overlaps, duplicates, dropped, unchecked;
+		DWORD wrongSize, fileNamed, fileNamedDiffer, notFrame, overlaps, duplicates, dropped, unchecked, forcedLogs;
 	} sheetCheck;
 
 	// the same name with or without .PNG
@@ -3438,15 +3465,16 @@ namespace ImageReplace
 	// the full piece list, so a misplacement can be read from the log: sheet rect -> pack frame, its part's rect in the frame canvas, the frame box placed in the sheet
 	VOID SheetPieceLog(const CHAR* label, DWORD fileId, LONG w, LONG h, DWORD count, const Twin::SeedSheetStats* stats, const CHAR* why)
 	{
-		DebugLog("image sheet pieces %.40s file %u %dx%d (%s): frames %u, pieces %u, dropped as uncertain %u (block of another size %u, frames whose pack entry may be the file %u) | pack %s",
-			label, fileId, w, h, why, sheetFrameCount, count, stats->uncertain, stats->wrongSize, stats->ambiguous, pack.gameNames ? "gamenames" : "assets");
+		DebugLog("image sheet pieces %.40s file %u %dx%d (%s): frames %u, pieces %u, dropped as uncertain %u (block of another size %u, frames whose pack entry reaches outside their parts %u) | frames whose pack entry is named like the file %u, seeded in canvas layout | pack %s",
+			label, fileId, w, h, why, sheetFrameCount, count, stats->uncertain, stats->wrongSize, stats->notFrame, stats->fileNamed, pack.gameNames ? "gamenames" : "assets");
 		for (DWORD f = 0; f < sheetFrameCount && f < 12; ++f)
 		{
 			const SheetFrameInfo* i = &sheetFrames[f];
 			const PackFrame* pf = i->frame >= 0 ? &pack.frames[i->frame] : NULL;
-			DebugLog("image sheet pieces %.40s frame [%u] %.48s canvas %dx%d -> pack %.48s%s #%d %dx%d offset %d,%d origin %s%s", label, f, i->name, i->cw, i->ch,
+			DebugLog("image sheet pieces %.40s frame [%u] %.48s canvas %dx%d, %u parts covering %d,%d %dx%d of it -> pack %.48s%s #%d %dx%d offset %d,%d origin %s%s%s", label, f, i->name, i->cw, i->ch,
+				i->parts, i->bounds.left, i->bounds.top, i->bounds.right - i->bounds.left, i->bounds.bottom - i->bounds.top,
 				i->anim ? pack.names + i->anim->name : "-", i->exact ? "" : " (name variant)", i->frame, pf ? pf->w : 0, pf ? pf->h : 0, pf ? pf->ox : 0, pf ? pf->oy : 0,
-				originNames[i->origin < 3 ? i->origin : 0], i->ambiguous ? " AMBIGUOUS" : "");
+				originNames[i->origin < 3 ? i->origin : 0], i->outsideParts ? " | ENTRY OUTSIDE THE FRAME'S PARTS: not this frame, left 1x" : "", !i->fileNamed ? "" : i->readingsDiffer ? " | named like the file, canvas reading (an identity reading would differ)" : " | named like the file, both readings agree");
 		}
 		CHAR text[1100];
 		CHAR* at = text;
@@ -3470,6 +3498,7 @@ namespace ImageReplace
 	// FALSE when no -INDEX.OPT entry points at the file; the pieces are in the static tables until the next call. Only pieces placed with certainty are kept
 	BOOL SheetPieces(Archive* a, DWORD fileId, const CHAR* label, LONG w, LONG h, BOOL log, DWORD* pieceCount, DWORD* conflictOut, Twin::SeedSheetStats* statsOut, DWORD* blockOut)
 	{
+		Twin::SeedStep step(Twin::StepPieces);
 		DWORD offsets[SHEET_BLOCKS];
 		DWORD blocks = 0;
 		for (DWORD value = a->itemHeads[(fileId * 2654435761u) & a->itemMask]; value; value = a->items[value - 1].next)
@@ -3495,6 +3524,10 @@ namespace ImageReplace
 		MemoryZero(&stats, sizeof(stats));
 		const BYTE* end = a->images + a->imagesSize;
 		sheetFrameCount = 0;
+		DWORD fileNamedDiffer = 0;
+		// event portraits, faces and every sheet with a multi-part frame of the decode's size get their full piece list, beyond the first 20 sheets
+		DWORD pathLength = StrLength(a->path);
+		BOOL forceLog = (pathLength >= 10 && !StrCompareInsensitive(a->path + pathLength - 10, "\\Events.ff")) || (pathLength >= 9 && !StrCompareInsensitive(a->path + pathLength - 9, "\\Faces.ff"));
 
 		for (DWORD b = 0; b < blocks; ++b)
 		{
@@ -3543,13 +3576,48 @@ namespace ImageReplace
 					continue;
 				}
 
-				// the pack names plain files and frames alike, and PlainFrame reads a file's entry as the file itself: when this frame's entry is named like the sheet file,
-				// is its size and the parts reorder the sheet, it may hold the sheet's layout instead of the frame's canvas, and nothing tells the two apart
-				BOOL reorders = FALSE;
-				for (DWORD i = 0; i < parts && !reorders; ++i)
-					reorders = part[i * 6] != part[i * 6 + 2] || part[i * 6 + 1] != part[i * 6 + 3];
-				BOOL fileEntry = !exact || (label && SameStem(pack.names + anim->name, label));
-				BOOL ambiguous = pack.gameNames && fileEntry && reorders && pf->w == w && pf->h == h;
+				LONG ox = pf->ox, oy = pf->oy;
+				if (origin == OriginCentre)
+				{
+					ox += cw / 2;
+					oy += ch / 2;
+				}
+				else if (origin == OriginSprite)
+					ox = oy = 0;
+
+				// an entry named like the sheet file still holds the frame, not the file: Gallean's GetImage takes the -IMAGES.OPT frame of a name before the raw file of that name,
+				// and builds it from the parts in canvas coordinates (ImagesExtractor.GetImage, BuildImage, GetImageBounds). Every such entry in the 19:07 log has exactly the parts'
+				// canvas bounds as its box (G000MG0116 64x54 at 124,123 of 320x320), which a raw file cannot have. So these frames are placed like any other; the log only marks them,
+				// and whether an identity reading (the entry over the file at 0,0, as PlainFrame reads a plain file) would have placed any part differently
+				BOOL fileNamed = !exact || (label && SameStem(pack.names + anim->name, label));
+				BOOL differ = FALSE;
+				for (DWORD i = 0; i < parts && fileNamed && !differ; ++i)
+					differ = part[i * 6 + 2] - part[i * 6] + ox != 0 || part[i * 6 + 3] - part[i * 6 + 1] + oy != 0;
+
+				// the entry is the frame's content box in its canvas (Gallean builds the frame from its parts and the pack crops it to what is not transparent), so it lies
+				// inside the union of the parts' canvas rects. One that reaches outside is another image of that name (another archive, or a raw file): its pieces would
+				// sample the wrong 4K, so the frame stays 1x. Geometry only, no pixels. Only for stills looked up by their own name in the gamenames pack: an animation frame's
+				// entry may be cropped to the whole animation's bounds, which no log has shown yet, and an asset-pack entry is the full canvas
+				RECT bounds = { 0, 0, 0, 0 };
+				for (DWORD i = 0; i < parts; ++i)
+				{
+					RECT r = { part[i * 6], part[i * 6 + 1], part[i * 6] + part[i * 6 + 4], part[i * 6 + 1] + part[i * 6 + 5] };
+					if (r.right <= r.left || r.bottom <= r.top)
+						continue;
+					if (IsRectEmpty(&bounds))
+						bounds = r;
+					else
+						UnionRect(&bounds, &bounds, &r);
+				}
+				BOOL outsideParts = pack.gameNames && !link && origin != OriginSprite && !IsRectEmpty(&bounds) &&
+					(ox < bounds.left || oy < bounds.top || ox + pf->w > bounds.right || oy + pf->h > bounds.bottom);
+				if (outsideParts)
+				{
+					++stats.notFrame;
+					++sheetCheck.notFrame;
+				}
+				if (parts > 1 && cw == w && ch == h)
+					forceLog = TRUE;
 				WORD frameOf = (WORD)min(sheetFrameCount, (DWORD)SHEET_FRAME_INFO - 1);
 				if (sheetFrameCount < SHEET_FRAME_INFO)
 				{
@@ -3561,22 +3629,22 @@ namespace ImageReplace
 					info->ch = ch;
 					info->origin = (BYTE)origin;
 					info->exact = (BYTE)exact;
-					info->ambiguous = (BYTE)ambiguous;
+					info->fileNamed = (BYTE)fileNamed;
+					info->readingsDiffer = (BYTE)differ;
+					info->outsideParts = (BYTE)outsideParts;
+					info->parts = (WORD)min(parts, 0xFFFFu);
+					info->bounds = bounds;
 				}
-				if (ambiguous)
+				if (fileNamed)
 				{
-					++stats.ambiguous;
-					++sheetCheck.ambiguous;
+					++stats.fileNamed;
+					++sheetCheck.fileNamed;
+					if (differ)
+					{
+						++fileNamedDiffer;
+						++sheetCheck.fileNamedDiffer;
+					}
 				}
-
-				LONG ox = pf->ox, oy = pf->oy;
-				if (origin == OriginCentre)
-				{
-					ox += cw / 2;
-					oy += ch / 2;
-				}
-				else if (origin == OriginSprite)
-					ox = oy = 0;
 
 				for (DWORD i = 0; i < parts; ++i, part += 6)
 				{
@@ -3630,7 +3698,7 @@ namespace ImageReplace
 					sheetCanvas[count].x = cx;
 					sheetCanvas[count].y = cy;
 					sheetFrameOf[count] = frameOf;
-					sheetDrop[count] = (BYTE)ambiguous;
+					sheetDrop[count] = (BYTE)outsideParts;
 					shared[count++] = FALSE;
 				}
 			}
@@ -3668,10 +3736,16 @@ namespace ImageReplace
 			++sheetCheck.pieceLogs;
 			SheetPieceLog(label, fileId, w, h, count, &stats, "sheet seed");
 		}
-		else if ((stats.uncertain || stats.wrongSize) && sheetCheck.uncertainLogs < SHEET_UNCERTAIN_LOGS)
+		else if (forceLog && sheetCheck.forcedLogs < SHEET_FORCED_LOGS)
 		{
+			++sheetCheck.forcedLogs;
+			SheetPieceLog(label, fileId, w, h, count, &stats, "event portrait, face or multi-part frame of the sheet's size");
+		}
+		else if ((stats.uncertain || stats.wrongSize || fileNamedDiffer) && sheetCheck.uncertainLogs < SHEET_UNCERTAIN_LOGS)
+		{
+			// a file-named frame whose readings differ is listed too, so its placement can be read from the log
 			++sheetCheck.uncertainLogs;
-			SheetPieceLog(label, fileId, w, h, count, &stats, "uncertain");
+			SheetPieceLog(label, fileId, w, h, count, &stats, stats.uncertain || stats.wrongSize ? "uncertain" : "named like the file");
 		}
 
 		DWORD kept = 0;
@@ -3716,8 +3790,8 @@ namespace ImageReplace
 			return "no frame name is in the pack";
 		if (stats->unmapped + stats->additive == stats->frames)
 			return "its frames are additive or not in the pack";
-		if (stats->ambiguous)
-			return "its pack entry is named like the sheet file and is its size, so it may hold the file's layout, not the frame's: left 1x";
+		if (stats->notFrame)
+			return "its pack entry reaches outside the frame's parts, so it is another image of that name: left 1x";
 		if (stats->wrongSize)
 			return "its -IMAGES.OPT block is of another sheet size";
 		if (stats->uncertain)
@@ -3807,8 +3881,8 @@ namespace ImageReplace
 		DebugLog("image seed sources since start: store draws %d (new memory %d) | faces loaded %d, face copies %d | ranges %d, decodes with art store %d face %d | archives with sheet tables %u | ground chunks %d builds %d published %d | prefetch at store load: files %u, frames asked %u",
 			storeStats.draws, storeStats.drawLinks, storeStats.faceLoads, storeStats.faceCopies, memory.count, memory.learnStore, memory.learnFace, sheets.archives,
 			ground.chunkCount, ground.builds, ground.published, storeStats.prefetchLoads, storeStats.prefetchFrames);
-		DebugLog("image sheet checks since start: pieces left 1x as uncertain %u | blocks of another sheet size %u, frames whose pack entry is named like the sheet file and may hold its layout %u, overlapping pieces with different 4K %u, one block at two places of a frame %u, sheets too big to check %u",
-			sheetCheck.dropped, sheetCheck.wrongSize, sheetCheck.ambiguous, sheetCheck.overlaps, sheetCheck.duplicates, sheetCheck.unchecked);
+		DebugLog("image sheet checks since start: pieces left 1x as uncertain %u | blocks of another sheet size %u, frames whose pack entry is named like the sheet file %u (an identity reading would differ for %u; all seeded in canvas layout), frames whose pack entry reaches outside their parts (another image of the name) %u, overlapping pieces with different 4K %u, one block at two places of a frame %u, sheets too big to check %u",
+			sheetCheck.dropped, sheetCheck.wrongSize, sheetCheck.fileNamed, sheetCheck.fileNamedDiffer, sheetCheck.notFrame, sheetCheck.overlaps, sheetCheck.duplicates, sheetCheck.unchecked);
 		LogRecords();
 	}
 

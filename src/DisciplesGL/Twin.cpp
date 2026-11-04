@@ -187,6 +187,8 @@
 #define SEED_CONFLICT_LOGS 24
 #define COVER_TOP 20
 #define SEED_POLL_BYTES (24 * 1024 * 1024)
+// late seeds whose base is not uploaded yet: at most this many base px per present, the rest at the next one (about 1.5 ms of conversion)
+#define SEED_POLL_BASE_PX (1024 * 1024)
 #define CMD_TYPES 14
 #define REPLAY_SLOW_US 50000
 #define REPLAY_SLOW_LOGS 64
@@ -194,7 +196,8 @@
 #define SEED_INLINE_MIN (1024 * 1024)
 #define SEED_INLINE_MAX (32 * 1024 * 1024)
 #define SEED_LOAD_GAP_MS 100
-#define SEED_LOAD_WAIT_DEFAULT 100
+// 0: a decode never waits for its 4K, even while the game is loading; the 19:07 run had one decode wait 59 ms there (a 78 ms frame), and the streaming path lands it a few frames later anyway
+#define SEED_LOAD_WAIT_DEFAULT 0
 #define SEED_LOAD_TOTAL_MS 1000
 #define TAG_GROUND -3
 #define TAG_SEED_SHEET -4
@@ -623,6 +626,40 @@ namespace Twin
 		ULONGLONG tscPerMs;
 	} spent;
 
+	const CHAR* const stepNames[SeedStepKinds] = { "-", "wait for 4K", "pieces", "decode capture", "guard", "base upload", "stack walk", "transfer candidates" };
+
+	struct {
+		DWORD cur;
+		ULONGLONG mark;
+		ULONGLONG acc[SeedStepKinds];
+		ULONGLONG logMark;
+		DWORD logCalls;
+	} steps;
+
+	SeedStep::SeedStep(DWORD kind)
+	{
+		if (__readfsdword(0x24) != spent.thread)
+		{
+			prev = SeedStepKinds;
+			return;
+		}
+		ULONGLONG now = __rdtsc();
+		steps.acc[steps.cur] += now - steps.mark;
+		steps.mark = now;
+		prev = steps.cur;
+		steps.cur = kind;
+	}
+
+	SeedStep::~SeedStep()
+	{
+		if (prev == SeedStepKinds)
+			return;
+		ULONGLONG now = __rdtsc();
+		steps.acc[steps.cur] += now - steps.mark;
+		steps.mark = now;
+		steps.cur = prev;
+	}
+
 	Cost::Cost(DWORD kind)
 	{
 		if (__readfsdword(0x24) != spent.thread)
@@ -781,6 +818,10 @@ namespace Twin
 		DWORD waitDecode;
 		DWORD loadWaits;
 		DWORD loadWaitTotalUs;
+		// key-alpha base px uploaded for seeds since the last present, and late seeds held to the next present by SEED_POLL_BASE_PX
+		DWORD frameBasePx;
+		DWORD baseHeld;
+		LONGLONG basePx;
 	} seeds;
 
 	enum XferVia { ViaWrite, ViaCreated, ViaTrap, ViaUnlock };
@@ -934,6 +975,7 @@ namespace Twin
 		DWORD byIndexed;
 		DWORD indexed;
 		DWORD indexedFromDecode;
+		DWORD quickGuards;
 		DWORD indexedIntoDecode;
 		DWORD indexedPartial;
 		DWORD indexedNoTwin;
@@ -1628,6 +1670,36 @@ namespace Twin
 	VOID SeedDropTwin(Record* twin, DWORD id);
 	VOID SeedRepend(const CHAR* reason);
 
+	VOID Append(Record* twin, const RECT* rect);
+
+	// takes rect out of the dirty list: the parts of dirty rects outside it stay dirty, the parts inside are left to an upload of rect that follows at once
+	VOID CutRegion(Record* twin, const RECT* rect)
+	{
+		DWORD i = 0;
+		while (i < twin->count)
+		{
+			RECT part;
+			if (!IntersectRect(&part, &twin->dirty[i], rect))
+			{
+				++i;
+				continue;
+			}
+
+			RECT dirty = twin->dirty[i];
+			twin->dirty[i] = twin->dirty[--twin->count];
+			RECT pieces[4] = {
+				{ dirty.left, dirty.top, dirty.right, part.top },
+				{ dirty.left, part.bottom, dirty.right, dirty.bottom },
+				{ dirty.left, part.top, part.left, part.bottom },
+				{ part.right, part.top, dirty.right, part.bottom }
+			};
+			for (DWORD k = 0; k < 4; ++k)
+				if (pieces[k].left < pieces[k].right && pieces[k].top < pieces[k].bottom)
+					Append(twin, &pieces[k]);
+			i = 0;
+		}
+	}
+
 	VOID Append(Record* twin, const RECT* rect)
 	{
 		if (twin->count == DIRTY_MAX)
@@ -1689,9 +1761,34 @@ namespace Twin
 	{
 		BOOL keyed = twin->keyed;
 		DWORD key = twin->key;
+		// four pixels at a time with SSE2, the same rule as the loop below; every upload goes through here on the game thread (a seed's base is a whole decode)
+		BOOL wide = config.cpu.sse2 && width >= 4;
+		__m128i vKey = _mm_set1_epi32((INT)key);
+		__m128i vCheck = _mm_set1_epi32((INT)COLORKEY_CHECK);
+		__m128i vLow = _mm_set1_epi32(0x00FFFFFF);
+		__m128i vMark = _mm_set1_epi32((INT)0xFE000000);
+		__m128i vTop = _mm_set1_epi32(0xFF);
 		for (LONG y = height; y; --y)
 		{
-			for (LONG x = 0; x < width; ++x)
+			LONG x = 0;
+			if (wide)
+			{
+				for (; x + 4 <= width; x += 4)
+				{
+					__m128i p = _mm_loadu_si128((const __m128i*)(src + x));
+					__m128i full = _mm_cmpeq_epi32(_mm_srli_epi32(p, 24), vTop);
+					__m128i marked = _mm_or_si128(_mm_and_si128(p, vLow), vMark);
+					__m128i out = _mm_or_si128(_mm_and_si128(full, p), _mm_andnot_si128(full, marked));
+					__m128i drop = _mm_setzero_si128();
+					if (keyed)
+						drop = _mm_cmpeq_epi32(p, vKey);
+					if (seed)
+						drop = _mm_or_si128(drop, _mm_cmpeq_epi32(p, vCheck));
+					_mm_storeu_si128((__m128i*)(dst + x), _mm_andnot_si128(drop, out));
+				}
+				dst += x;
+			}
+			for (; x < width; ++x)
 			{
 				DWORD pixel = src[x];
 				// key pixels become transparent black so premultiplied art blends over them; alpha 254 marks a 1x alpha byte other than 255, so keyed copies keep the CPU's exact DWORD compare
@@ -3941,13 +4038,17 @@ namespace Twin
 		SeedCounters* c = &seeds.kinds[r->kind];
 		if (!r->based)
 		{
-			// the decode is still pending as dirty 1x; it is replaced by a key-alpha upload the 4K is cut by
+			// the decode is still pending as dirty 1x; it is replaced by a key-alpha upload the 4K is cut by. Dirty rects that reach past it keep their outer parts dirty;
+			// they used to be uploaded whole here (the scratch's merged dirty boxes), on top of this upload
+			SeedStep step(StepBase);
 			DrainSyncIn(twin, &rect);
 			Cover(twin, &rect);
-			FlushRegion(twin, r->id, &rect, TRUE);
+			CutRegion(twin, &rect);
 			Upload(twin, r->id, &rect, TRUE);
 			r->based = TRUE;
 			c->px += Area(&rect);
+			seeds.frameBasePx += Area(&rect);
+			seeds.basePx += Area(&rect);
 		}
 
 		DWORD conflictCount = 0;
@@ -4064,6 +4165,12 @@ namespace Twin
 			// after a rebuild every intact seed comes back; spreading them over frames keeps the queue under its limit
 			if (game.list && game.list->size > SEED_POLL_BYTES)
 				break;
+			// the key-alpha base is converted here on the game thread; past the budget a late seed lands at the next present, its 1x still in place
+			if (!r->based && seeds.frameBasePx >= SEED_POLL_BASE_PX)
+			{
+				++seeds.baseHeld;
+				continue;
+			}
 
 			DWORD waiting = SeedEmit(r);
 			if (!r->owner)
@@ -4218,6 +4325,7 @@ namespace Twin
 		}
 		if (waitMs)
 		{
+			SeedStep step(StepWait);
 			LARGE_INTEGER start, now;
 			QueryPerformanceCounter(&start);
 			LONGLONG frequency = game.frequency.QuadPart ? game.frequency.QuadPart : 1000;
@@ -4476,6 +4584,7 @@ namespace Twin
 
 	VOID XferCapture(const VOID* first, LONG pitch, LONG width, LONG height, SeedKind kind, const CHAR* label, const SeedPiece* pieces, DWORD count, const SeedConflict* conflicts, DWORD conflictCount, const SeedSheetStats* sheet)
 	{
+		SeedStep step(StepCapture);
 		TrapDrain();
 		// whatever was watched for the previous decode is complete by now
 		XferResolve(TRUE);
@@ -4537,7 +4646,17 @@ namespace Twin
 		LONG end16 = (top + height - 1) * raw + (left + width) * (LONG)sizeof(WORD);
 		DWORD layouts = 0;
 		LONG end = 0;
-		if (!IsBadReadPtr(data + low, end32 - low))
+		LONG end8 = (top + height - 1) * raw + left + width;
+		// the BlitObject says 8-bit indices (every StoreDraw decode so far): only that reading is kept, half the bytes of the 32 bpp span and no compares in readings it cannot be
+		if (described && xfer.srcTrue == 0)
+		{
+			if (!IsBadReadPtr(data + low, end8 - low))
+			{
+				layouts = Layout8;
+				end = end8;
+			}
+		}
+		else if (!IsBadReadPtr(data + low, end32 - low))
 		{
 			layouts = described ? Layout32 | Layout16 | Layout8 : Layout32;
 			end = end32;
@@ -4715,6 +4834,7 @@ namespace Twin
 	// how the surface at x,y holds the decode's sub rect in every format the snapshot can be read as; a check that is not final stops at the first bad row
 	VOID XferGuard(const Record* twin, LONG x, LONG y, const RECT* sub, BOOL final, GuardResult* out)
 	{
+		SeedStep timing(StepGuard);
 		LONG width = sub->right - sub->left, height = sub->bottom - sub->top;
 		MemoryZero(out, sizeof(GuardResult));
 		out->format = GuardFormats;
@@ -4790,6 +4910,40 @@ namespace Twin
 					break;
 				}
 		}
+	}
+
+	#define GUARD_QUICK_STEP 4
+
+	// the indexed blit read the decode by its source pointer, so the guard is only a check that the snapshot is that decode: every GUARD_QUICK_STEP-th row and the
+	// last one, read through the blit's own palette, must hold exactly. It used to compare every row in five readings (about 7 ns a pixel, 3 ms for an 800x600 decode)
+	BOOL XferGuardQuick(const Record* twin, LONG x, LONG y, const RECT* sub, GuardResult* out)
+	{
+		SeedStep timing(StepGuard);
+		if (!(xfer.layouts & Layout8) || !xfer.paletteSet)
+			return FALSE;
+		LONG width = sub->right - sub->left, height = sub->bottom - sub->top;
+		if (width <= 0 || height <= 0)
+			return FALSE;
+		for (LONG row = 0;;)
+		{
+			const DWORD* have = (const DWORD*)twin->base + (y + row) * twin->pitch + x;
+			BOOL within, varied = FALSE;
+			DWORD firstSeen = 0, expect = 0;
+			if (GuardRow(twin, GuardPalette, have, sub->left, sub->top + row, width, TRUE, &within, NULL, &firstSeen, &varied, &expect) != width)
+				return FALSE;
+			if (row == height - 1)
+				break;
+			row = min(row + GUARD_QUICK_STEP, height - 1);
+		}
+		MemoryZero(out, sizeof(GuardResult));
+		for (DWORD f = 0; f < GuardFormats; ++f)
+			out->leads[f] = out->matches[f] = -1;
+		out->format = GuardPalette;
+		out->lead = out->rows = height;
+		out->leads[GuardPalette] = out->matches[GuardPalette] = height;
+		out->badY = height;
+		++xfer.quickGuards;
+		return TRUE;
 	}
 
 	// 0 rejected, 1 exact in some format, 2 tolerant: a fresh surface of the decode's size where XFER_TOLERANT_PCT of the rows match within XFER_TOLERANCE
@@ -5126,6 +5280,7 @@ namespace Twin
 
 	VOID XferResolve(BOOL final)
 	{
+		SeedStep step(StepResolve);
 		Cost cost(CostSeed);
 		static BOOL resolving;
 		if (!xfer.watchCount || resolving)
@@ -5439,7 +5594,7 @@ namespace Twin
 	VOID XferIndexedTry(const BYTE* src, LONG srcPitch, const DWORD* palette, const DWORD* dst, LONG dstPitch, LONG width, LONG height, const DWORD* chain, DWORD chainCount,
 		const DWORD* scan, DWORD scanCount)
 	{
-		if (xfer.valid && (xfer.layouts & Layout32) && (const BYTE*)dst >= xfer.rawData && (const BYTE*)dst < xfer.rawData + (xfer.rawTop + xfer.height) * xfer.rawPitch * 2)
+		if (xfer.valid && (const BYTE*)dst >= xfer.rawData && (const BYTE*)dst < xfer.rawData + (xfer.rawTop + xfer.height) * xfer.rawPitch * ((xfer.layouts & Layout32) ? 2 : 1))
 		{
 			++xfer.indexedIntoDecode;
 			return;
@@ -5516,7 +5671,8 @@ namespace Twin
 
 		const CHAR* via = "indexed blit from the decode";
 		GuardResult g;
-		XferGuard(twin, x, y, &sub, TRUE, &g);
+		if (!XferGuardQuick(twin, x, y, &sub, &g))
+			XferGuard(twin, x, y, &sub, TRUE, &g);
 		const CHAR* reason = NULL;
 		DWORD format = GuardFormats;
 		DWORD verdict = GuardVerdict(&g, height, TRUE, &reason, &format);
@@ -5557,6 +5713,12 @@ namespace Twin
 		}
 	}
 
+	// the scan of the stack above a blit only feeds log lines and the code dump; once their budgets are spent it is skipped
+	BOOL ScanWanted()
+	{
+		return Diagnostics() || xfer.loaderLogs < LOADER_LOGS || game.indexedOtherLogs < INDEXED_OTHER_LOGS || unnamed.logs < UNNAMED_LOGS;
+	}
+
 	VOID OnIndexedBlit(const BYTE* src, LONG srcPitch, const DWORD* palette, const DWORD* dst, LONG dstPitch, LONG width, LONG height, const DWORD* slot)
 	{
 		Timed timed("OnIndexedBlit");
@@ -5594,13 +5756,18 @@ namespace Twin
 			b->width = width;
 			b->height = height;
 			MemoryCopy(b->palette, palette, sizeof(b->palette));
+			SeedStep step(StepStack);
 			b->chainCount = WalkFrames(slot, b->chain, INDEXED_CHAIN);
-			b->scanCount = StackCallers(slot, b->chain, b->chainCount, b->scan, STACK_CALLERS);
+			b->scanCount = ScanWanted() ? StackCallers(slot, b->chain, b->chainCount, b->scan, STACK_CALLERS) : 0;
 			return;
 		}
 		DWORD chain[INDEXED_CHAIN], scan[STACK_CALLERS];
-		DWORD chainCount = WalkFrames(slot, chain, INDEXED_CHAIN);
-		DWORD scanCount = StackCallers(slot, chain, chainCount, scan, STACK_CALLERS);
+		DWORD chainCount, scanCount;
+		{
+			SeedStep step(StepStack);
+			chainCount = WalkFrames(slot, chain, INDEXED_CHAIN);
+			scanCount = ScanWanted() ? StackCallers(slot, chain, chainCount, scan, STACK_CALLERS) : 0;
+		}
 		XferIndexedTry(src, srcPitch, palette, dst, dstPitch, width, height, chain, chainCount, scan, scanCount);
 	}
 
@@ -5726,9 +5893,9 @@ namespace Twin
 		DebugLog("twin seed transfer done: unlock with the decode during the lock %u, before the lock %u | inside the decode call %u | hooked write %u (watched %u) | surface created before the decode %u (watched %u) | first write trapped %u (watched %u, late %u) | indexed blit from the decode %u | rejected %u surfaces (blank %u, partial at the end %u, mostly matching but not a fresh surface %u), unlocks of much larger surfaces %u, not compared: smaller than the decode %u, guard failed %u times already %u",
 			xfer.byDuring, xfer.byBefore, xfer.byInside, xfer.byWrite, xfer.watches, xfer.byCreated, xfer.createdWatches, xfer.byTrap, xfer.trapWatches, xfer.trapLate, xfer.byIndexed,
 			xfer.guardFails, xfer.blank, xfer.partialExpired, xfer.weakTolerant, xfer.unlockLarge, xfer.unlockSmall, XFER_UNLOCK_RETRIES, xfer.unlockRetired);
-		DebugLog("twin seed transfer guard since start: exact rgb32 %u bgr32 %u 565 %u indices %u palette %u | tolerant 565 %u indices %u palette %u | indexed blits %u: from the decode %u (part of it %u, no surface twin %u), into the decode %u, other sources %u, dropped inside a decode %u",
+		DebugLog("twin seed transfer guard since start: exact rgb32 %u bgr32 %u 565 %u indices %u palette %u | tolerant 565 %u indices %u palette %u | indexed blits %u: from the decode %u (part of it %u, no surface twin %u; guarded on sampled rows through the blit's palette %u), into the decode %u, other sources %u, dropped inside a decode %u",
 			xfer.exact[GuardRgb], xfer.exact[GuardBgr], xfer.exact[Guard565], xfer.exact[GuardIndexed], xfer.exact[GuardPalette], xfer.tolerant[Guard565], xfer.tolerant[GuardIndexed], xfer.tolerant[GuardPalette],
-			xfer.indexed, xfer.indexedFromDecode, xfer.indexedPartial, xfer.indexedNoTwin, xfer.indexedIntoDecode, xfer.indexedOther, xfer.indexedInsideDropped);
+			xfer.indexed, xfer.indexedFromDecode, xfer.indexedPartial, xfer.indexedNoTwin, xfer.quickGuards, xfer.indexedIntoDecode, xfer.indexedOther, xfer.indexedInsideDropped);
 		LogUnnamed();
 		CodeFlush();
 	}
@@ -7019,10 +7186,12 @@ namespace Twin
 			seeds.active, pending, seeds.evicted, seeds.repends, seeds.repeats, seeds.skippedPieces, waitAvg, seeds.waitMaxUs, seeds.waits, replayed, replayedPieces, missing, seeds.maskedCopies, seeds.maskedSkipped);
 
 		DWORD lateAvgFrames = seeds.late ? DWORD(seeds.lateFrames / seeds.late) : 0, lateAvgMs = seeds.late ? DWORD(seeds.lateMs / seeds.late) : 0;
-		DebugLog("twin seed streaming 5s: deferred %u (now pending %u), carried by copies out of pending seeds %u (pieces %u) | landed late %u (pieces %u) after avg %u frames / %u ms, max %u frames / %u ms | frame checks still decoding %u, over the inline upload budget %u (budget %u KB per present) | pieces dropped by a write since the decode %u | waits while loading %u (SeedWait %u ms, SeedLoadWait %u ms)",
+		DebugLog("twin seed streaming 5s: deferred %u (now pending %u), carried by copies out of pending seeds %u (pieces %u) | landed late %u (pieces %u) after avg %u frames / %u ms, max %u frames / %u ms | frame checks still decoding %u, over the inline upload budget %u (budget %u KB per present) | pieces dropped by a write since the decode %u | waits while loading %u (SeedWait %u ms, SeedLoadWait %u ms) | key-alpha bases %u Kpx, late seeds held to the next present by the base budget %u",
 			seeds.deferredInterval, pending, seeds.derived, seeds.derivedPieces, seeds.late, seeds.latePieces, lateAvgFrames, lateAvgMs, seeds.lateMaxFrames, seeds.lateMaxMs, seeds.waitDecode, seeds.inlineDeferred,
-			DWORD(seeds.inlineBudget / 1024), seeds.piecesWritten, seeds.loadWaits, seeds.waitMs, seeds.loadWaitMs);
+			DWORD(seeds.inlineBudget / 1024), seeds.piecesWritten, seeds.loadWaits, seeds.waitMs, seeds.loadWaitMs, DWORD(seeds.basePx / 1000), seeds.baseHeld);
 		seeds.deferredInterval = seeds.derived = seeds.derivedPieces = seeds.late = seeds.latePieces = seeds.waitDecode = seeds.inlineDeferred = seeds.piecesWritten = seeds.loadWaits = 0;
+		seeds.basePx = 0;
+		seeds.baseHeld = 0;
 		seeds.lateFrames = seeds.lateMs = 0;
 		seeds.lateMaxFrames = seeds.lateMaxMs = 0;
 
@@ -8369,6 +8538,10 @@ namespace Twin
 		{
 			spent.thread = __readfsdword(0x24);
 			spent.mark = now;
+			steps.mark = now;
+			debugLogThread = spent.thread;
+			steps.logMark = debugLogCycles;
+			steps.logCalls = debugLogCalls;
 			spent.lastQpc = q.QuadPart;
 			spent.calTsc = now;
 			spent.calQpc = q.QuadPart;
@@ -8384,6 +8557,8 @@ namespace Twin
 
 		spent.acc[spent.cur] += now - spent.mark;
 		spent.mark = now;
+		steps.acc[steps.cur] += now - steps.mark;
+		steps.mark = now;
 		ULONGLONG total = 0;
 		for (DWORD k = CostNone + 1; k < CostKinds; ++k)
 		{
@@ -8418,16 +8593,29 @@ namespace Twin
 				for (DWORD k = CostNone + 1; k < CostKinds; ++k)
 					if (CostUs(spent.acc[k]) >= 100)
 						at += StrPrint(at, " %s %u.%u", costNames[k], CostUs(spent.acc[k]) / 1000, CostUs(spent.acc[k]) % 1000 / 100);
+				// which seed sub-step took the time; the log line time is measured inside DebugLog and also counts in the step it was written from
+				CHAR stepText[300];
+				CHAR* st = stepText;
+				*st = 0;
+				for (DWORD k = StepNone + 1; k < SeedStepKinds; ++k)
+					if (CostUs(steps.acc[k]) >= 100)
+						st += StrPrint(st, " %s %u.%u", stepNames[k], CostUs(steps.acc[k]) / 1000, CostUs(steps.acc[k]) % 1000 / 100);
+				DWORD logUs = CostUs(debugLogCycles - steps.logMark);
 				const Counters* c = game.list ? &game.list->counters : NULL;
 				DWORD slowUs = CostUs(spent.frameSlowCycles);
-				DebugLog("twin hitch: present interval %u ms at frame %u | twin and image code %u.%u ms:%s | slowest call %s %u.%u ms | this frame: seeds %u, uploads %u (%u Kpx), copies %u, fills %u, ground blits %u (%s)",
-					(DWORD)ms, game.frameNo, CostUs(total) / 1000, CostUs(total) % 1000 / 100, *parts ? parts : " none", spent.frameSlowName ? spent.frameSlowName : "none",
-					slowUs / 1000, slowUs % 1000 / 100, spent.frameSeeds, c ? c->uploads : 0, c ? c->pixels / 1000 : 0, c ? c->copies : 0, c ? c->fills : 0, spent.frameGround,
+				DebugLog("twin hitch: present interval %u ms at frame %u | twin and image code %u.%u ms:%s | seed steps:%s | log lines written on the game thread %u in %u.%u ms | slowest call %s %u.%u ms | this frame: seeds %u, uploads %u (%u Kpx), base uploads %u Kpx, copies %u, fills %u, ground blits %u (%s)",
+					(DWORD)ms, game.frameNo, CostUs(total) / 1000, CostUs(total) % 1000 / 100, *parts ? parts : " none", *stepText ? stepText : " none", debugLogCalls - steps.logCalls,
+					logUs / 1000, logUs % 1000 / 100, spent.frameSlowName ? spent.frameSlowName : "none",
+					slowUs / 1000, slowUs % 1000 / 100, spent.frameSeeds, c ? c->uploads : 0, c ? c->pixels / 1000 : 0, seeds.frameBasePx / 1000, c ? c->copies : 0, c ? c->fills : 0, spent.frameGround,
 					spent.frameGround ? "the map view was drawn" : "no map drawing");
 			}
 		}
 
 		MemoryZero(spent.acc, sizeof(spent.acc));
+		MemoryZero(steps.acc, sizeof(steps.acc));
+		steps.logMark = debugLogCycles;
+		steps.logCalls = debugLogCalls;
+		seeds.frameBasePx = 0;
 		spent.frameSlowCycles = 0;
 		spent.frameSlowName = NULL;
 		spent.frameSeeds = spent.frameGround = 0;

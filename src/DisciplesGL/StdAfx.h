@@ -128,6 +128,12 @@ extern HANDLE hActCtx;
 extern CHAR snapshotName[];
 
 void DebugLog(const char* format, ...);
+// writes the buffered log lines now (crash, unload); otherwise the log's own thread writes them within 50 ms
+VOID DebugLogFlush();
+// DebugLog time on one thread (the game thread, set by the twins), for the hitch lines
+extern volatile DWORD debugLogThread;
+extern ULONGLONG debugLogCycles;
+extern DWORD debugLogCalls;
 VOID CrashArm();
 DWORD CrashModule(DWORD address, CHAR* name, DWORD size);
 
