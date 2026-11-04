@@ -1,0 +1,53 @@
+== Sprites BOAT_0_BG frames 1
+   frame 0 {"Width": 950, "Height": 600, "PixelWidth": 1900, "PixelHeight": 1200, "OffsetX": 0, "OffsetY": 0, "Additive": false, "PixelScale": 2} offset 0 length 1762760
+== Sprites CITY_0_BG frames 1
+   frame 0 {"Width": 950, "Height": 600, "PixelWidth": 1900, "PixelHeight": 1200, "OffsetX": 0, "OffsetY": 0, "Additive": false, "PixelScale": 2} offset 10997370 length 1933592
+== Sprites CITY_1_BG frames 1
+   frame 0 {"Width": 950, "Height": 600, "PixelWidth": 1900, "PixelHeight": 1200, "OffsetX": 0, "OffsetY": 0, "Additive": false, "PixelScale": 2} offset 12930962 length 2284644
+== Sprites CITY_2_BG frames 1
+   frame 0 {"Width": 950, "Height": 600, "PixelWidth": 1900, "PixelHeight": 1200, "OffsetX": 0, "OffsetY": 0, "Additive": false, "PixelScale": 2} offset 15215606 length 2973334
+== Sprites DWARF_0_BG frames 1
+   frame 0 {"Width": 950, "Height": 600, "PixelWidth": 1900, "PixelHeight": 1200, "OffsetX": 0, "OffsetY": 0, "Additive": false, "PixelScale": 2} offset 18193676 length 2499724
+== Sprites DWARF_1_BG frames 1
+   frame 0 {"Width": 950, "Height": 600, "PixelWidth": 1900, "PixelHeight": 1200, "OffsetX": 0, "OffsetY": 0, "Additive": false, "PixelScale": 2} offset 20693400 length 2801988
+== Sprites DWARF_2_BG frames 1
+   frame 0 {"Width": 950, "Height": 600, "PixelWidth": 1900, "PixelHeight": 1200, "OffsetX": 0, "OffsetY": 0, "Additive": false, "PixelScale": 2} offset 23495388 length 2478316
+== Sprites HERETIC_0_BG frames 1
+   frame 0 {"Width": 950, "Height": 600, "PixelWidth": 1900, "PixelHeight": 1200, "OffsetX": 0, "OffsetY": 0, "Additive": false, "PixelScale": 2} offset 26034638 length 1721642
+== Sprites HERETIC_1_BG frames 1
+   frame 0 {"Width": 950, "Height": 600, "PixelWidth": 1900, "PixelHeight": 1200, "OffsetX": 0, "OffsetY": 0, "Additive": false, "PixelScale": 2} offset 27756280 length 2417242
+== Sprites HERETIC_2_BG frames 1
+   frame 0 {"Width": 950, "Height": 600, "PixelWidth": 1900, "PixelHeight": 1200, "OffsetX": 0, "OffsetY": 0, "Additive": false, "PixelScale": 2} offset 30173522 length 2562806
+== Sprites HUMAN_0_BG frames 1
+   frame 0 {"Width": 950, "Height": 600, "PixelWidth": 1900, "PixelHeight": 1200, "OffsetX": 0, "OffsetY": 0, "Additive": false, "PixelScale": 2} offset 32736328 length 2185946
+== Sprites HUMAN_1_BG frames 1
+   frame 0 {"Width": 950, "Height": 600, "PixelWidth": 1900, "PixelHeight": 1200, "OffsetX": 0, "OffsetY": 0, "Additive": false, "PixelScale": 2} offset 34922274 length 2773452
+== Sprites HUMAN_2_BG frames 1
+   frame 0 {"Width": 950, "Height": 600, "PixelWidth": 1900, "PixelHeight": 1200, "OffsetX": 0, "OffsetY": 0, "Additive": false, "PixelScale": 2} offset 37695726 length 2803462
+== Sprites NEUTRAL_0_BG frames 1
+   frame 0 {"Width": 950, "Height": 600, "PixelWidth": 1900, "PixelHeight": 1200, "OffsetX": 0, "OffsetY": 0, "Additive": false, "PixelScale": 2} offset 40672800 length 1964472
+== Sprites NEUTRAL_1_BG frames 1
+   frame 0 {"Width": 950, "Height": 600, "PixelWidth": 1900, "PixelHeight": 1200, "OffsetX": 0, "OffsetY": 0, "Additive": false, "PixelScale": 2} offset 42762228 length 2328680
+== Sprites NEUTRAL_2_BG frames 1
+   frame 0 {"Width": 950, "Height": 600, "PixelWidth": 1900, "PixelHeight": 1200, "OffsetX": 0, "OffsetY": 0, "Additive": false, "PixelScale": 2} offset 45090908 length 2291452
+== Sprites RUIN_0_BG frames 1
+   frame 0 {"Width": 950, "Height": 600, "PixelWidth": 1900, "PixelHeight": 1200, "OffsetX": 0, "OffsetY": 0, "Additive": false, "PixelScale": 2} offset 47388350 length 2395022
+== Sprites RUIN_1_BG frames 1
+   frame 0 {"Width": 950, "Height": 600, "PixelWidth": 1900, "PixelHeight": 1200, "OffsetX": 0, "OffsetY": 0, "Additive": false, "PixelScale": 2} offset 49783372 length 2447752
+== Sprites RUIN_2_BG frames 1
+   frame 0 {"Width": 950, "Height": 600, "PixelWidth": 1900, "PixelHeight": 1200, "OffsetX": 0, "OffsetY": 0, "Additive": false, "PixelScale": 2} offset 52231124 length 2590120
+== Sprites UNDEAD_0_BG frames 1
+   frame 0 {"Width": 950, "Height": 600, "PixelWidth": 1900, "PixelHeight": 1200, "OffsetX": 0, "OffsetY": 0, "Additive": false, "PixelScale": 2} offset 57195214 length 1705986
+== Sprites UNDEAD_1_BG frames 1
+   frame 0 {"Width": 950, "Height": 600, "PixelWidth": 1900, "PixelHeight": 1200, "OffsetX": 0, "OffsetY": 0, "Additive": false, "PixelScale": 2} offset 58967052 length 1955898
+== Sprites UNDEAD_2_BG frames 1
+   frame 0 {"Width": 950, "Height": 600, "PixelWidth": 1900, "PixelHeight": 1200, "OffsetX": 0, "OffsetY": 0, "Additive": false, "PixelScale": 2} offset 60922950 length 2177392
+== Sprites WATER_0_BG frames 1
+   frame 0 {"Width": 950, "Height": 600, "PixelWidth": 1900, "PixelHeight": 1200, "OffsetX": 0, "OffsetY": 0, "Additive": false, "PixelScale": 2} offset 63100342 length 2322168
+== Sprites ELF_0_BG frames 1
+   frame 0 {"Width": 990, "Height": 600, "PixelWidth": 1980, "PixelHeight": 1200, "OffsetX": 0, "OffsetY": 0, "Additive": false, "PixelScale": 2} offset 169793824 length 2833546
+== Sprites ELF_1_BG frames 1
+   frame 0 {"Width": 990, "Height": 600, "PixelWidth": 1980, "PixelHeight": 1200, "OffsetX": 0, "OffsetY": 0, "Additive": false, "PixelScale": 2} offset 172627370 length 3071708
+== Sprites ELF_2_BG frames 1
+   frame 0 {"Width": 990, "Height": 600, "PixelWidth": 1980, "PixelHeight": 1200, "OffsetX": 0, "OffsetY": 0, "Additive": false, "PixelScale": 2} offset 175699078 length 2884116
+own-v1 matches 26
