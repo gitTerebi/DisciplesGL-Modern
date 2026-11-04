@@ -78,6 +78,7 @@
 #define LINK_MAX 256
 #define GROUND_LOGS 8
 #define SCREEN_LOGS 64
+#define SHOW_LOGS 32
 #define UNMATCHED_LOGS 16
 #define LOGS_FRAME 4
 #define SHOT_DELAY 15000
@@ -316,6 +317,9 @@ namespace Twin
 		DWORD showBack;
 		DWORD showInvalid;
 		DWORD showGone;
+		DWORD showUs;
+		DWORD showSamples;
+		DWORD showMaxUs;
 		DWORD showOff;
 		DWORD showOther;
 		CheckResult check;
@@ -326,6 +330,8 @@ namespace Twin
 		BOOL failed;
 		GLuint copyProgram;
 		GLuint checkProgram;
+		GLuint showProgram;
+		GLint ratioLoc;
 		GLint keyedLoc;
 		GLint keyLoc;
 		GLint artLoc;
@@ -369,6 +375,14 @@ namespace Twin
 		DWORD groundReplayed;
 		DWORD groundFallbacks;
 		BYTE* checkMask;
+		DWORD showView;
+		DWORD showTwin;
+		DWORD showFrame;
+		DWORD showLogs;
+		DWORD showCount;
+		DWORD showUs;
+		DWORD showSamples;
+		DWORD showMaxUs;
 		DWORD readFbo;
 		LARGE_INTEGER frequency;
 		struct {
@@ -1769,7 +1783,9 @@ namespace Twin
 		shared.artDraws = shared.artFallbacks = shared.artRejected = shared.artCalls = shared.groundReplayed = shared.groundFallbacks = 0;
 		CheckResult check = shared.check;
 		DWORD showOpaque = shared.showOpaque, showBack = shared.showBack, showInvalid = shared.showInvalid, showGone = shared.showGone, showOffCount = shared.showOff, showOther = shared.showOther;
+		DWORD showUs = shared.showSamples ? shared.showUs / shared.showSamples : 0, showMaxUs = shared.showMaxUs, showSamples = shared.showSamples;
 		shared.showOpaque = shared.showBack = shared.showInvalid = shared.showGone = shared.showOff = shared.showOther = 0;
+		shared.showUs = shared.showSamples = shared.showMaxUs = 0;
 		Unlock();
 
 		DebugLog("twin art expected %u dup %u matched %u draws %u px %u notready %u rejected place %u aspect %u unmatched %u overflow %u | replayed %u calls %u fallbacks %u",
@@ -1780,8 +1796,8 @@ namespace Twin
 			art.cacheHits, art.cacheMisses, art.cachedDraws, art.groundArts, groundReplayed, groundFallbacks, art.groundNoTwin);
 		art.cacheHits = art.cacheMisses = art.cachedDraws = art.groundArts = art.groundNoTwin = 0;
 
-		DebugLog("twin show shown %u (opaque %u, over background %u) hidden: 1x toggle %u, invalid %u (no twin at present %u, twin gone %u), other %u",
-			showOpaque + showBack, showOpaque, showBack, showOffCount, showInvalid + showGone, showInvalid, showGone, showOther);
+		DebugLog("twin show shown %u (opaque %u, over background %u) hidden: 1x toggle %u, invalid %u (no twin at present %u, twin gone %u), other %u | show gpu avg %u us max %u us (%u samples)",
+			showOpaque + showBack, showOpaque, showBack, showOffCount, showInvalid + showGone, showInvalid, showGone, showOther, showUs, showMaxUs, showSamples);
 		game.presentNoTwin = 0;
 
 		if (check.valid)
@@ -2085,7 +2101,7 @@ namespace Twin
 			"uniform int keyed;\n"
 			"uniform int art;\n"
 			"uniform int tint;\n"
-			"uniform int opaque;\n"
+
 			"uniform vec4 key;\n"
 			"in vec2 fTex;\n"
 			"out vec4 FRAG_COLOR;\n"
@@ -2096,8 +2112,7 @@ namespace Twin
 			"	vec4 c = texture(tex01, fTex);\n"
 			"	if (art != 0 && tint != 0)\n"
 			"		c.rgb *= vec3(1.0, 0.15, 1.0);\n"
-			"	if (opaque != 0 && c.a < 254.5 / 255.0)\n"
-			"		discard;\n"
+
 			"	if (keyed != 0)\n"
 			"	{\n"
 			"		if (c.a < 0.5 / 255.0 || (c.a > 254.5 / 255.0 && all(lessThan(abs(c.rgb - key.rgb), vec3(0.5 / 255.0)))))\n"
@@ -2129,11 +2144,57 @@ namespace Twin
 			gl.keyLoc = GLGetUniformLocation(gl.copyProgram, "key");
 			gl.artLoc = GLGetUniformLocation(gl.copyProgram, "art");
 			gl.tintLoc = GLGetUniformLocation(gl.copyProgram, "tint");
-			gl.opaqueLoc = GLGetUniformLocation(gl.copyProgram, "opaque");
 			GLUniform1i(gl.tintLoc, 0);
-			GLUniform1i(gl.opaqueLoc, 0);
 			GLUniform1i(gl.keyedLoc, 0);
 			GLUniform1i(gl.artLoc, 0);
+		}
+
+		// box filter: each output pixel averages the twin texels its footprint covers, weighted by overlap, so minifying 4K detail doesn't shimmer while scrolling; a footprint of 1 texel is plain bilinear
+		const CHAR* showFragment =
+			"uniform sampler2D tex01;\n"
+			"uniform vec2 ratio;\n"
+			"uniform int opaque;\n"
+			"in vec2 fTex;\n"
+			"out vec4 FRAG_COLOR;\n"
+			"void main()\n"
+			"{\n"
+			"	ivec2 size = textureSize(tex01, 0);\n"
+			"	vec2 r = max(ratio, vec2(1.0));\n"
+			"	vec2 centre = fTex * vec2(size) - vec2(0.5);\n"
+			"	vec2 lo = centre - r * 0.5 + vec2(0.5);\n"
+			"	vec2 hi = centre + r * 0.5 + vec2(0.5);\n"
+			"	ivec2 i0 = ivec2(floor(lo));\n"
+			"	ivec2 i1 = min(ivec2(ceil(hi)) - ivec2(1), i0 + ivec2(7));\n"
+			"	vec4 sum = vec4(0.0);\n"
+			"	float total = 0.0;\n"
+			"	for (int y = i0.y; y <= i1.y; ++y)\n"
+			"	{\n"
+			"		float wy = min(hi.y, float(y + 1)) - max(lo.y, float(y));\n"
+			"		int cy = clamp(y, 0, size.y - 1);\n"
+			"		for (int x = i0.x; x <= i1.x; ++x)\n"
+			"		{\n"
+			"			float w = (min(hi.x, float(x + 1)) - max(lo.x, float(x))) * wy;\n"
+			"			if (w > 0.0)\n"
+			"			{\n"
+			"				sum += texelFetch(tex01, ivec2(clamp(x, 0, size.x - 1), cy), 0) * w;\n"
+			"				total += w;\n"
+			"			}\n"
+			"		}\n"
+			"	}\n"
+			"	vec4 c = sum / max(total, 1e-6);\n"
+			"	if (opaque != 0 && c.a < 254.5 / 255.0)\n"
+			"		discard;\n"
+			"	FRAG_COLOR = c;\n"
+			"}\n";
+
+		gl.showProgram = Link(vertex, showFragment);
+		if (gl.showProgram)
+		{
+			GLUseProgram(gl.showProgram);
+			GLUniform1i(GLGetUniformLocation(gl.showProgram, "tex01"), 0);
+			gl.ratioLoc = GLGetUniformLocation(gl.showProgram, "ratio");
+			gl.opaqueLoc = GLGetUniformLocation(gl.showProgram, "opaque");
+			GLUniform1i(gl.opaqueLoc, 0);
 		}
 
 		gl.checkProgram = Link(vertex, checkFragment);
@@ -2158,7 +2219,7 @@ namespace Twin
 		SetNearest(GL_NEAREST);
 		GLTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, STAGE_SIZE, STAGE_SIZE, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
 
-		gl.ready = gl.copyProgram && gl.checkProgram && gl.vao && gl.vbo && gl.stage;
+		gl.ready = gl.copyProgram && gl.checkProgram && gl.showProgram && gl.vao && gl.vbo && gl.stage;
 		gl.failed = !gl.ready;
 		shared.glFailed = gl.failed;
 		gl.keyed = FALSE;
@@ -3080,18 +3141,46 @@ namespace Twin
 		else
 			AddShowQuad(&frame, gpu, baseX, baseY, frameWidth, frameHeight);
 
-		UseCopy(FALSE, 0);
+		FLOAT ratioX = (FLOAT)(frameWidth * gpu->scale) / rect->width;
+		FLOAT ratioY = (FLOAT)(frameHeight * gpu->scale) / rect->height;
+		DWORD view = MAKELONG(rect->width, rect->height);
+		DWORD twinSize = MAKELONG(gpu->width * gpu->scale, gpu->height * gpu->scale);
+		DWORD frameSize = MAKELONG(frameWidth, frameHeight);
+		if ((view != gl.showView || twinSize != gl.showTwin || frameSize != gl.showFrame) && gl.showLogs < SHOW_LOGS)
+		{
+			gl.showView = view;
+			gl.showTwin = twinSize;
+			gl.showFrame = frameSize;
+			++gl.showLogs;
+			DebugLog("twin show viewport %dx%d twin %dx%d frame %ux%u ratio %d.%03d x %d.%03d %s", rect->width, rect->height, gpu->width * gpu->scale, gpu->height * gpu->scale,
+				frameWidth, frameHeight, (LONG)ratioX, (LONG)(ratioX * 1000) % 1000, (LONG)ratioY, (LONG)(ratioY * 1000) % 1000, ratioX > 1.0f || ratioY > 1.0f ? "box minify" : "bilinear");
+		}
+
+		gl.program = gl.showProgram;
+		GLUseProgram(gl.showProgram);
+		GLUniform2f(gl.ratioLoc, ratioX, ratioY);
 		// with a background image the renderer already blended the 1x frame over it; keep those pixels and only cover what was opaque in 1x
-		if (back)
-			GLUniform1i(gl.opaqueLoc, 1);
+		GLUniform1i(gl.opaqueLoc, back ? 1 : 0);
 		GLBindTexture(GL_TEXTURE_2D, gpu->texture);
-		GLTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-		GLTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+		BOOL timed = !(++gl.showCount & 255);
+		LARGE_INTEGER start, end;
+		if (timed)
+		{
+			GLFinish();
+			QueryPerformanceCounter(&start);
+		}
 		DrawVerts();
-		if (back)
-			GLUniform1i(gl.opaqueLoc, 0);
-		GLTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-		GLTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+		if (timed)
+		{
+			GLFinish();
+			QueryPerformanceCounter(&end);
+			DWORD us = gl.frequency.QuadPart ? DWORD((end.QuadPart - start.QuadPart) * 1000000 / gl.frequency.QuadPart) : 0;
+			gl.showUs += us;
+			++gl.showSamples;
+			if (us > gl.showMaxUs)
+				gl.showMaxUs = us;
+		}
 		return TRUE;
 	}
 
@@ -3221,6 +3310,11 @@ namespace Twin
 		shared.showBack += gl.showBack;
 		shared.showInvalid += gl.showInvalid;
 		shared.showGone += gl.showGone;
+		shared.showUs += gl.showUs;
+		shared.showSamples += gl.showSamples;
+		if (gl.showMaxUs > shared.showMaxUs)
+			shared.showMaxUs = gl.showMaxUs;
+		gl.showUs = gl.showSamples = gl.showMaxUs = 0;
 		shared.groundReplayed += gl.groundReplayed;
 		shared.groundFallbacks += gl.groundFallbacks;
 		shared.showOther += gl.showOther;
@@ -3270,6 +3364,7 @@ namespace Twin
 			GLDeleteVertexArrays(1, &gl.vao);
 			GLDeleteProgram(gl.copyProgram);
 			GLDeleteProgram(gl.checkProgram);
+			GLDeleteProgram(gl.showProgram);
 		}
 
 		if (gl.checkData)
