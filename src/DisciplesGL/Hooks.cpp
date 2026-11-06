@@ -46,6 +46,7 @@
 #include "SaveList.h"
 #include "ShopFrame.h"
 #include "WalkSpeed.h"
+#include "ScrollPacing.h"
 #include "BattleSpeed.h"
 #include "FastAI.h"
 
@@ -4473,11 +4474,25 @@ namespace Hooks
 #pragma endregion
 
 #pragma region Scroll and Double Click
-	VOID __fastcall GetScrollOffset(POINT* offset)
+	BOOL pacedPending;
+	POINT pacedOffset;
+
+	VOID GetScrollTickOffset(POINT* offset)
 	{
 		DOUBLE off = config.scroll.value * (1.0 - 0.005 * config.scroll.speed);
 		offset->y = (LONG)MathRound(off);
 		offset->x = (LONG)MathRound(off * 2.0);
+	}
+
+	VOID __fastcall GetScrollOffset(POINT* offset)
+	{
+		if (pacedPending)
+		{
+			pacedPending = FALSE;
+			*offset = pacedOffset;
+		}
+		else
+			GetScrollTickOffset(offset);
 	}
 
 	VOID __declspec(naked) hook_004E0323()
@@ -4520,8 +4535,10 @@ namespace Hooks
 	DWORD __fastcall GetScrollTime(DWORD time)
 	{
 		config.scroll.speed = time;
-		return config.scroll.check;
+		return 0;
 	}
+
+	BOOL wasdEasing;
 
 	DWORD __fastcall PreCheckScroll(ScrollDirection dir)
 	{
@@ -4544,10 +4561,11 @@ namespace Hooks
 			wasdScroll = dir != ScrollCenter;
 		}
 		else if (!config.scroll.edge.active)
-			return ScrollCenter;
+			dir = ScrollCenter;
 
 		if (dir != ScrollCenter)
 		{
+			wasdEasing = wasdScroll;
 			config.scroll.speed = wasdScroll ? config.scroll.speed + 70 : config.scroll.speed;
 			config.scroll.dir = dir;
 			if (config.scroll.state != ScrollStarted)
@@ -4557,11 +4575,19 @@ namespace Hooks
 
 		if (config.scroll.state != ScrollNone)
 		{
+			if (wasdEasing)
+			{
+				wasdEasing = FALSE;
+				config.scroll.state = ScrollNone;
+				config.scroll.easy.in = 0.0f;
+				return ScrollCenter;
+			}
 			if (config.scroll.state == ScrollStarted)
 				config.scroll.state = ScrollEnding;
 			return config.scroll.dir;
 		}
 
+		wasdEasing = FALSE;
 		return ScrollCenter;
 	}
 
@@ -4599,7 +4625,28 @@ namespace Hooks
 		}
 	}
 
+	DWORD CheckScrollState(ScrollDirection dir, DWORD time);
+
 	DWORD __fastcall CheckScroll(ScrollDirection dir, DWORD time)
+	{
+		pacedPending = FALSE;
+		DWORD res = CheckScrollState(dir, time);
+		if (res == ScrollCenter)
+		{
+			ScrollPacing::Reset();
+			return res;
+		}
+
+		POINT tick;
+		GetScrollTickOffset(&tick);
+		if (!ScrollPacing::Step(hWndMain, tick.x, tick.y, config.speed.frequency, &pacedOffset))
+			return ScrollCenter;
+
+		pacedPending = TRUE;
+		return res;
+	}
+
+	DWORD CheckScrollState(ScrollDirection dir, DWORD time)
 	{
 		if (dir != ScrollCenter)
 		{
