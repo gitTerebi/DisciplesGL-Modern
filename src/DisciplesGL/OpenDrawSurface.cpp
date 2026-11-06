@@ -25,6 +25,7 @@
 #include "StdAfx.h"
 #include "intrin.h"
 #include "OpenDrawSurface.h"
+#include "ScrollPacing.h"
 #include "OpenDraw.h"
 #include "Main.h"
 #include "Config.h"
@@ -502,7 +503,7 @@ VOID OpenDrawSurface::Flush()
 			QueryPerformanceCounter((LARGE_INTEGER*)&time);
 			if (time >= this->ddraw->flushTime)
 			{
-				this->ddraw->flushTime = config.syncStep.value * (time / config.syncStep.value + 1);
+				this->ddraw->flushTime = ScrollPacing::NextFlush(time, config.syncStep.value);
 				this->drawEnabled = FALSE;
 #endif
 		LONG textLeft = 0, textTop = 0;

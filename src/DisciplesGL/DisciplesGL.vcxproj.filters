@@ -112,6 +112,9 @@
     <ClCompile Include="ShopFrame.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="ScrollPacing.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="WalkSpeed.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -244,6 +247,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="ShopFrame.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="ScrollPacing.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="WalkSpeed.h">
