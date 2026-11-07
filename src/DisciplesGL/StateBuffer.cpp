@@ -30,49 +30,26 @@ StateBuffer::StateBuffer()
 {
 	this->data = NULL;
 	this->isAllocated = FALSE;
-	this->isPaged = FALSE;
 }
 
 StateBuffer::StateBuffer(DWORD size)
 {
 	this->data = MemoryAlloc(size);
 	this->isAllocated = TRUE;
-	this->isPaged = FALSE;
 
 	MemoryZero(this->data, size);
-}
-
-// pages of their own, so the twins' write trap can protect one surface without touching its heap neighbours; VirtualAlloc memory comes zeroed
-StateBuffer::StateBuffer(DWORD size, BOOL paged)
-{
-	this->isAllocated = TRUE;
-	this->isPaged = FALSE;
-	this->data = paged && size ? VirtualAlloc(NULL, size, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE) : NULL;
-	if (this->data)
-		this->isPaged = TRUE;
-	else
-	{
-		this->data = MemoryAlloc(size);
-		MemoryZero(this->data, size);
-	}
 }
 
 StateBuffer::StateBuffer(VOID* data)
 {
 	this->data = data;
 	this->isAllocated = FALSE;
-	this->isPaged = FALSE;
 }
 
 StateBuffer::~StateBuffer()
 {
 	if (this->isAllocated)
-	{
-		if (this->isPaged)
-			VirtualFree(this->data, 0, MEM_RELEASE);
-		else
-			MemoryFree(this->data);
-	}
+		MemoryFree(this->data);
 }
 
 StateBufferAligned::StateBufferAligned()

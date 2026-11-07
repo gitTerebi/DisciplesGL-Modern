@@ -279,8 +279,11 @@
     <ClCompile Include="ScrollPacing.cpp" />
     <ClCompile Include="BattleSpeed.cpp" />
     <ClCompile Include="FastAI.cpp" />
-    <ClCompile Include="ImageReplace.cpp" />
+    <ClCompile Include="Ground.cpp" />
+    <ClCompile Include="Pack.cpp" />
+    <ClCompile Include="Seed.cpp" />
     <ClCompile Include="Twin.cpp" />
+    <ClCompile Include="TwinGL.cpp" />
     <ClCompile Include="NewRenderer.cpp" />
     <ClCompile Include="OGLRenderer.cpp" />
     <ClCompile Include="OldRenderer.cpp" />
@@ -328,8 +331,11 @@
     <ClInclude Include="ScrollPacing.h" />
     <ClInclude Include="BattleSpeed.h" />
     <ClInclude Include="FastAI.h" />
-    <ClInclude Include="ImageReplace.h" />
+    <ClInclude Include="Ground.h" />
+    <ClInclude Include="Pack.h" />
+    <ClInclude Include="Seed.h" />
     <ClInclude Include="Twin.h" />
+    <ClInclude Include="TwinGL.h" />
     <ClInclude Include="NewRenderer.h" />
     <ClInclude Include="OGLRenderer.h" />
     <ClInclude Include="OldRenderer.h" />
@@ -362,210 +368,9 @@
     <Manifest Include="module.manifest" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="..\libwebp\src\dec\alpha_dec.c">
+    <ClCompile Include="..\zstd\zstddeclib.c">
       <CompileAs>CompileAsC</CompileAs>
       <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(ProjectDir)..\libwebp;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-    </ClCompile>
-    <ClCompile Include="..\libwebp\src\dec\buffer_dec.c">
-      <CompileAs>CompileAsC</CompileAs>
-      <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(ProjectDir)..\libwebp;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-    </ClCompile>
-    <ClCompile Include="..\libwebp\src\dec\frame_dec.c">
-      <CompileAs>CompileAsC</CompileAs>
-      <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(ProjectDir)..\libwebp;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-    </ClCompile>
-    <ClCompile Include="..\libwebp\src\dec\idec_dec.c">
-      <CompileAs>CompileAsC</CompileAs>
-      <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(ProjectDir)..\libwebp;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-    </ClCompile>
-    <ClCompile Include="..\libwebp\src\dec\io_dec.c">
-      <CompileAs>CompileAsC</CompileAs>
-      <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(ProjectDir)..\libwebp;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-    </ClCompile>
-    <ClCompile Include="..\libwebp\src\dec\quant_dec.c">
-      <CompileAs>CompileAsC</CompileAs>
-      <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(ProjectDir)..\libwebp;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-    </ClCompile>
-    <ClCompile Include="..\libwebp\src\dec\tree_dec.c">
-      <CompileAs>CompileAsC</CompileAs>
-      <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(ProjectDir)..\libwebp;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-    </ClCompile>
-    <ClCompile Include="..\libwebp\src\dec\vp8_dec.c">
-      <CompileAs>CompileAsC</CompileAs>
-      <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(ProjectDir)..\libwebp;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-    </ClCompile>
-    <ClCompile Include="..\libwebp\src\dec\vp8l_dec.c">
-      <CompileAs>CompileAsC</CompileAs>
-      <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(ProjectDir)..\libwebp;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-    </ClCompile>
-    <ClCompile Include="..\libwebp\src\dec\webp_dec.c">
-      <CompileAs>CompileAsC</CompileAs>
-      <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(ProjectDir)..\libwebp;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-    </ClCompile>
-    <ClCompile Include="..\libwebp\src\dsp\alpha_processing.c">
-      <CompileAs>CompileAsC</CompileAs>
-      <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(ProjectDir)..\libwebp;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-    </ClCompile>
-    <ClCompile Include="..\libwebp\src\dsp\alpha_processing_sse2.c">
-      <CompileAs>CompileAsC</CompileAs>
-      <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(ProjectDir)..\libwebp;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-    </ClCompile>
-    <ClCompile Include="..\libwebp\src\dsp\alpha_processing_sse41.c">
-      <CompileAs>CompileAsC</CompileAs>
-      <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(ProjectDir)..\libwebp;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-    </ClCompile>
-    <ClCompile Include="..\libwebp\src\dsp\cpu.c">
-      <CompileAs>CompileAsC</CompileAs>
-      <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(ProjectDir)..\libwebp;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-    </ClCompile>
-    <ClCompile Include="..\libwebp\src\dsp\dec.c">
-      <CompileAs>CompileAsC</CompileAs>
-      <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(ProjectDir)..\libwebp;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-    </ClCompile>
-    <ClCompile Include="..\libwebp\src\dsp\dec_clip_tables.c">
-      <CompileAs>CompileAsC</CompileAs>
-      <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(ProjectDir)..\libwebp;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-    </ClCompile>
-    <ClCompile Include="..\libwebp\src\dsp\dec_sse2.c">
-      <CompileAs>CompileAsC</CompileAs>
-      <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(ProjectDir)..\libwebp;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-    </ClCompile>
-    <ClCompile Include="..\libwebp\src\dsp\dec_sse41.c">
-      <CompileAs>CompileAsC</CompileAs>
-      <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(ProjectDir)..\libwebp;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-    </ClCompile>
-    <ClCompile Include="..\libwebp\src\dsp\filters.c">
-      <CompileAs>CompileAsC</CompileAs>
-      <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(ProjectDir)..\libwebp;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-    </ClCompile>
-    <ClCompile Include="..\libwebp\src\dsp\filters_sse2.c">
-      <CompileAs>CompileAsC</CompileAs>
-      <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(ProjectDir)..\libwebp;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-    </ClCompile>
-    <ClCompile Include="..\libwebp\src\dsp\lossless.c">
-      <CompileAs>CompileAsC</CompileAs>
-      <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(ProjectDir)..\libwebp;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-    </ClCompile>
-    <ClCompile Include="..\libwebp\src\dsp\lossless_sse2.c">
-      <CompileAs>CompileAsC</CompileAs>
-      <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(ProjectDir)..\libwebp;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-    </ClCompile>
-    <ClCompile Include="..\libwebp\src\dsp\lossless_sse41.c">
-      <CompileAs>CompileAsC</CompileAs>
-      <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(ProjectDir)..\libwebp;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-    </ClCompile>
-    <ClCompile Include="..\libwebp\src\dsp\rescaler.c">
-      <CompileAs>CompileAsC</CompileAs>
-      <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(ProjectDir)..\libwebp;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-    </ClCompile>
-    <ClCompile Include="..\libwebp\src\dsp\rescaler_sse2.c">
-      <CompileAs>CompileAsC</CompileAs>
-      <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(ProjectDir)..\libwebp;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-    </ClCompile>
-    <ClCompile Include="..\libwebp\src\dsp\upsampling.c">
-      <CompileAs>CompileAsC</CompileAs>
-      <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(ProjectDir)..\libwebp;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-    </ClCompile>
-    <ClCompile Include="..\libwebp\src\dsp\upsampling_sse2.c">
-      <CompileAs>CompileAsC</CompileAs>
-      <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(ProjectDir)..\libwebp;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-    </ClCompile>
-    <ClCompile Include="..\libwebp\src\dsp\upsampling_sse41.c">
-      <CompileAs>CompileAsC</CompileAs>
-      <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(ProjectDir)..\libwebp;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-    </ClCompile>
-    <ClCompile Include="..\libwebp\src\dsp\yuv.c">
-      <CompileAs>CompileAsC</CompileAs>
-      <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(ProjectDir)..\libwebp;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-    </ClCompile>
-    <ClCompile Include="..\libwebp\src\dsp\yuv_sse2.c">
-      <CompileAs>CompileAsC</CompileAs>
-      <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(ProjectDir)..\libwebp;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-    </ClCompile>
-    <ClCompile Include="..\libwebp\src\dsp\yuv_sse41.c">
-      <CompileAs>CompileAsC</CompileAs>
-      <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(ProjectDir)..\libwebp;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-    </ClCompile>
-    <ClCompile Include="..\libwebp\src\utils\bit_reader_utils.c">
-      <CompileAs>CompileAsC</CompileAs>
-      <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(ProjectDir)..\libwebp;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-    </ClCompile>
-    <ClCompile Include="..\libwebp\src\utils\color_cache_utils.c">
-      <CompileAs>CompileAsC</CompileAs>
-      <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(ProjectDir)..\libwebp;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-    </ClCompile>
-    <ClCompile Include="..\libwebp\src\utils\filters_utils.c">
-      <CompileAs>CompileAsC</CompileAs>
-      <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(ProjectDir)..\libwebp;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-    </ClCompile>
-    <ClCompile Include="..\libwebp\src\utils\huffman_utils.c">
-      <CompileAs>CompileAsC</CompileAs>
-      <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(ProjectDir)..\libwebp;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-    </ClCompile>
-    <ClCompile Include="..\libwebp\src\utils\palette.c">
-      <CompileAs>CompileAsC</CompileAs>
-      <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(ProjectDir)..\libwebp;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-    </ClCompile>
-    <ClCompile Include="..\libwebp\src\utils\quant_levels_dec_utils.c">
-      <CompileAs>CompileAsC</CompileAs>
-      <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(ProjectDir)..\libwebp;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-    </ClCompile>
-    <ClCompile Include="..\libwebp\src\utils\random_utils.c">
-      <CompileAs>CompileAsC</CompileAs>
-      <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(ProjectDir)..\libwebp;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-    </ClCompile>
-    <ClCompile Include="..\libwebp\src\utils\rescaler_utils.c">
-      <CompileAs>CompileAsC</CompileAs>
-      <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(ProjectDir)..\libwebp;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-    </ClCompile>
-    <ClCompile Include="..\libwebp\src\utils\thread_utils.c">
-      <CompileAs>CompileAsC</CompileAs>
-      <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(ProjectDir)..\libwebp;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-    </ClCompile>
-    <ClCompile Include="..\libwebp\src\utils\utils.c">
-      <CompileAs>CompileAsC</CompileAs>
-      <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(ProjectDir)..\libwebp;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

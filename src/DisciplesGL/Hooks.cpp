@@ -50,7 +50,8 @@
 #include "ScrollPacing.h"
 #include "BattleSpeed.h"
 #include "FastAI.h"
-#include "ImageReplace.h"
+#include "Ground.h"
+#include "Seed.h"
 #include "Twin.h"
 
 #define PANEL_WIDTH 160
@@ -2077,7 +2078,7 @@ namespace Hooks
 		}
 
 		// the store decodes indexed art; this is where its pixels can reach a surface, so the decode's seed can follow them
-		Twin::OnIndexedBlit(firstSrc, srcPitch, palette, firstDst, dstPitch, width, rows, (const DWORD*)_AddressOfReturnAddress());
+		Seed::OnIndexedBlit(firstSrc, srcPitch, firstDst, dstPitch, width, rows);
 	}
 
 	DWORD __stdcall Pixel_ConvertPixel_565(BYTE red, BYTE green, BYTE blue)
@@ -3224,7 +3225,7 @@ namespace Hooks
 		if (obj->isTrueColor)
 		{
 			TextReplace::OnFillRect(obj->data, rect);
-			ImageReplace::OnGroundFill(obj, color == COLORKEY_CHECK_16 ? 0 : Convert565toRGB(color) | ALPHA_COMPONENT, rect);
+			Ground::OnFill(obj, color == COLORKEY_CHECK_16 ? 0 : Convert565toRGB(color) | ALPHA_COMPONENT, rect);
 			Twin::OnFillRect((DWORD*)obj->data + rect->top * (obj->pitch >> 1) + rect->left, obj->pitch >> 1, rect->right - rect->left, rect->bottom - rect->top, Convert565toRGB(color));
 		}
 
@@ -3279,7 +3280,7 @@ namespace Hooks
 	{
 		TextReplace::OnDiamond(obj->data, loc, rect);
 		TwinDiamond(obj, loc, rect);
-		ImageReplace::OnGround(ImageReplace::GroundBorder, thisObj, obj, NULL, loc, rect, NULL, NULL);
+		Ground::OnGround(Ground::OpBorder, thisObj, obj, NULL, loc, rect, NULL, NULL);
 
 		DWORD pitch = obj->pitch >> 1;
 
@@ -3348,7 +3349,7 @@ namespace Hooks
 	{
 		TextReplace::OnDiamond(obj->data, dstLoc, rect);
 		TwinDiamond(obj, dstLoc, rect);
-		ImageReplace::OnGround(ImageReplace::GroundCopy, thisObj, obj, srcLoc, dstLoc, rect, blendMask, alphaMask);
+		Ground::OnGround(Ground::OpCopy, thisObj, obj, srcLoc, dstLoc, rect, blendMask, alphaMask);
 
 		static BlendData blendList[32];
 
@@ -3462,7 +3463,7 @@ namespace Hooks
 	{
 		TextReplace::OnDiamond(obj->data, loc, rect);
 		TwinDiamond(obj, loc, rect);
-		ImageReplace::OnGround(ImageReplace::GroundClear, NULL, obj, NULL, loc, rect, NULL, NULL);
+		Ground::OnGround(Ground::OpClear, NULL, obj, NULL, loc, rect, NULL, NULL);
 
 		DWORD pitch = obj->pitch >> 1;
 
@@ -3919,7 +3920,7 @@ namespace Hooks
 
 	VOID __stdcall DrawFaces(DWORD* dstData, LONG dstPitch, DWORD* srcData, LONG srcPitch, LONG top, LONG bottom, LONG width, BYTE isMirror, DWORD flag, DWORD minIdx, PixObject* pixData_1, PixObject* pixData_2, DWORD* mskData, LONG mskPitch)
 	{
-		ImageReplace::OnFaceCopy(srcData, srcPitch, dstData, top, bottom, width, isMirror, (flag & 0xFF) && (!((flag + 1) & 0xFF) || (!mskData && !pixData_1->exists && (!pixData_2->exists || minIdx >= (DWORD)(bottom - top)))));
+		Seed::OnFaceCopy(srcData, srcPitch);
 
 		if (!flag)
 			return;
@@ -3997,7 +3998,7 @@ namespace Hooks
 
 	VOID __stdcall DrawFaces_SSE(DWORD* dstData, LONG dstPitch, DWORD* srcData, LONG srcPitch, LONG top, LONG bottom, LONG width, BYTE isMirror, DWORD flag, DWORD minIdx, PixObject* pixData_1, PixObject* pixData_2, DWORD* mskData, LONG mskPitch)
 	{
-		ImageReplace::OnFaceCopy(srcData, srcPitch, dstData, top, bottom, width, isMirror, (flag & 0xFF) && (!((flag + 1) & 0xFF) || (!mskData && !pixData_1->exists && (!pixData_2->exists || minIdx >= (DWORD)(bottom - top)))));
+		Seed::OnFaceCopy(srcData, srcPitch);
 
 		if (!flag)
 			return;
@@ -7092,7 +7093,7 @@ namespace Hooks
 	{
 		HANDLE hFile = CreateFile(lpFileName, dwDesiredAccess, dwShareMode, lpSecurityAttributes, dwCreationDisposition, dwFlagsAndAttributes, hTemplateFile);
 		if (hFile != INVALID_HANDLE_VALUE)
-			ImageReplace::OnFileOpen(lpFileName, hFile);
+			Seed::OnFileOpen(lpFileName, hFile);
 
 		CHAR* p = StrLastChar((CHAR*)lpFileName, '\\');
 		if (p && !StrCompareInsensitive(p, !config.type.editor ? "\\Interf.dlg" : "\\ScenEdit.dlg"))
@@ -7246,39 +7247,8 @@ namespace Hooks
 		return FALSE;
 	}
 
-	// the game reads .ff records through its own ReadFile import; where the read starts says which record it is
-	BOOL __stdcall ReadRecordHook(HANDLE hFile, LPVOID lpBuffer, DWORD nNumberOfBytesToRead, LPDWORD lpNumberOfBytesRead, LPOVERLAPPED lpOverlapped)
-	{
-		if (!ImageReplace::RecordFile(hFile))
-			return ReadFile(hFile, lpBuffer, nNumberOfBytesToRead, lpNumberOfBytesRead, lpOverlapped);
-
-		LONGLONG position = -1;
-		if (lpOverlapped)
-			position = ((LONGLONG)lpOverlapped->OffsetHigh << 32) | lpOverlapped->Offset;
-		else
-		{
-			LONG high = 0;
-			SetLastError(NO_ERROR);
-			DWORD low = SetFilePointer(hFile, 0, &high, FILE_CURRENT);
-			if (low != INVALID_SET_FILE_POINTER || GetLastError() == NO_ERROR)
-				position = ((LONGLONG)high << 32) | low;
-		}
-
-		BOOL ok = ReadFile(hFile, lpBuffer, nNumberOfBytesToRead, lpNumberOfBytesRead, lpOverlapped);
-		if (ok && position >= 0 && lpNumberOfBytesRead && *lpNumberOfBytesRead)
-		{
-			DWORD error = GetLastError();
-			DWORD frames[2] = { 0, 0 };
-			Twin::WalkFrames((const DWORD*)_AddressOfReturnAddress(), frames, 2);
-			ImageReplace::OnFileRead(hFile, position, lpBuffer, *lpNumberOfBytesRead, (DWORD)_ReturnAddress(), frames[1]);
-			SetLastError(error);
-		}
-		return ok;
-	}
-
 	BOOL __stdcall CloseHandleHook(HANDLE hObject)
 	{
-		ImageReplace::OnFileClose(hObject);
 		if (hInterf && hObject == hInterf)
 			hInterf = NULL;
 		else if (hAutoSave && hObject == hAutoSave)
@@ -9347,7 +9317,8 @@ namespace Hooks
 
 		TurnOrder::Load(hooker, hookSpace, baseOffset);
 
-		ImageReplace::Load(hooker, hookSpace, baseOffset);
+		Seed::Load(hooker, hookSpace, baseOffset);
+		Ground::Load(hooker, hookSpace, baseOffset);
 
 		ShopFrame::Load(hooker, hookSpace, baseOffset);
 
@@ -9851,8 +9822,6 @@ namespace Hooks
 				PatchImportByName(hooker, "GetPrivateProfileStringA", GetPrivateProfileStringHook);
 				PatchImportByName(hooker, "CreateFileA", CreateFileHook);
 				PatchImportByName(hooker, "CloseHandle", CloseHandleHook);
-				if (!PatchImportByName(hooker, "ReadFile", ReadRecordHook))
-					DebugLog("image record reads: the game does not import ReadFile");
 
 				if (PatchImportByName(hooker, "RegOpenKeyExA", RegOpenKeyExHook))
 				{

@@ -29,8 +29,9 @@
 #include "Main.h"
 #include "Resource.h"
 #include "TextReplace.h"
-#include "ImageReplace.h"
+#include "Pack.h"
 #include "Twin.h"
+#include "TwinGL.h"
 
 NewRenderer::NewRenderer(OpenDraw* ddraw)
 	: OGLRenderer(ddraw)
@@ -200,8 +201,8 @@ VOID NewRenderer::End()
 {
 	TextReplace::SetRenderer(FALSE);
 	TextReplace::ReleaseGL();
-	ImageReplace::ReleaseGL();
-	Twin::ReleaseGL();
+	Pack::ReleaseGL();
+	TwinGL::ReleaseGL();
 
 	if (this->fsr.fboId)
 	{
@@ -396,8 +397,8 @@ BOOL NewRenderer::RenderInner(BOOL ready, BOOL force, StateBufferAligned** lpSta
 
 		BOOL textUpActive = this->isTrueColor;
 		BOOL textUpChanged = TextReplace::Prepare(stateBuffer, textUpActive);
-		textUpChanged |= ImageReplace::Prepare(stateBuffer, textUpActive);
-		textUpChanged |= Twin::Prepare();
+		textUpChanged |= Pack::Prepare();
+		textUpChanged |= TwinGL::Prepare();
 		if (this->pixelBuffer->Update(lpStateBuffer, ready && !Twin::Active(), TRUE) || state.flags || stateChanged || mapZoomChanged || textUpChanged)
 		{
 			BOOL clearBackTransition = this->backStatus && !stateBuffer->isBack;
@@ -692,8 +693,8 @@ BOOL NewRenderer::RenderInner(BOOL ready, BOOL force, StateBufferAligned** lpSta
 
 				if (textUpActive)
 				{
-					Twin::Draw(&this->ddraw->viewport.rectangle, this->ddraw->viewport.offset, frameSize.width, frameSize.height);
-					ImageReplace::Draw(&this->ddraw->viewport.rectangle, this->ddraw->viewport.offset, frameSize.width, frameSize.height);
+					TwinGL::Draw(&this->ddraw->viewport.rectangle, this->ddraw->viewport.offset, frameSize.width, frameSize.height);
+					Pack::Draw();
 					TextReplace::Draw(&this->ddraw->viewport.rectangle, this->ddraw->viewport.offset, frameSize.width, frameSize.height);
 				}
 			}
@@ -732,8 +733,8 @@ BOOL NewRenderer::RenderInner(BOOL ready, BOOL force, StateBufferAligned** lpSta
 		lbl_noup:;
 		BOOL textActive = this->isTrueColor;
 		BOOL textChanged = TextReplace::Prepare(stateBuffer, textActive);
-		textChanged |= ImageReplace::Prepare(stateBuffer, textActive);
-		textChanged |= Twin::Prepare();
+		textChanged |= Pack::Prepare();
+		textChanged |= TwinGL::Prepare();
 		if (this->pixelBuffer->Update(lpStateBuffer, ready && !Twin::Active()) || state.flags || stateChanged || mapZoomChanged || textChanged)
 		{
 			if (this->isVSync != config.image.vSync)
@@ -853,8 +854,8 @@ BOOL NewRenderer::RenderInner(BOOL ready, BOOL force, StateBufferAligned** lpSta
 
 			if (textActive)
 			{
-				Twin::Draw(&this->ddraw->viewport.rectangle, this->ddraw->viewport.offset, frameSize.width, frameSize.height);
-				ImageReplace::Draw(&this->ddraw->viewport.rectangle, this->ddraw->viewport.offset, frameSize.width, frameSize.height);
+				TwinGL::Draw(&this->ddraw->viewport.rectangle, this->ddraw->viewport.offset, frameSize.width, frameSize.height);
+				Pack::Draw();
 				TextReplace::Draw(&this->ddraw->viewport.rectangle, this->ddraw->viewport.offset, frameSize.width, frameSize.height);
 			}
 

@@ -2,117 +2,94 @@
 
 #include "StateBuffer.h"
 
-class OpenDrawSurface;
+#define TWIN_MAX 512
+#define TWIN_NONE 0xFFFFFFFF
+#define DIRTY_MAX 32
+#define ART_MAX 64
+#define MASK_SIZE 2048
 
 namespace Twin
 {
-	// game thread
 	BOOL Active();
-	// game-thread time inside twin and image code, per present and category; a scope charges its own time, not its callees' scopes
-	enum CostKind { CostNone, CostRecord, CostMirror, CostTile, CostSeed, CostTrap, CostLookup, CostDiag, CostImage, CostKinds };
-	struct Cost {
-		DWORD prev;
-		explicit Cost(DWORD kind);
-		~Cost();
-	};
-	// sub-steps of the seed work on the game thread, for the hitch line; exclusive like Cost: an inner step charges its own time, not the outer one's
-	enum SeedStepKind { StepNone, StepWait, StepPieces, StepCapture, StepGuard, StepBase, StepStack, StepResolve, SeedStepKinds };
-	struct SeedStep {
-		DWORD prev;
-		explicit SeedStep(DWORD kind);
-		~SeedStep();
-	};
-	// [Twin] Diagnostics=1: per-copy write notes and caller scans, copy-in and arrival records, coverage tables, copy traces
-	BOOL Diagnostics();
-	// a ground tile or border blit: the map view is being drawn, which scrolling does every frame
-	VOID CountGround();
 	VOID OnCreate(StateBuffer* buffer, LONG width, LONG height);
 	VOID OnRelease(StateBuffer* buffer);
-	VOID OnCopy(StateBuffer* dst, LONG x, LONG y, StateBuffer* src, const RECT* srcRect, BOOL keyed, DWORD key);
-	// the game code behind the next OnCopy (Blt/BltFast return address and the caller above the game's wrapper)
 	VOID OnCopyCaller(DWORD caller, DWORD outer);
+	VOID OnCopy(StateBuffer* dst, LONG x, LONG y, StateBuffer* src, const RECT* srcRect, BOOL keyed, DWORD key);
 	VOID OnFill(StateBuffer* dst, const RECT* rect, DWORD color);
 	VOID OnWrite(const VOID* first, LONG pitch, LONG width, LONG height);
 	VOID OnWriteAll(StateBuffer* buffer);
-	enum PixelMode { PixelKeyed, PixelAverage, PixelAdd, PixelSub, PixelEmpty, PixelCopy, PixelBlend, PixelKeyedCopy, PixelTint };
+	enum PixelMode { PixelKeyed, PixelAverage, PixelAdd, PixelSub, PixelEmpty, PixelCopy, PixelBlend, PixelKeyedCopy, PixelTint, PixelModes };
 	enum PixelFlag { PixelMirror = 0x10000 };
 	VOID OnPixelCopy(PixelMode mode, const DWORD* src, LONG srcPitch, const DWORD* dst, LONG dstPitch, LONG width, LONG height, DWORD key, DWORD param);
 	VOID OnFillRect(const DWORD* first, LONG pitch, LONG width, LONG height, DWORD color);
 	VOID OnTintRect(const DWORD* first, LONG pitch, LONG width, LONG height, DWORD color, DWORD weight);
 	VOID OnBlendRow(const DWORD* src, const DWORD* dst, LONG length, const BYTE* mask, BOOL keyed, DWORD key);
 	VOID OnLighter(const DWORD* first, LONG pitch, LONG width, LONG height, DWORD key, BOOL lighten);
-	VOID OnPresent(StateBuffer* screen, LONG left, LONG top);
-	struct ArtPart {
-		LONG dx, dy;
-		LONG sx, sy;
-		LONG w, h;
-	};
-	VOID ExpectArt(LONG frame, BOOL flipped, const RECT* place, const RECT* clip, const ArtPart* parts, DWORD count);
-	VOID GroundArt(const VOID* data, LONG pitch, const RECT* rect, const VOID* ops, DWORD bytes);
 	VOID OnMemory(const VOID* base, LONG pitch, LONG width, LONG height);
-	VOID OnMemoryFree(const VOID* data);
-	VOID LearnArt(const VOID* data, LONG pitch, const RECT* rect, LONG frame, const RECT* canvas, LONG canvasWidth, LONG canvasHeight, BOOL flipped);
-	VOID LogStats();
+	VOID OnPresent(StateBuffer* screen, LONG left, LONG top);
 
-	// seed mode: 4K art is written into a twin where the game decodes 1x art whose name is known; every later operation is a plain replay
-	BOOL SeedMode();
-	enum SeedKind { SeedStore, SeedSheet, SeedFace, SeedKinds };
-	// rects are local to the decoded image; place is where the whole pack frame lands in those coordinates
-	struct SeedPiece {
-		RECT to;
-		RECT place;
-		LONG frame;
-	};
-	struct SeedConflict {
-		RECT to;
-		RECT placeA;
-		RECT placeB;
-		LONG frameA;
-		LONG frameB;
-	};
-	struct SeedSheetStats {
-		DWORD frames;
-		DWORD unmapped;
-		DWORD additive;
-		DWORD outside;
-		DWORD shared;
-		// blocks whose sheet size is not the decode's, frames whose pack entry is named like the sheet file (seeded in canvas layout like the rest), pieces dropped as uncertain
-		DWORD wrongSize;
-		DWORD fileNamed;
-		// frames whose pack entry reaches outside the union of their parts in the canvas: another image of that name, left 1x
-		DWORD notFrame;
-		DWORD uncertain;
-		// frames whose pack entry lost its crop offset in the repack and whose place the parts and the 1x key cannot give: left 1x
-		DWORD offsetLost;
-	};
-	// memoryTwin FALSE: an 8-bit decode whose 32 bpp reading runs past the scratch; it is only captured for the transfer, no memory twin is made over it
-	VOID SeedArt(const VOID* first, LONG pitch, LONG width, LONG height, SeedKind kind, const CHAR* name, const SeedPiece* pieces, DWORD count, const SeedConflict* conflicts, DWORD conflictCount, const SeedSheetStats* sheet, BOOL memoryTwin = TRUE);
-	// the latest transfer capture's sequence, and whether it holds a snapshot with pieces
-	DWORD CaptureSeq(BOOL* valid);
-	// the image the coverage is counted under: the latest large plain image a loader decoded (the screen's background)
-	VOID ScreenLabel(const CHAR* name);
-	// the game decodes store art into a scratch buffer and then writes it into a surface by CPU; these follow it there
-	VOID DecodeBegin();
-	VOID DecodeEnd();
-	VOID OnLock(StateBuffer* buffer, const RECT* rect, DWORD caller, DWORD outer);
-	VOID OnUnlock(StateBuffer* buffer);
-	// the decode's BlitObject as the game passed it: data, raw pitch field, format byte (0 = 8-bit indices) and clip rect
-	VOID DecodeSource(const VOID* data, LONG pitchField, BYTE trueColor, const RECT* rect);
-	// slot is the stack slot of the game's return address into the blit, the start of the call chain
-	VOID OnIndexedBlit(const BYTE* src, LONG srcPitch, const DWORD* palette, const DWORD* dst, LONG dstPitch, LONG width, LONG height, const DWORD* slot);
-	// return addresses into the game, from the slot of the innermost one outwards (frame pointer chain above it)
-	DWORD WalkFrames(const DWORD* slot, DWORD* frames, DWORD count);
-	// the game's code around an address goes into twin-code.bin, for disassembly in the next round
-	VOID CodeDump(DWORD address, DWORD radius, const CHAR* why);
-	// the next number of a twin decode named line, 0 once the log limit is reached
-	DWORD DecodeLogNumber();
-	VOID RenderBegin();
-	VOID RenderEnd();
-	// first-write trap: surface pages are read-only until the first write, which names the code that writes it ([Twin] WriteTrap)
-	BOOL TrapWanted();
+	enum CmdType { CmdCreate, CmdDestroy, CmdReset, CmdCopy, CmdFill, CmdTint, CmdUpload, CmdPixel, CmdMask, CmdLighter, CmdSeed, CmdGround, CmdPresent };
+	enum PresentFlags { PresentMapZoom = 1, PresentBack = 2, PresentZoomed = 4 };
 
-	// render thread
-	BOOL Prepare();
-	BOOL Draw(const Rect* rect, LONG offset, DWORD frameWidth, DWORD frameHeight);
-	VOID ReleaseGL();
+	struct Cmd {
+		DWORD type, dst, src;
+		RECT rect, place;
+		LONG x, y;
+		DWORD value, flags, extra;
+	};
+
+	struct List {
+		List* next;
+		Cmd* cmds;
+		DWORD count, capacity;
+		BYTE* arena;
+		DWORD size, arenaCapacity;
+	};
+
+	struct Shared {
+		CRITICAL_SECTION cs;
+		volatile LONG state, gen;
+		volatile BOOL show, glFailed;
+		List* head;
+		List* tail;
+		DWORD bytes;
+		List* pool;
+		DWORD poolCount;
+	};
+
+	extern Shared shared;
+	VOID Lock();
+	VOID Unlock();
+	VOID RecycleList(List* list);
+	VOID DropQueued();
+
+	struct Record {
+		StateBuffer* owner;
+		BYTE* base;
+		LONG pitch, width, height;
+		BOOL keyed;
+		DWORD key;
+		BOOL memory, screen, told1x;
+		DWORD lastUse, stamp, seeds;
+		DWORD count;
+		RECT dirty[DIRTY_MAX];
+		DWORD artCount;
+		RECT art[ART_MAX];
+	};
+
+	Record* At(DWORD id);
+	Record* FindAddress(const VOID* ptr, DWORD* id);
+	BOOL PixelPos(const Record* twin, const VOID* ptr, LONG pitch, LONG width, LONG height, LONG* x, LONG* y);
+	Record* MemoryTwin(const VOID* base, LONG pitch, LONG width, LONG height, BOOL create, DWORD* id, RECT* rect);
+	VOID DropMemory(const VOID* base);
+	Cmd* Emit(DWORD type);
+	DWORD ListBytes();
+	VOID MarkDirty(Record* twin, RECT rect);
+	VOID Cover(Record* twin, const RECT* rect);
+	VOID CutRegion(Record* twin, const RECT* rect);
+	VOID Upload(Record* twin, DWORD id, const RECT* rect, BOOL seed);
+	VOID AddArt(Record* twin, const RECT* rect);
+	BOOL Carries4K(const Record* twin, const RECT* rect);
+	DWORD Stamp(const VOID* data);
+	VOID GroundArt(const VOID* data, LONG pitch, const RECT* rect, const VOID* ops, DWORD bytes);
 }

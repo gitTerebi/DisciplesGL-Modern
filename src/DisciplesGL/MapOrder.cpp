@@ -1,6 +1,5 @@
 #include "StdAfx.h"
 #include "Hooks.h"
-#include "ImageReplace.h"
 #include "MapOrder.h"
 
 #define f(a) (a + baseOffset)
@@ -69,8 +68,7 @@ namespace MapOrder
 				continue;
 
 			const LONG* box = (const LONG*)(s + 0x18);
-			const BYTE* first = ReadPtr(s);
-			DebugLog("map stack %d row=%d box=%d,%d,%d,%d img=%s", stacks++, hash >> 9, box[0], box[1], box[2], box[3], first ? ImageReplace::ImageName(ReadPtr(first)) : "?");
+			DebugLog("map stack %d row=%d box=%d,%d,%d,%d", stacks++, hash >> 9, box[0], box[1], box[2], box[3]);
 			for (const BYTE* o = s + 0x2C; o < end; o += 0x2C)
 			{
 				const LONG* other = (const LONG*)(o + 0x18);
@@ -84,7 +82,7 @@ namespace MapOrder
 				{
 					const LONG* at = (const LONG*)(item + 4);
 					const VOID* image = ReadPtr(item);
-					DebugLog("  over layer=%d row=%d box=%d,%d,%d,%d pos=%d,%d size=%d,%d img=%s vtbl=%08X", key & 0x1FF, key >> 9, other[0], other[1], other[2], other[3], at[0], at[1], at[2], at[3], ImageReplace::ImageName(image), image ? (DWORD)ReadPtr(image) : 0);
+					DebugLog("  over layer=%d row=%d box=%d,%d,%d,%d pos=%d,%d size=%d,%d vtbl=%08X", key & 0x1FF, key >> 9, other[0], other[1], other[2], other[3], at[0], at[1], at[2], at[3], image ? (DWORD)ReadPtr(image) : 0);
 				}
 			}
 		}

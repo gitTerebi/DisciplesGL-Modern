@@ -27,7 +27,6 @@
 #include "stdio.h"
 #include "Config.h"
 #include "Hooks.h"
-#include "ImageReplace.h"
 #include "TurnArt.h"
 #include "TurnOrder.h"
 #include "Twin.h"
@@ -106,7 +105,6 @@ namespace TurnOrder
 		POINT size;
 		POINT faceSize;
 		LONG faceFrame;
-		BOOL faceFlipped;
 		BOOL attacker;
 		BOOL current;
 		BOOL leaving;
@@ -463,7 +461,6 @@ namespace TurnOrder
 		*(RECT*)(faceData + 0x8) = { 0, 0, size.x, size.y };
 		*(LONG*)(faceData + 0x18) = size.x << 1;
 		((VOID(__stdcall*)(DWORD*, BYTE*))((DWORD*)card->face[1])[1])(card->face + 1, faceData);
-		ImageReplace::TakeFace(pixels, size.x, size.y, &card->faceFlipped);
 		card->faceFrame = -1;
 
 		card->facePixels = (BYTE*)MemoryAlloc(faceWidth * faceHeight * bpp);

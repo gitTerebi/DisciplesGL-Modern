@@ -34,7 +34,7 @@
 #include "PngLib.h"
 #include "Mods.h"
 #include "TextReplace.h"
-#include "ImageReplace.h"
+#include "Ground.h"
 #include "Twin.h"
 
 OpenDrawSurface::OpenDrawSurface(IDrawUnknown** list, OpenDraw* lpDD, SurfaceType type, OpenDrawSurface* attached)
@@ -329,7 +329,7 @@ VOID OpenDrawSurface::CreateBuffer(DWORD width, DWORD height, DWORD bpp, VOID* b
 			if (bpp == sizeof(BYTE) && this->type == SurfacePrimary || bpp == sizeof(WORD) && config.bpp32Hooked)
 				bpp = sizeof(DWORD);
 
-			this->indexBuffer = config.bpp32Hooked && Twin::TrapWanted() ? new StateBuffer(width * height * bpp, TRUE) : new StateBuffer(width * height * bpp);
+			this->indexBuffer = new StateBuffer(width * height * bpp);
 		}
 
 		if (this->type == SurfacePrimary)
@@ -387,7 +387,7 @@ VOID OpenDrawSurface::CreateBuffer(DWORD width, DWORD height, DWORD bpp, VOID* b
 VOID OpenDrawSurface::ReleaseBuffer()
 {
 	TextReplace::OnRelease(this);
-	ImageReplace::OnRelease(this);
+	Ground::OnRelease(this);
 	Twin::OnRelease(this->indexBuffer);
 	Twin::OnRelease(this->secondaryBuffer);
 	Twin::OnRelease(this->backBuffer);
@@ -636,7 +636,7 @@ HRESULT __stdcall OpenDrawSurface::IsLost()
 	return DD_OK;
 }
 
-// the game reaches Lock through one wrapper, so the wrapper's caller is what tells the paths apart; it is the first return address above it on the stack
+// the game reaches Blt and BltFast through one wrapper, so the wrapper's caller is what tells the paths apart; it is the first return address above it on the stack
 static DWORD LockOuterCaller(const DWORD* slot, DWORD ret)
 {
 	static DWORD low, high;
@@ -666,19 +666,6 @@ HRESULT __stdcall OpenDrawSurface::Lock(LPRECT lpDestRect, LPDDSURFACEDESC2 lpDD
 	TextReplace::TraceLock(this, lpDestRect, _ReturnAddress());
 	TextReplace::OnLock(this);
 	this->GetSurfaceDesc(lpDDSurfaceDesc);
-	if (config.bpp32Hooked)
-	{
-		DWORD ret = (DWORD)_ReturnAddress();
-		Twin::OnLock(this->indexBuffer, lpDestRect, ret, LockOuterCaller((const DWORD*)_AddressOfReturnAddress(), ret));
-	}
-
-	return DD_OK;
-}
-
-HRESULT __stdcall OpenDrawSurface::Unlock(LPRECT lpRect)
-{
-	if (config.bpp32Hooked)
-		Twin::OnUnlock(this->indexBuffer);
 
 	return DD_OK;
 }

@@ -74,7 +74,6 @@ public:
 	HRESULT __stdcall GetSurfaceDesc(LPDDSURFACEDESC2) override;
 	HRESULT __stdcall IsLost() override;
 	HRESULT __stdcall Lock(LPRECT, LPDDSURFACEDESC2, DWORD, HANDLE) override;
-	HRESULT __stdcall Unlock(LPRECT) override;
 	HRESULT __stdcall SetClipper(IDrawClipper*) override;
 	HRESULT __stdcall GetClipper(IDrawClipper**) override;
 	HRESULT __stdcall SetColorKey(DWORD, LPDDCOLORKEY) override;
