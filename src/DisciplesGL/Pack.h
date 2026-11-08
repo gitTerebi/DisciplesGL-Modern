@@ -1,6 +1,6 @@
 #pragma once
 
-#define PACK_NAME "ff2k-v1.galleanpack"
+#define PACK_NAME "DisciplesGL-2x.pack"
 #define PACK_SCALE 2
 
 namespace Pack

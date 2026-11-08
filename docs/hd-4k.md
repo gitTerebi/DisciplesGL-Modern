@@ -2,15 +2,15 @@
 
 The DLL keeps GPU twins of the game's 32-bit surfaces at N times their size (N = ceil(primary monitor / game mode), 1 to 4, lowered while 12 screens of twin would pass 512 MB or a side would pass 8192). The game thread records every hooked pixel operation as a command. The render thread replays the commands into the twins and shows the screen's twin over the 1x frame. The 1x game memory stays the only truth: the game never reads a twin, and every recorded operation repeats a 1x one, so the worst case is 1x pixels.
 
-4K art enters a twin only where the game decodes a `.ff` record whose name is known exactly: the archive file name plus the record file name from the archive's file table. Nothing looks at pixels, sizes or timing to name anything. A record without an exact name or an `ff4k` entry stays 1x, and the log says so once.
+4K art enters a twin only where the game decodes a `.ff` record whose name is known exactly: the archive file name plus the record file name from the archive's file table. Nothing looks at pixels, sizes or timing to name anything. A record without an exact name or a pack entry stays 1x, and the log says so once.
 
-Twins are off when `ff2k-v1.galleanpack` is not next to the game, for the GDI renderer, below GL 3.0, without the 32-bit hook, and in the editor.
+Twins are off when `DisciplesGL-2x.pack` is not next to the game, for the GDI renderer, below GL 3.0, without the 32-bit hook, and in the editor.
 
 ## Files
 
 | File | Thread | Holds |
 |---|---|---|
-| `Pack.cpp/.h` | worker, game, render | Opens `ff2k-v1.galleanpack` (2x art as BC7 blocks, each entry zstd compressed; `tools/repack/ff2k.py` builds it from the 4x WebP pack that `ffpack.py` writes), parses the `Sprites` manifest, and looks entries up by `<ARCHIVE.FF>/<RECORD>` (`Find`) or by record name alone for ground tiles (`FindRecord`). Its worker threads unpack the premultiplied BC7 blocks (128 MB cap) and the render thread uploads them with `glCompressedTexImage2D`, nearest sampled and without mipmaps. Twins run at the pack scale (`PACK_SCALE`, 2), so a seed lands one texel per twin pixel and only the present shaders scale to the screen. `Draw` uploads for at most 4 ms a frame on the render thread and evicts the least recently used textures past half the reported video memory (256 MB to 1.5 GB) |
+| `Pack.cpp/.h` | worker, game, render | Opens `DisciplesGL-2x.pack` (header `DGLPACK`, version 1; 2x art as BC7 blocks, each entry zstd compressed), parses the `Sprites` manifest, keeps plain entries and the `V2:` or `V3:` entries of the running exe (file version 2003.10 or 2003.12) without the prefix, and looks entries up by `<ARCHIVE.FF>/<RECORD>` (`Find`) or by record name alone for ground tiles (`FindRecord`). Its worker threads unpack the premultiplied BC7 blocks (128 MB cap) and the render thread uploads them with `glCompressedTexImage2D`, nearest sampled and without mipmaps. Twins run at the pack scale (`PACK_SCALE`, 2), so a seed lands one texel per twin pixel and only the present shaders scale to the screen. `Draw` uploads for at most 4 ms a frame on the render thread and evicts the least recently used textures past half the reported video memory (256 MB to 1.5 GB) |
 | `Seed.cpp/.h` | game | The name sources: `.ff` file tables, the image store hooks (`StoreLoad`, `StoreDraw`, `StoreFree`), `FaceLoad`, `OnFaceCopy`, `OnIndexedBlit`. The seed records and their life cycle. Every "image stays 1x" line |
 | `Twin.cpp/.h` | game | Twin records keyed by `StateBuffer`, memory twins, dirty rects and uploads, the 4K rect list per twin, the command list, arena and FIFO, and every `On*` entry point the hooks call. `Twin.h` also holds the types that `Seed`, `Ground` and `TwinGL` share (`Cmd`, `List`, `Shared`, `Record`) |
 | `TwinGL.cpp/.h` | render | Shaders, the replay of each command type (only consecutive compatible commands are batched), the show pass, `ReleaseGL` |
@@ -53,13 +53,13 @@ A seed record holds the twin, the rect, the place (where the whole entry lands; 
 
 | Line | When |
 |---|---|
-| `twin off: ff2k-v1.galleanpack is not next to the game` | once |
-| `image pack ff2k-v1.galleanpack loaded: N entries`, or `could not be opened`, `header not recognised`, `manifest not read`, `not a BC7-ZSTD pack` | once |
-| `image stays 1x: no ff4k entry for <ARCHIVE>/<RECORD> (WxH)` | once per record |
-| `image stays 1x: the ff4k entry for <key> is WxH, the decode WxH` | once per record |
-| `image stays 1x: <key> WxH was decoded before ff2k-v1.galleanpack was loaded` | once per record |
+| `twin off: DisciplesGL-2x.pack is not next to the game` | once |
+| `image pack DisciplesGL-2x.pack loaded: N entries`, or `could not be opened`, `header not recognised`, `manifest not read`, `not a BC7-ZSTD pack` | once |
+| `image stays 1x: no pack entry for <ARCHIVE>/<RECORD> (WxH)` | once per record |
+| `image stays 1x: the pack entry for <key> is WxH, the decode WxH` | once per record |
+| `image stays 1x: <key> WxH was decoded before DisciplesGL-2x.pack was loaded` | once per record |
 | `image stays 1x: face <name> has no record of that name in Faces.ff` | once per face |
-| `image stays 1x: the ff4k entry <key> failed to decode` | once per entry |
+| `image stays 1x: the pack entry <key> failed to decode` | once per entry |
 | `image pack: BC7 upload of <key> WxH failed with GL error X` | once |
 | `image stays 1x: a WxH surface (or memory image) with no 4K at x,y WxH reached the screen through game code at <module+offset> (<how>)` | a copy, pixel op or blend row into a presented buffer from a twin rect that carries no 4K and has no pending seed; once per source twin |
 | `image stays 1x: memory no twin covers reached the screen through game code at <module+offset> (<how>)` | the same from untwinned memory or a hooked CPU write; once per address |
@@ -79,3 +79,12 @@ For copies the address is the Blt caller above the game's DirectDraw wrapper. Ot
 - Turn order strip faces, which `TurnOrder.cpp` draws on the CPU.
 - A memory twin evicted by the budget gets 4K again only at the next decode.
 - If unhooked code rewrote the scratch between `StoreDraw` and the blit, the blit would take the latest decode's name. No such code is known.
+
+## Building the pack
+
+The art is Gallean's AI-upscaled game art (github.com/GalleanDev/Gallean, Apache-2.0), plus our own upscales for images Gallean lacks. The sources live in `G:\games\d2-pack-src`: `assets-v1.galleanpack` (Gallean), `own-v1-v2.galleanpack` and `own-v1-v3.galleanpack`.
+
+1. `python -I tools/repack/ffpack.py <game folder> <assets-v1.galleanpack> --own <own-v1 pack> --out <game.pack>` builds one game's pack: every `.PNG` record of the folder's `.ff` files at 4x, shrunk 2x2, premultiplied, BC7 and zstd.
+2. `python -I tools/repack/merge.py DisciplesGL-2x.pack V2=<v2 pack> V3=<v3 pack>` stores entries both games have with identical bytes once, and every other entry as `V2:` or `V3:`.
+
+v2.02b and Rise of the Elves share one `DisciplesGL-2x.pack`, hard-linked into both folders.

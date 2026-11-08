@@ -130,6 +130,9 @@
     <ClCompile Include="Pack.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="Flip.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="Seed.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -274,6 +277,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="Pack.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Flip.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="Seed.h">

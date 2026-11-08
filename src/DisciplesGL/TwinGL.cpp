@@ -1103,6 +1103,20 @@ namespace TwinGL
 				gl.shown.flags = cmd->flags;
 				break;
 			}
+			if (traceUntil && (LONG)(traceUntil - (LONG)GetTickCount()) > 0)
+			{
+				static const CHAR* names[] = { "Create", "Destroy", "Reset", "Copy", "Fill", "Tint", "Upload", "Pixel", "Mask", "Lighter", "Seed", "Ground", "Present" };
+				for (DWORD k = i; k < max(next, i + 1) && k < list->count; ++k)
+				{
+					if (InterlockedIncrement(&traceLines) > 6000)
+						break;
+					const Cmd* c = &list->cmds[k];
+					DebugLog("trace: %u %s dst %u src %u rect %d,%d,%d,%d place %d,%d,%d,%d x %d y %d value 0x%08X flags 0x%08X extra 0x%08X", k,
+						c->type < sizeof(names) / sizeof(*names) ? names[c->type] : "?", c->dst, c->src,
+						c->rect.left, c->rect.top, c->rect.right, c->rect.bottom, c->place.left, c->place.top, c->place.right, c->place.bottom,
+						c->x, c->y, c->value, c->flags, c->extra);
+				}
+			}
 			i = max(next, i + 1);
 		}
 	}
@@ -1168,6 +1182,48 @@ namespace TwinGL
 		return pending;
 	}
 
+	VOID DumpTwins()
+	{
+		static DWORD frames;
+		if (++frames % 60)
+			return;
+		CHAR path[MAX_PATH];
+		DWORD length = GetModuleFileName(NULL, path, MAX_PATH);
+		while (length && path[length - 1] != '\\')
+			--length;
+		StrCopy(path + length, "DisciplesGL-dump.flag");
+		if (GetFileAttributes(path) == INVALID_FILE_ATTRIBUTES)
+			return;
+		DeleteFile(path);
+
+		GLActiveTexture(GL_TEXTURE0);
+		for (DWORD id = 0; id < TWIN_MAX; ++id)
+		{
+			Gpu* gpu = &gl.twins[id];
+			if (!gpu->texture)
+				continue;
+			LONG w = gpu->width * gpu->scale, h = gpu->height * gpu->scale;
+			BYTE* pixels = (BYTE*)MemoryAlloc(w * h * 4);
+			if (!pixels)
+				continue;
+			GLBindFramebuffer(GL_READ_FRAMEBUFFER, gpu->fbo);
+			GLPixelStorei(GL_PACK_ALIGNMENT, 4);
+			GLReadPixels(0, 0, w, h, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+			StrPrint(path + length, "twin-%02u-%dx%d.raw", id, gpu->width, gpu->height);
+			HANDLE file = CreateFile(path, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, 0, NULL);
+			if (file != INVALID_HANDLE_VALUE)
+			{
+				DWORD written;
+				LONG size[2] = { w, h };
+				WriteFile(file, size, sizeof(size), &written, NULL);
+				WriteFile(file, pixels, w * h * 4, &written, NULL);
+				CloseHandle(file);
+			}
+			MemoryFree(pixels);
+		}
+		DebugLog("twins dumped next to the game");
+	}
+
 	BOOL Draw(const Rect* rect, LONG offset, DWORD frameWidth, DWORD frameHeight)
 	{
 		if (shared.state != 2)
@@ -1216,6 +1272,7 @@ namespace TwinGL
 			GLDisable(GL_SCISSOR_TEST);
 			for (List* list = lists; list; list = list->next)
 				Replay(list);
+			DumpTwins();
 			if (shared.show)
 				shown = Show(rect, offset, frameWidth, frameHeight, drawFbo);
 		}

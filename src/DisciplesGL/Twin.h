@@ -58,6 +58,7 @@ namespace Twin
 	};
 
 	extern Shared shared;
+	extern volatile LONG traceUntil, traceLines;
 	VOID Lock();
 	VOID Unlock();
 	VOID RecycleList(List* list);

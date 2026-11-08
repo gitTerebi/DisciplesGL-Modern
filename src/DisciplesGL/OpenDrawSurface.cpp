@@ -36,6 +36,7 @@
 #include "TextReplace.h"
 #include "Ground.h"
 #include "Twin.h"
+#include "Flip.h"
 
 OpenDrawSurface::OpenDrawSurface(IDrawUnknown** list, OpenDraw* lpDD, SurfaceType type, OpenDrawSurface* attached)
 	: IDrawSurface7(list)
@@ -400,6 +401,63 @@ VOID OpenDrawSurface::ReleaseBuffer()
 	this->backBuffer = NULL;
 }
 
+static VOID DumpScreen1x(StateBuffer* screen)
+{
+	static BOOL dumped;
+	CHAR path[MAX_PATH];
+	DWORD length = GetModuleFileName(NULL, path, MAX_PATH);
+	while (length && path[length - 1] != '\\')
+		--length;
+	StrCopy(path + length, "DisciplesGL-dump.flag");
+	if (GetFileAttributes(path) == INVALID_FILE_ATTRIBUTES)
+	{
+		dumped = FALSE;
+		return;
+	}
+	if (dumped)
+		return;
+	dumped = TRUE;
+
+	LONG w = config.mode->width, h = config.mode->height;
+	BOOL trueColor = config.mode->bpp != 16 || config.bpp32Hooked;
+	BOOL bgr = config.renderer == RendererGDI;
+	BYTE* pixels = (BYTE*)MemoryAlloc(w * h * 4);
+	if (!pixels)
+		return;
+	BYTE* dst = pixels;
+	for (LONG i = 0; i < w * h; ++i, dst += 4)
+	{
+		if (trueColor)
+		{
+			DWORD p = ((DWORD*)screen->data)[i];
+			dst[0] = BYTE(bgr ? p >> 16 : p);
+			dst[1] = BYTE(p >> 8);
+			dst[2] = BYTE(bgr ? p : p >> 16);
+		}
+		else
+		{
+			WORD p = ((WORD*)screen->data)[i];
+			dst[0] = BYTE(((p >> 11) & 31) * 255 / 31);
+			dst[1] = BYTE(((p >> 5) & 63) * 255 / 63);
+			dst[2] = BYTE((p & 31) * 255 / 31);
+		}
+		dst[3] = 255;
+	}
+
+	StrPrint(path + length, "screen1x-%dx%d.raw", w, h);
+	HANDLE file = CreateFile(path, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, 0, NULL);
+	if (file != INVALID_HANDLE_VALUE)
+	{
+		DWORD written;
+		LONG size[2] = { w, h };
+		WriteFile(file, size, sizeof(size), &written, NULL);
+		WriteFile(file, pixels, w * h * 4, &written, NULL);
+		CloseHandle(file);
+	}
+	MemoryFree(pixels);
+	DebugLog("screen1x dumped %dx%d format %s", w, h, trueColor ? (bgr ? "32-bit BGRX" : "32-bit RGBX") : "16-bit 565");
+}
+
 VOID OpenDrawSurface::SwapBuffers()
 {
 	StateBufferAligned* stateBuffer = ((StateBufferAligned*)this->backBuffer);
@@ -426,6 +484,7 @@ VOID OpenDrawSurface::SwapBuffers()
 		Mods::DrawFrame((config.mode->width - stateBuffer->size.width) >> 1, (config.mode->height - stateBuffer->size.height) >> 1, stateBuffer->size.width, stateBuffer->size.height, *(LONG*)&pitch, fomat, lpBuffer);
 	}
 
+	DumpScreen1x(stateBuffer);
 	Twin::OnPresent(stateBuffer, (config.mode->width - stateBuffer->size.width) >> 1, (config.mode->height - stateBuffer->size.height) >> 1);
 
 	stateBuffer->isReady = TRUE;
@@ -814,6 +873,7 @@ HRESULT __stdcall OpenDrawSurface::Blt(LPRECT lpDestRect, IDrawSurface7* lpDDSrc
 {
 	// 16778240 - DDBLT_WAIT | DDBLT_COLORFILL
 	TextReplace::TraceBlt("blt", this, lpDestRect, 0, 0, (OpenDrawSurface*)lpDDSrcSurface, lpSrcRect, dwFlags, _ReturnAddress());
+	Flip::OnBlt("blt", this->indexBuffer, lpDDSrcSurface ? ((OpenDrawSurface*)lpDDSrcSurface)->indexBuffer : NULL, lpDestRect, 0, 0, lpSrcRect, dwFlags, lpDDBltFx);
 	if (dwFlags & DDBLT_COLORFILL)
 	{
 		if (this->drawEnabled)
@@ -925,6 +985,7 @@ HRESULT __stdcall OpenDrawSurface::Blt(LPRECT lpDestRect, IDrawSurface7* lpDDSrc
 		}
 	}
 
+	Flip::Settle();
 	return DD_OK;
 }
 
@@ -932,6 +993,7 @@ HRESULT __stdcall OpenDrawSurface::BltFast(DWORD dwX, DWORD dwY, IDrawSurface7* 
 {
 	// 17 - DDBLTFAST_WAIT | DDBLTFAST_SRCCOLORKEY
 	TextReplace::TraceBlt("bltfast", this, NULL, dwX, dwY, (OpenDrawSurface*)lpDDSrcSurface, lpSrcRect, dwTrans, _ReturnAddress());
+	Flip::OnBlt("bltfast", this->indexBuffer, lpDDSrcSurface ? ((OpenDrawSurface*)lpDDSrcSurface)->indexBuffer : NULL, NULL, dwX, dwY, lpSrcRect, dwTrans, NULL);
 	if (this->drawEnabled)
 	{
 		OpenDrawSurface* surface = (OpenDrawSurface*)lpDDSrcSurface;
@@ -1132,5 +1194,6 @@ HRESULT __stdcall OpenDrawSurface::BltFast(DWORD dwX, DWORD dwY, IDrawSurface7* 
 		}
 	}
 
+	Flip::Settle();
 	return DD_OK;
 }

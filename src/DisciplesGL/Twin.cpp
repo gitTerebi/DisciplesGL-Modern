@@ -1,6 +1,7 @@
 #include "StdAfx.h"
 #include "intrin.h"
 #include "Config.h"
+#include "Flip.h"
 #include "Ground.h"
 #include "Pack.h"
 #include "Seed.h"
@@ -15,10 +16,13 @@
 #define POOL_KEEP (8 * 1024 * 1024)
 #define FIND_CACHE 256
 #define ERROR_LOGS 16
+#define SCRATCH_SIZE 1024
+#define SCRATCH_SLOTS 4096
 
 namespace Twin
 {
 	Shared shared = { {}, 0, 0, TRUE, FALSE, FALSE };
+	volatile LONG traceUntil, traceLines;
 
 	struct {
 		BOOL chosen;
@@ -567,6 +571,7 @@ namespace Twin
 
 	VOID Release(Record* twin, DWORD id)
 	{
+		Flip::OnRelease(twin);
 		Cmd* cmd = Emit(CmdDestroy);
 		if (cmd)
 			cmd->dst = id;
@@ -611,8 +616,28 @@ namespace Twin
 		EmitCreate(twin, id);
 	}
 
-	VOID DestroyMemoryTwin(Record* twin, DWORD id)
+	struct Dropped {
+		const BYTE* lo;
+		const BYTE* hi;
+		const CHAR* why;
+		LONG width, height;
+		CHAR name[96];
+	};
+
+	struct {
+		Dropped list[256];
+		DWORD next;
+	} dropped;
+
+	VOID DestroyMemoryTwin(Record* twin, DWORD id, const CHAR* why)
 	{
+		Dropped* d = &dropped.list[dropped.next++ % 256];
+		d->lo = twin->base;
+		d->hi = twin->base + ((twin->height - 1) * twin->pitch + twin->width) * sizeof(DWORD);
+		d->why = why;
+		d->width = twin->width;
+		d->height = twin->height;
+		StrCopy(d->name, Seed::DescribeMemory(twin->base));
 		StateBuffer* owner = twin->owner;
 		Release(twin, id);
 		delete owner;
@@ -640,7 +665,7 @@ namespace Twin
 			}
 			if (!oldest)
 				break;
-			DestroyMemoryTwin(oldest, oldestId);
+			DestroyMemoryTwin(oldest, oldestId, "memory budget");
 		}
 
 		StateBuffer* owner = new StateBuffer((VOID*)base);
@@ -681,7 +706,7 @@ namespace Twin
 				overlap = InTwin(other, row) || InTwin(other, row + (width - 1) * sizeof(DWORD));
 			}
 			if (overlap)
-				DestroyMemoryTwin(other, i);
+				DestroyMemoryTwin(other, i, "overlapped by a new memory twin");
 		}
 	}
 
@@ -713,7 +738,7 @@ namespace Twin
 			Record* twin = &game.twins[i];
 			if (twin->owner && twin->memory && twin->base == (const BYTE*)base)
 			{
-				DestroyMemoryTwin(twin, i);
+				DestroyMemoryTwin(twin, i, "memory freed");
 				return;
 			}
 		}
@@ -776,6 +801,7 @@ namespace Twin
 
 	VOID CopyTwins(Record* target, DWORD dstId, LONG x, LONG y, Record* source, DWORD srcId, const RECT* srcRect, BOOL keyed, DWORD key, DWORD caller)
 	{
+		Flip::Settle();
 		RECT whole = { x, y, x + srcRect->right - srcRect->left, y + srcRect->bottom - srcRect->top };
 		if (!source)
 		{
@@ -850,6 +876,7 @@ namespace Twin
 		cmd->value = key;
 		cmd->flags = masked ? 2 : keyed ? 1 : 0;
 		cmd->extra = maskOffset;
+		Flip::OnCopy(target, dstId, &to, source, srcId, &from, keyed ? "keyed copy" : "copy", caller);
 
 		if (!keyed)
 			Seed::Derive(target, dstId, &to, source, &from, FALSE);
@@ -1022,6 +1049,118 @@ namespace Twin
 		DebugLog("pixel op %d from memory with no twin: mode %d param %X %dx%d to %d,%d src %p in %s", n, mode, param, width, height, to->left, to->top, src, Seed::DescribeMemory(src));
 	}
 
+	struct ScratchSlot {
+		ULONGLONG hash;
+		LONG width, height, x, y;
+	};
+
+	struct {
+		DWORD pixels[SCRATCH_SIZE * SCRATCH_SIZE];
+		ScratchSlot slots[SCRATCH_SLOTS];
+		DWORD used;
+		LONG x, y, row;
+		Record* twin;
+		DWORD id;
+	} scratch;
+
+	VOID ToldScratch(DWORD mode, DWORD param, const VOID* src, LONG width, LONG height)
+	{
+		static LONG told;
+		static const VOID* seen[48];
+		if (told >= 48)
+			return;
+		for (LONG i = 0; i < told; ++i)
+			if (seen[i] == src)
+				return;
+		seen[told++] = src;
+
+		const BYTE* p = (const BYTE*)src;
+		for (DWORD i = 0; i < 256 && i < dropped.next; ++i)
+		{
+			const Dropped* d = &dropped.list[(dropped.next - 1 - i) % 256];
+			if (p >= d->lo && p < d->hi)
+			{
+				DebugLog("scratch %d: mode %u param %X %dx%d src %p was in a %dx%d memory twin dropped (%s), %d drops ago, decoded as %s; now %s", told, mode, param,
+					width, height, src, d->width, d->height, d->why, i, d->name, Seed::DescribeMemory(src));
+				return;
+			}
+		}
+		DebugLog("scratch %d: mode %u param %X %dx%d src %p never had a dropped twin (last %u drops); %s", told, mode, param, width, height, src,
+			min(dropped.next, 256u), Seed::DescribeMemory(src));
+	}
+
+	Record* Scratch(const DWORD* src, LONG pitch, LONG width, LONG height, DWORD* id, LONG* sx, LONG* sy)
+	{
+		if (width > SCRATCH_SIZE || height > SCRATCH_SIZE)
+			return NULL;
+		if (!scratch.twin || scratch.twin->owner == NULL || scratch.twin->base != (BYTE*)scratch.pixels)
+		{
+			StateBuffer* owner = new StateBuffer(scratch.pixels);
+			CreateTwin(owner, SCRATCH_SIZE, SCRATCH_SIZE);
+			scratch.twin = Find(owner, &scratch.id);
+			if (!scratch.twin)
+			{
+				delete owner;
+				return NULL;
+			}
+			MemoryZero(scratch.slots, sizeof(scratch.slots));
+			scratch.used = 0;
+			scratch.x = scratch.y = scratch.row = 0;
+		}
+
+		ULONGLONG hash = 14695981039346656037ull ^ ((ULONGLONG)width << 32) ^ (ULONGLONG)height;
+		for (LONG y = 0; y < height; ++y)
+			for (LONG x = 0; x < width; ++x)
+				hash = (hash ^ src[y * pitch + x]) * 1099511628211ull;
+
+		DWORD i = (DWORD)(hash ^ (hash >> 32)) & (SCRATCH_SLOTS - 1);
+		for (; scratch.slots[i].width; i = (i + 1) & (SCRATCH_SLOTS - 1))
+		{
+			ScratchSlot* slot = &scratch.slots[i];
+			if (slot->hash == hash && slot->width == width && slot->height == height)
+			{
+				*sx = slot->x;
+				*sy = slot->y;
+				*id = scratch.id;
+				return scratch.twin;
+			}
+		}
+
+		if (scratch.x + width > SCRATCH_SIZE)
+		{
+			scratch.x = 0;
+			scratch.y += scratch.row;
+			scratch.row = 0;
+		}
+		if (scratch.y + height > SCRATCH_SIZE || scratch.used * 2 >= SCRATCH_SLOTS)
+		{
+			MemoryZero(scratch.slots, sizeof(scratch.slots));
+			scratch.used = 0;
+			scratch.x = scratch.y = scratch.row = 0;
+			for (i = (DWORD)(hash ^ (hash >> 32)) & (SCRATCH_SLOTS - 1); scratch.slots[i].width; i = (i + 1) & (SCRATCH_SLOTS - 1))
+				;
+		}
+
+		ScratchSlot* slot = &scratch.slots[i];
+		slot->hash = hash;
+		slot->width = width;
+		slot->height = height;
+		slot->x = scratch.x;
+		slot->y = scratch.y;
+		++scratch.used;
+		scratch.x += width;
+		scratch.row = max(scratch.row, height);
+
+		for (LONG y = 0; y < height; ++y)
+			MemoryCopy(scratch.pixels + (slot->y + y) * SCRATCH_SIZE + slot->x, src + y * pitch, width * sizeof(DWORD));
+		RECT rect = { slot->x, slot->y, slot->x + width, slot->y + height };
+		MarkDirty(scratch.twin, rect);
+		*sx = slot->x;
+		*sy = slot->y;
+		*id = scratch.id;
+		return scratch.twin;
+	}
+
 	VOID OnPixelCopy(PixelMode mode, const DWORD* src, LONG srcPitch, const DWORD* dst, LONG dstPitch, LONG width, LONG height, DWORD key, DWORD param)
 	{
 		if (!dst || !src || width <= 0 || height <= 0 || (DWORD)mode >= PixelModes || !Active())
@@ -1029,6 +1168,8 @@ namespace Twin
 
 		Ground::Flush(src);
 		Sync();
+		Flip::Settle();
+		Flip::OnPixel(mode, src, dst, width, height, param);
 
 		DWORD dstId, srcId;
 		LONG dx, dy, sx, sy;
@@ -1044,6 +1185,11 @@ namespace Twin
 
 		Record* source = FindAddress(src, &srcId);
 		if (!source || !PixelPos(source, src, srcPitch, width, height, &sx, &sy))
+		{
+			ToldScratch(mode, param, src, width, height);
+			source = Scratch(src, srcPitch, width, height, &srcId, &sx, &sy);
+		}
+		if (!source)
 		{
 			DumpUncovered(target, mode, param, src, srcPitch, width, height, &to);
 			Seed::Tell1x(target, NULL, &to, 0, "pixel op");
@@ -1088,6 +1234,7 @@ namespace Twin
 		cmd->value = key;
 		cmd->flags = mode;
 		cmd->extra = param;
+		Flip::OnCopy(target, dstId, &to, source, srcId, &from, "pixel op", param);
 
 		if (mode == PixelCopy)
 			CoverArt(target, &to);
@@ -1302,6 +1449,7 @@ namespace Twin
 
 		Ground::Retry();
 		Seed::Poll();
+		Flip::Settle();
 
 		DWORD id;
 		Record* twin = Find(screen, &id);

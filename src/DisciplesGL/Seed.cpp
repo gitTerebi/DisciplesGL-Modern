@@ -1,5 +1,6 @@
 #include "StdAfx.h"
 #include "intrin.h"
+#include "Flip.h"
 #include "Pack.h"
 #include "Seed.h"
 #include "Twin.h"
@@ -76,6 +77,7 @@ namespace Seed
 		LONG pitch;
 		RECT rect;
 		LONG frame;
+		LONG mirrorWidth;
 		DWORD depth, count;
 		Blit inside[INSIDE_MAX];
 	} loader;
@@ -382,9 +384,9 @@ namespace Seed
 		else if (Once(hash))
 		{
 			if (frame < 0)
-				DebugLog("image stays 1x: no ff4k entry for %s (%dx%d)", key, width, height);
+				DebugLog("image stays 1x: no pack entry for %s (%dx%d)", key, width, height);
 			else
-				DebugLog("image stays 1x: the ff4k entry for %s is %dx%d, the decode %dx%d", key, w, h, width, height);
+				DebugLog("image stays 1x: the pack entry for %s is %dx%d, the decode %dx%d", key, w, h, width, height);
 		}
 		return -1;
 	}
@@ -709,6 +711,20 @@ namespace Seed
 
 		RECT rect = { x, y, x + cw, y + ch };
 		RECT place = { x - sx, y - sy, x - sx + w, y - sy + h };
+		if (loader.mirrorWidth)
+		{
+			place.left = x - sx + loader.mirrorWidth;
+			place.right = place.left - w;
+		}
+		static LONG toldBg;
+		if (toldBg < 96 && StrStr(Pack::EntryName(loader.frame), "BG"))
+		{
+			++toldBg;
+			DebugLog("bg part: %s sheet %d,%d %dx%d (blit %dx%d) to twin %u %dx%d%s at %d,%d", Pack::EntryName(loader.frame), sx, sy, cw, ch, b->width, b->height,
+				id, twin->width, twin->height, twin->memory ? " memory" : "", x, y);
+		}
+		if (StrStr(Pack::EntryName(loader.frame), "BG_BOAT"))
+			Flip::NoteSource(twin);
 		SeedAt(twin, id, &rect, &place, loader.frame, FALSE, FALSE);
 	}
 
@@ -820,12 +836,27 @@ namespace Seed
 		}
 		else
 			Pack::State(frame);
+		if (frame >= 0 && StrStr(Pack::EntryName(frame), "BG_BOAT"))
+		{
+			InterlockedExchange(&Twin::traceLines, 0);
+			InterlockedExchange(&Twin::traceUntil, (LONG)(GetTickCount() + 1500));
+		}
+		static LONG toldDecode;
+		if (toldDecode < 32 && frame >= 0 && StrStr(Pack::EntryName(frame), "BG"))
+		{
+			++toldDecode;
+			DebugLog("bg decode: %s %s rect %d,%d %dx%d pitch %d entry %dx%d", Pack::EntryName(frame), desc[0] ? "memory" : "loader", rect[0], rect[1],
+				rect[2] - rect[0], rect[3] - rect[1], pitchField, width, height);
+		}
 		if (!desc[0])
 		{
 			loader.data = data;
 			loader.pitch = pitchField;
 			SetRect(&loader.rect, rect[0], rect[1], rect[0] + width, rect[1] + height);
 			loader.frame = frame;
+			const BYTE* info = *(const BYTE* const*)((const BYTE*)thisObj + 0x10);
+			// the store draw reverses every decoded row when this byte is set (mirrored story portraits); same offset in v2.02b, v3.01a and v3.01b
+			loader.mirrorWidth = info && info[0x41C] ? rect[2] - rect[0] : 0;
 			return;
 		}
 

@@ -1,5 +1,6 @@
 #include "StdAfx.h"
 #include "GLib.h"
+#include "Config.h"
 #include "Pack.h"
 #include "../zstd/zstd.h"
 
@@ -34,6 +35,7 @@ namespace Pack
 		LONG w, h;
 		LONG pw, ph;
 		BOOL additive;
+		BOOL fallback;
 	};
 
 	struct Name {
@@ -382,9 +384,25 @@ namespace Pack
 		key[idLength] = '\0';
 		Upper(key);
 
-		if (!Insert(pack.ids, &pack.idCount, key, (LONG)pack.count, FALSE, &entry.name))
+		const CHAR* name = key;
+		if (key[0] == 'V' && key[2] == ':')
+		{
+			entry.fallback = key[1] != (config.version.major.value >= ((2003 << 16) | 12) ? '3' : '2');
+			name = key + 3;
+		}
+		LONG existing = Lookup(pack.ids, name);
+		if (existing >= 0)
+		{
+			if (pack.entries[existing].fallback && !entry.fallback)
+			{
+				entry.name = pack.entries[existing].name;
+				pack.entries[existing] = entry;
+			}
 			return;
-		const CHAR* record = StrChar(key, '/');
+		}
+		if (!Insert(pack.ids, &pack.idCount, name, (LONG)pack.count, FALSE, &entry.name))
+			return;
+		const CHAR* record = StrChar(name, '/');
 		if (record)
 			Insert(pack.records, &pack.recordCount, record + 1, (LONG)pack.count, TRUE, NULL);
 		pack.entries[pack.count++] = entry;
@@ -474,7 +492,7 @@ namespace Pack
 		}
 
 		BYTE header[32];
-		if (!ReadAt(pack.file, 0, header, sizeof(header)) || MemoryCompare(header, "GALLEANPACK", 11) || *(LONG*)(header + 12) != 27)
+		if (!ReadAt(pack.file, 0, header, sizeof(header)) || MemoryCompare(header, "DGLPACK", 8) || *(LONG*)(header + 12) != 1)
 		{
 			DebugLog("image pack %s: header not recognised", PACK_NAME);
 			return FALSE;
@@ -488,7 +506,7 @@ namespace Pack
 			MemoryFree(manifest);
 		if (ok && !pack.bc7)
 		{
-			DebugLog("image pack %s: not a BC7-ZSTD pack, rebuild it with tools/repack/ff2k.py", PACK_NAME);
+			DebugLog("image pack %s: not a BC7-ZSTD pack, rebuild it with tools/repack/ffpack.py and merge.py", PACK_NAME);
 			return FALSE;
 		}
 		pack.texs = ok ? (Tex*)MemoryAlloc(pack.count * sizeof(Tex)) : NULL;
@@ -575,7 +593,7 @@ namespace Pack
 		Tex* tex = &pack.texs[index];
 		if (!ReadBlocks(&pack.entries[index], tex))
 		{
-			DebugLog("image stays 1x: the ff4k entry %s failed to decode", pack.names + pack.entries[index].name);
+			DebugLog("image stays 1x: the pack entry %s failed to decode", pack.names + pack.entries[index].name);
 			InterlockedExchange(&tex->state, TexFailed);
 			return;
 		}

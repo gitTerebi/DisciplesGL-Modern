@@ -281,6 +281,7 @@
     <ClCompile Include="FastAI.cpp" />
     <ClCompile Include="Ground.cpp" />
     <ClCompile Include="Pack.cpp" />
+    <ClCompile Include="Flip.cpp" />
     <ClCompile Include="Seed.cpp" />
     <ClCompile Include="Twin.cpp" />
     <ClCompile Include="TwinGL.cpp" />
@@ -333,6 +334,7 @@
     <ClInclude Include="FastAI.h" />
     <ClInclude Include="Ground.h" />
     <ClInclude Include="Pack.h" />
+    <ClInclude Include="Flip.h" />
     <ClInclude Include="Seed.h" />
     <ClInclude Include="Twin.h" />
     <ClInclude Include="TwinGL.h" />

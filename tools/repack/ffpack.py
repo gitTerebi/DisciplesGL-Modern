@@ -1,6 +1,7 @@
-"""Build <game>\\ff4k-v1.galleanpack: one 4x image per .PNG record of every .ff in Imgs\\ and Interf\\.
+"""Build one game's 2x pack: one 2x BC7 image per .PNG record of every .ff in Imgs\\ and Interf\\, built at 4x and
+shrunk 2x2. tools\\repack\\merge.py combines the games' packs into DisciplesGL-2x.pack.
 
-python -I tools\\repack\\ffpack.py <game folder> <assets-v1.galleanpack> [--own PATH] [--out PATH] [--workers N] [--only A.FF,B.FF] [--limit N]
+python -I tools\\repack\\ffpack.py <game folder> <assets-v1.galleanpack> --out PATH [--own PATH] [--workers N] [--only A.FF,B.FF] [--limit N]
 
 Sheet records: every -IMAGES.OPT part of the record takes its frame's 4K canvas (Gallean, then own-v1, then an
 entry named like the record itself, read over the record at 0,0) at the part's canvas rect, scaled 4x, and writes
@@ -10,15 +11,17 @@ has no source, keeps a Lanczos upscale of the 1x. Alpha is 0 wherever the 1x is 
 """
 import io, json, os, struct, sys, time, collections, argparse, mmap, warnings
 import multiprocessing as mp
+import etcpak
 import numpy as np
+import zstandard
 from PIL import Image
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 warnings.filterwarnings('ignore', 'Palette images with Transparency')
 IEND = b'\x00\x00\x00\x00IEND\xaeB`\x82'
 SCALE = 4
-LOSSY = dict(lossless=False, quality=85, method=4, exact=True)
-LOSSLESS = dict(lossless=True, quality=100, method=4, exact=True)
+OUT_SCALE = 2
+ZSTD_LEVEL = 19
 
 MAX_MISS = 0.05
 MAX_EXTRA = 0.05
@@ -290,8 +293,6 @@ def opacity(alg, tidx, pal):
     if alg <= 255:
         brush = ((p[:, 0] & 0xf8) == 0xf8) & ((p[:, 1] & 0xf8) == 0) & ((p[:, 2] & 0xf8) == 0xf8)
         op = np.where(brush | (alg == 0), 0, 255).astype(np.uint8)
-    elif alg in (300, 400):
-        op = np.arange(256, dtype=np.uint8)
     else:
         op = np.full(256, 255, np.uint8)
     op[tidx] = 0
@@ -417,7 +418,6 @@ def do_record(task):
     r = {'tid': tid, 'name': name, 'w': W, 'h': H, 'parts': 0, 'parts4k': 0, 'nosrc': 0, 'failed': 0,
          'fails': [], 'src': collections.Counter()}
     cache = {}
-    lossless_all = True
     writes = []
 
     def place(s, cx, cy, sx, sy, pw, ph):
@@ -480,7 +480,6 @@ def do_record(task):
                 else:
                     s, ok, bad = chosen
                     extra = ''
-                    lossless_all &= decode_entry(s, cache)[1]
                     for p, c, m, v in ok:
                         cx, cy, sx, sy, pw, ph, a1 = p
                         if additive:
@@ -508,7 +507,6 @@ def do_record(task):
                 bad.append('whole record: %s: %s' % (label(s), v))
                 continue
             writes.append((0, 0, c, np.zeros((H, W), bool)))
-            lossless_all &= decode_entry(s, cache)[1]
             if r['parts']:
                 r['parts4k'] = 1
                 r['src'][label(s)] += 1
@@ -530,13 +528,21 @@ def do_record(task):
     exact = os.path.basename(path).upper() in EXACT_ARCHIVES
     if exact:
         out = exact_up(rgb, alpha)
-    lossless = exact or (bool(r['parts4k']) and lossless_all)
-    buf = io.BytesIO()
-    Image.fromarray(out, 'RGBA').save(buf, 'WEBP', **(LOSSLESS if lossless else LOSSY))
-    r['webp'] = buf.getvalue()
-    r['lossless'] = lossless
+    r['blob'] = encode(out)
     r['src'] = dict(r['src'])
     return r
+
+
+def encode(out):
+    pixels = out.astype(np.float32)
+    pixels[..., :3] *= pixels[..., 3:4] / 255
+    f = SCALE // OUT_SCALE
+    h, w = pixels.shape[0] // f, pixels.shape[1] // f
+    pixels = pixels.reshape(h, f, w, f, 4).mean((1, 3))
+    pw, ph = (w + 3) // 4 * 4, (h + 3) // 4 * 4
+    padded = np.zeros((ph, pw, 4), np.uint8)
+    padded[:h, :w] = np.clip(pixels + 0.5, 0, 255)
+    return zstandard.ZstdCompressor(level=ZSTD_LEVEL).compress(etcpak.compress_bc7(padded.tobytes(), pw, ph))
 
 
 def main():
@@ -544,7 +550,7 @@ def main():
     ap.add_argument('game')
     ap.add_argument('gallean')
     ap.add_argument('--own')
-    ap.add_argument('--out')
+    ap.add_argument('--out', required=True)
     ap.add_argument('--workers', type=int, default=os.cpu_count())
     ap.add_argument('--only')
     ap.add_argument('--limit', type=int, default=0)
@@ -552,7 +558,7 @@ def main():
     t0 = time.time()
     own = a.own or os.path.join(a.game, 'own-v1.galleanpack')
     own = own if os.path.exists(own) else None
-    out = a.out or os.path.join(a.game, 'ff4k-v1.galleanpack')
+    out = a.out
     report_path = os.path.splitext(out)[0] + '-report.txt'
     assert not os.path.exists(out), 'refusing to overwrite ' + out
 
@@ -589,7 +595,7 @@ def main():
         o.write(b'\0' * 32)
         with mp.Pool(a.workers, init_worker, ([a.gallean, own],)) as pool:
             for i, r in enumerate(pool.imap_unordered(do_record, run, chunksize=1)):
-                data = r.pop('webp')
+                data = r.pop('blob')
                 o.write(data)
                 r['offset'], r['length'] = pos, len(data)
                 pos += len(data)
@@ -600,17 +606,17 @@ def main():
         per_arch = collections.OrderedDict()
         for an, r in zip(order, results):
             sprites.append({'Id': '%s/%s' % (an, r['name']),
-                            'Metadata': {'Width': r['w'], 'Height': r['h'], 'PixelWidth': r['w'] * SCALE,
-                                         'PixelHeight': r['h'] * SCALE, 'OffsetX': 0, 'OffsetY': 0,
-                                         'Additive': False, 'PixelScale': SCALE},
+                            'Metadata': {'Width': r['w'], 'Height': r['h'], 'PixelWidth': r['w'] * OUT_SCALE,
+                                         'PixelHeight': r['h'] * OUT_SCALE, 'OffsetX': 0, 'OffsetY': 0,
+                                         'Additive': False, 'PixelScale': OUT_SCALE},
                             'Offset': r['offset'], 'Length': r['length'], 'Transforms': [], 'Layers': []})
             per_arch.setdefault(an, []).append(r)
-        manifest = json.dumps({'CreatedAt': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()), 'CreatedBy': 'ffpack.py',
+        manifest = json.dumps({'CreatedAt': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()), 'CreatedBy': 'ffpack.py', 'Format': 'BC7-ZSTD',
                                'Sparse': False, 'Sprites': sprites, 'Animations': [], 'Sounds': []},
                               separators=(',', ':')).encode('utf8')
         o.write(manifest)
         o.seek(0)
-        o.write(b'GALLEANPACK\0' + struct.pack('<iqq', 27, 32 + pos, len(manifest)))
+        o.write(b'DGLPACK\0\0\0\0\0' + struct.pack('<iqq', 1, 32 + pos, len(manifest)))
     os.replace(tmp, out)
     elapsed = time.time() - t0
     write_report(report_path, a, out, own, per_arch, stats, elapsed)
@@ -640,7 +646,7 @@ def write_report(path, a, out, own, per_arch, stats, elapsed):
                 c['partly'] += 1
             else:
                 c['plain'] += 1
-            for k in ('parts', 'parts4k', 'failed', 'nosrc', 'lossless', 'length'):
+            for k in ('parts', 'parts4k', 'failed', 'nosrc', 'length'):
                 c[k] += r[k]
             srcs.update(r['src'])
         T.update(c)
@@ -652,7 +658,6 @@ def write_report(path, a, out, own, per_arch, stats, elapsed):
           'full4K: every part with an opaque 1x pixel took 4K art. partly: some did. plain: none did.',
           'parts: parts with an opaque 1x pixel (a plain record counts as one part). failed: parts whose 4K failed the check.',
           'no src: parts with no 4K source at all. parts = 4K + failed + no src. MB: encoded size in the pack.',
-          'records encoded lossless (every 4K source lossless): %d; lossy q85: %d' % (T['lossless'], T['records'] - T['lossless']),
           '',
           'Source mapping (Gallean and own-v1 entries):']
     for k, v in sorted(stats.items()):
