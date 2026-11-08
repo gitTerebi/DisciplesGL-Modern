@@ -17,6 +17,7 @@ namespace Twin
 	VOID OnCopy(StateBuffer* dst, LONG x, LONG y, StateBuffer* src, const RECT* srcRect, BOOL keyed, DWORD key);
 	VOID OnFill(StateBuffer* dst, const RECT* rect, DWORD color);
 	VOID OnWrite(const VOID* first, LONG pitch, LONG width, LONG height);
+	VOID OnArt(const VOID* first, LONG pitch, LONG width, LONG height, const DWORD* art, LONG scale);
 	VOID OnWriteAll(StateBuffer* buffer);
 	enum PixelMode { PixelKeyed, PixelAverage, PixelAdd, PixelSub, PixelEmpty, PixelCopy, PixelBlend, PixelKeyedCopy, PixelTint, PixelModes };
 	enum PixelFlag { PixelMirror = 0x10000 };
@@ -28,7 +29,7 @@ namespace Twin
 	VOID OnMemory(const VOID* base, LONG pitch, LONG width, LONG height);
 	VOID OnPresent(StateBuffer* screen, LONG left, LONG top);
 
-	enum CmdType { CmdCreate, CmdDestroy, CmdReset, CmdCopy, CmdFill, CmdTint, CmdUpload, CmdPixel, CmdMask, CmdLighter, CmdSeed, CmdGround, CmdPresent };
+	enum CmdType { CmdCreate, CmdDestroy, CmdReset, CmdCopy, CmdFill, CmdTint, CmdUpload, CmdPixel, CmdMask, CmdLighter, CmdSeed, CmdGround, CmdPresent, CmdArt };
 	enum PresentFlags { PresentMapZoom = 1, PresentBack = 2, PresentZoomed = 4 };
 
 	struct Cmd {

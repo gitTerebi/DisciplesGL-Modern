@@ -1002,6 +1002,50 @@ namespace Twin
 		MarkDirty(twin, rect);
 	}
 
+	VOID OnArt(const VOID* first, LONG pitch, LONG width, LONG height, const DWORD* art, LONG scale)
+	{
+		if (!first || !art || width <= 0 || height <= 0 || !Active())
+			return;
+
+		Sync();
+		if (game.scale != scale)
+			return;
+
+		DWORD id;
+		Record* twin = FindAddress(first, &id);
+		if (!twin || twin->pitch != pitch)
+			return;
+
+		LONG start = LONG(((const BYTE*)first - twin->base) / sizeof(DWORD));
+		RECT rect;
+		SetRect(&rect, start % pitch, start / pitch, start % pitch + width, start / pitch + height);
+		RECT clipped = rect;
+		if (!Clip(twin, &clipped) || !EqualRect(&clipped, &rect))
+			return;
+
+		FlushRegion(twin, id, &rect, TRUE);
+
+		LONG count = width * scale * height * scale;
+		DWORD offset;
+		DWORD* dst = (DWORD*)Reserve(count * sizeof(DWORD), &offset);
+		Cmd* cmd = dst ? Emit(CmdArt) : NULL;
+		if (!cmd)
+			return;
+		for (LONG i = 0; i < count; ++i)
+		{
+			DWORD pixel = art[i];
+			if (twin->keyed && pixel == twin->key)
+				dst[i] = 0;
+			else
+				dst[i] = pixel >= ALPHA_COMPONENT ? pixel : (pixel & 0x00FFFFFF) | 0xFE000000;
+		}
+		cmd->dst = id;
+		cmd->rect = rect;
+		cmd->value = offset;
+		cmd->extra = scale;
+		AddArt(twin, &rect);
+	}
+
 	VOID OnWriteAll(StateBuffer* buffer)
 	{
 		if (!Active())

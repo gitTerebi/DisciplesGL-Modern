@@ -96,6 +96,7 @@ namespace TurnOrder
 		DWORD unitId;
 		DWORD* face;
 		BYTE* facePixels;
+		DWORD* face2x;
 		BYTE* pixels;
 		LONG hp;
 		LONG hpMax;
@@ -148,6 +149,9 @@ namespace TurnOrder
 
 		if (card->facePixels)
 			MemoryFree(card->facePixels);
+
+		if (card->face2x)
+			MemoryFree(card->face2x);
 
 		if (card->pixels)
 			MemoryFree(card->pixels);
@@ -444,26 +448,8 @@ namespace TurnOrder
 		((POINT*(__thiscall*)(DWORD*, POINT*, BYTE*, const CHAR*, RECT*, DWORD))((DWORD*)*turnText)[2])(turnText, &size, data, text, &area, 1);
 	}
 
-	VOID RenderTurnFace(TurnCard* card, BYTE* data, LONG faceWidth, LONG faceHeight, DWORD bpp, const DWORD* masks)
+	VOID ShrinkTurnFace(const BYTE* pixels, POINT size, BYTE* out, LONG faceWidth, LONG faceHeight, DWORD bpp, const DWORD* masks)
 	{
-		if (card->facePixels)
-			MemoryFree(card->facePixels);
-
-		POINT size;
-		((POINT*(__thiscall*)(DWORD*, POINT*))((DWORD*)card->face[0])[1])(card->face, &size);
-
-		BYTE* pixels = (BYTE*)MemoryAlloc(size.x * size.y * bpp);
-
-		// Discipl2.exe v3.01b 0x005B149D: SurfaceDecompressData is 1072 bytes, memory at +0x4, area at +0x8, pitch at +0x18
-		BYTE faceData[1072];
-		MemoryCopy(faceData, data, sizeof(faceData));
-		*(BYTE**)(faceData + 0x4) = pixels;
-		*(RECT*)(faceData + 0x8) = { 0, 0, size.x, size.y };
-		*(LONG*)(faceData + 0x18) = size.x << 1;
-		((VOID(__stdcall*)(DWORD*, BYTE*))((DWORD*)card->face[1])[1])(card->face + 1, faceData);
-		card->faceFrame = -1;
-
-		card->facePixels = (BYTE*)MemoryAlloc(faceWidth * faceHeight * bpp);
 		for (LONG y = 0; y < faceHeight; ++y)
 		{
 			for (LONG x = 0; x < faceWidth; ++x)
@@ -485,8 +471,102 @@ namespace TurnOrder
 				for (DWORD i = 0; i < 4; ++i)
 					pix |= (DWORD)(sums[i] / 16) & masks[i];
 
-				SetTurnPixel(card->facePixels + (y * faceWidth + x) * bpp, bpp, pix);
+				SetTurnPixel(out + (y * faceWidth + x) * bpp, bpp, pix);
 			}
+		}
+	}
+
+	VOID DrawTurnFace2x(const TurnCard* card, BYTE* surface, LONG pitch, LONG width, LONG height, DWORD now, const DWORD* masks)
+	{
+		if (card->divider || !card->face2x || !card->pixels)
+			return;
+
+		LONG cardWidth = card->size.x;
+		LONG faceWidth = card->faceSize.x;
+		LONG faceHeight = card->faceSize.y;
+		LONG faceLeft = TURN_ORDER_INSET + TurnCardX(card, now) - 1 + 3;
+		LONG faceTop = TURN_ORDER_LIFT + (turnRowHeight - card->size.y) / 2 + TURN_ORDER_TOP + 2;
+		LONG x0 = max(faceLeft, TURN_ORDER_INSET - 1 + TURN_ORDER_MARKER);
+		LONG x1 = min(faceLeft + faceWidth, width - TURN_ORDER_INSET + 1);
+		LONG y0 = max(faceTop, 0);
+		LONG y1 = min(faceTop + faceHeight, height);
+		if (x0 >= x1 || y0 >= y1)
+			return;
+
+		LONG w = x1 - x0;
+		LONG h = y1 - y0;
+		DWORD* art = (DWORD*)MemoryAlloc(w * h * 4 * sizeof(DWORD));
+		if (!art)
+			return;
+
+		DWORD red = TurnColor(RGB(200, 0, 0), TRUE, masks);
+		DWORD black = TurnColor(RGB(0, 0, 0), TRUE, masks);
+		LONG missing = card->shownHpMax > 0 ? faceHeight * max(0, card->shownHpMax - card->shownHp) / card->shownHpMax : 0;
+		for (LONG y = y0; y < y1; ++y)
+		{
+			LONG fy = y - faceTop;
+			for (LONG x = x0; x < x1; ++x)
+			{
+				LONG fx = x - faceLeft;
+				DWORD expected = ((const DWORD*)card->pixels)[(TURN_ORDER_TOP + 2 + fy) * cardWidth + 3 + fx];
+				if (card->next)
+					expected = DimPixel(expected, masks);
+				DWORD actual = ((const DWORD*)(surface + y * pitch))[x];
+
+				for (LONG sy = 0; sy < 2; ++sy)
+					for (LONG sx = 0; sx < 2; ++sx)
+					{
+						DWORD pix = actual;
+						if (actual == expected)
+						{
+							pix = card->face2x[(fy * 2 + sy) * faceWidth * 2 + fx * 2 + sx];
+							if (fy >= faceHeight - missing)
+								pix = BlendTurnPixel(pix, red, 141, masks);
+							if (fy >= faceHeight - TURN_ORDER_BAND)
+								pix = BlendTurnPixel(pix, black, TURN_ORDER_BAND_SHADE, masks);
+							if (card->next)
+								pix = DimPixel(pix, masks);
+						}
+						art[((y - y0) * 2 + sy) * w * 2 + (x - x0) * 2 + sx] = pix;
+					}
+			}
+		}
+
+		Twin::OnArt(surface + y0 * pitch + x0 * sizeof(DWORD), pitch / (LONG)sizeof(DWORD), w, h, art, 2);
+		MemoryFree(art);
+	}
+
+	VOID RenderTurnFace(TurnCard* card, BYTE* data, LONG faceWidth, LONG faceHeight, DWORD bpp, const DWORD* masks)
+	{
+		if (card->facePixels)
+			MemoryFree(card->facePixels);
+
+		POINT size;
+		((POINT*(__thiscall*)(DWORD*, POINT*))((DWORD*)card->face[0])[1])(card->face, &size);
+
+		BYTE* pixels = (BYTE*)MemoryAlloc(size.x * size.y * bpp);
+
+		// Discipl2.exe v3.01b 0x005B149D: SurfaceDecompressData is 1072 bytes, memory at +0x4, area at +0x8, pitch at +0x18
+		BYTE faceData[1072];
+		MemoryCopy(faceData, data, sizeof(faceData));
+		*(BYTE**)(faceData + 0x4) = pixels;
+		*(RECT*)(faceData + 0x8) = { 0, 0, size.x, size.y };
+		*(LONG*)(faceData + 0x18) = size.x << 1;
+		((VOID(__stdcall*)(DWORD*, BYTE*))((DWORD*)card->face[1])[1])(card->face + 1, faceData);
+		card->faceFrame = -1;
+
+		card->facePixels = (BYTE*)MemoryAlloc(faceWidth * faceHeight * bpp);
+		ShrinkTurnFace(pixels, size, card->facePixels, faceWidth, faceHeight, bpp, masks);
+
+		if (card->face2x)
+		{
+			MemoryFree(card->face2x);
+			card->face2x = NULL;
+		}
+		if (bpp == sizeof(DWORD))
+		{
+			card->face2x = (DWORD*)MemoryAlloc(faceWidth * faceHeight * 4 * sizeof(DWORD));
+			ShrinkTurnFace(pixels, size, (BYTE*)card->face2x, faceWidth * 2, faceHeight * 2, bpp, masks);
 		}
 
 		MemoryFree(pixels);
@@ -593,6 +673,10 @@ namespace TurnOrder
 				}
 			}
 		}
+
+		if (isTrueColor)
+			for (DWORD i = 0; i < turnCardCount; ++i)
+				DrawTurnFace2x(&turnCards[i], surface, pitch, width, height, now, masks);
 
 		// Discipl2.exe v3.01b 0x006775E0 sets the staging colour key from +0x1C after the draw, as 0x00560E31 stores it
 		*(DWORD*)(data + 0x1C) = COLORKEY_CHECK_16;

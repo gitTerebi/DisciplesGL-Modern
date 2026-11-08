@@ -1096,6 +1096,18 @@ namespace TwinGL
 			case CmdGround:
 				ReplayGround(cmd, list);
 				break;
+			case CmdArt:
+				if (Valid(cmd->dst) && gl.twins[cmd->dst].scale == (LONG)cmd->extra)
+				{
+					Gpu* gpu = &gl.twins[cmd->dst];
+					LONG scale = gpu->scale;
+					GLBindTexture(GL_TEXTURE_2D, gpu->texture);
+					GLPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+					GLPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+					GLTexSubImage2D(GL_TEXTURE_2D, 0, cmd->rect.left * scale, cmd->rect.top * scale, (cmd->rect.right - cmd->rect.left) * scale, (cmd->rect.bottom - cmd->rect.top) * scale,
+						GL_RGBA, GL_UNSIGNED_BYTE, list->arena + cmd->value);
+				}
+				break;
 			case CmdPresent:
 				gl.shown.valid = TRUE;
 				gl.shown.id = cmd->dst;
@@ -1105,7 +1117,7 @@ namespace TwinGL
 			}
 			if (traceUntil && (LONG)(traceUntil - (LONG)GetTickCount()) > 0)
 			{
-				static const CHAR* names[] = { "Create", "Destroy", "Reset", "Copy", "Fill", "Tint", "Upload", "Pixel", "Mask", "Lighter", "Seed", "Ground", "Present" };
+				static const CHAR* names[] = { "Create", "Destroy", "Reset", "Copy", "Fill", "Tint", "Upload", "Pixel", "Mask", "Lighter", "Seed", "Ground", "Present", "Art" };
 				for (DWORD k = i; k < max(next, i + 1) && k < list->count; ++k)
 				{
 					if (InterlockedIncrement(&traceLines) > 6000)
@@ -1131,7 +1143,7 @@ namespace TwinGL
 			(FLOAT)part->left / gpu->width, (FLOAT)part->top / gpu->height, (FLOAT)part->right / gpu->width, (FLOAT)part->bottom / gpu->height);
 	}
 
-	BOOL Show(const Rect* rect, LONG offset, DWORD frameWidth, DWORD frameHeight, GLuint drawFbo)
+	BOOL ShowTwin(const Rect* rect, LONG offset, DWORD frameWidth, DWORD frameHeight, GLuint drawFbo)
 	{
 		if (!gl.shown.valid || !Valid(gl.shown.id) || rect->width <= 0 || rect->height <= 0 || !frameWidth || !frameHeight)
 			return FALSE;
@@ -1224,10 +1236,78 @@ namespace TwinGL
 		DebugLog("twins dumped next to the game");
 	}
 
-	BOOL Draw(const Rect* rect, LONG offset, DWORD frameWidth, DWORD frameHeight)
+	struct Saved {
+		GLint program, vao, buffer, active, texture0, texture1, texture2, drawFbo, readFbo, viewport[4], scissor[4], blendSrc, blendDst;
+		GLfloat clear[4];
+		GLboolean blend, scissorTest;
+	};
+
+	VOID SaveState(Saved* s)
+	{
+		GLGetIntegerv(GL_CURRENT_PROGRAM, &s->program);
+		GLGetIntegerv(GL_VERTEX_ARRAY_BINDING, &s->vao);
+		GLGetIntegerv(GL_ARRAY_BUFFER_BINDING, &s->buffer);
+		GLGetIntegerv(GL_ACTIVE_TEXTURE, &s->active);
+		GLGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &s->drawFbo);
+		GLGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &s->readFbo);
+		GLGetIntegerv(GL_VIEWPORT, s->viewport);
+		GLGetIntegerv(GL_SCISSOR_BOX, s->scissor);
+		glGetFloatv(GL_COLOR_CLEAR_VALUE, s->clear);
+		s->blend = glIsEnabled(GL_BLEND);
+		GLGetIntegerv(GL_BLEND_SRC, &s->blendSrc);
+		GLGetIntegerv(GL_BLEND_DST, &s->blendDst);
+		s->scissorTest = glIsEnabled(GL_SCISSOR_TEST);
+		GLActiveTexture(GL_TEXTURE2);
+		GLGetIntegerv(GL_TEXTURE_BINDING_2D, &s->texture2);
+		GLActiveTexture(GL_TEXTURE1);
+		GLGetIntegerv(GL_TEXTURE_BINDING_2D, &s->texture1);
+		GLActiveTexture(GL_TEXTURE0);
+		GLGetIntegerv(GL_TEXTURE_BINDING_2D, &s->texture0);
+	}
+
+	VOID RestoreState(const Saved* s)
+	{
+		GLBindFramebuffer(GL_DRAW_FRAMEBUFFER, s->drawFbo);
+		GLBindFramebuffer(GL_READ_FRAMEBUFFER, s->readFbo);
+		GLViewport(s->viewport[0], s->viewport[1], s->viewport[2], s->viewport[3]);
+		glScissor(s->scissor[0], s->scissor[1], s->scissor[2], s->scissor[3]);
+		GLClearColor(s->clear[0], s->clear[1], s->clear[2], s->clear[3]);
+		GLBlendFunc(s->blendSrc, s->blendDst);
+		if (s->blend)
+			GLEnable(GL_BLEND);
+		else
+			GLDisable(GL_BLEND);
+		if (s->scissorTest)
+			GLEnable(GL_SCISSOR_TEST);
+		else
+			GLDisable(GL_SCISSOR_TEST);
+		GLActiveTexture(GL_TEXTURE2);
+		GLBindTexture(GL_TEXTURE_2D, s->texture2);
+		GLActiveTexture(GL_TEXTURE1);
+		GLBindTexture(GL_TEXTURE_2D, s->texture1);
+		GLActiveTexture(GL_TEXTURE0);
+		GLBindTexture(GL_TEXTURE_2D, s->texture0);
+		GLActiveTexture(s->active);
+		GLBindBuffer(GL_ARRAY_BUFFER, s->buffer);
+		GLBindVertexArray(s->vao);
+		GLUseProgram(s->program);
+	}
+
+	VOID BeginGL()
+	{
+		gl.target = TWIN_NONE;
+		gl.program = 0;
+		GLUseProgram(0);
+		GLBindVertexArray(gl.vao);
+		GLBindBuffer(GL_ARRAY_BUFFER, gl.vbo);
+		GLDisable(GL_BLEND);
+		GLDisable(GL_SCISSOR_TEST);
+	}
+
+	VOID Replay()
 	{
 		if (shared.state != 2)
-			return FALSE;
+			return;
 
 		Lock();
 		List* lists = shared.head;
@@ -1236,71 +1316,18 @@ namespace TwinGL
 		Unlock();
 
 		if (!lists && !gl.shown.valid)
-			return FALSE;
+			return;
 
-		GLint program, vao, buffer, active, texture0, texture1, texture2, drawFbo, readFbo, viewport[4], scissor[4], blendSrc, blendDst;
-		GLfloat clear[4];
-		GLGetIntegerv(GL_CURRENT_PROGRAM, &program);
-		GLGetIntegerv(GL_VERTEX_ARRAY_BINDING, &vao);
-		GLGetIntegerv(GL_ARRAY_BUFFER_BINDING, &buffer);
-		GLGetIntegerv(GL_ACTIVE_TEXTURE, &active);
-		GLGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &drawFbo);
-		GLGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &readFbo);
-		GLGetIntegerv(GL_VIEWPORT, viewport);
-		GLGetIntegerv(GL_SCISSOR_BOX, scissor);
-		glGetFloatv(GL_COLOR_CLEAR_VALUE, clear);
-		GLboolean blend = glIsEnabled(GL_BLEND);
-		GLGetIntegerv(GL_BLEND_SRC, &blendSrc);
-		GLGetIntegerv(GL_BLEND_DST, &blendDst);
-		GLboolean scissorTest = glIsEnabled(GL_SCISSOR_TEST);
-		GLActiveTexture(GL_TEXTURE2);
-		GLGetIntegerv(GL_TEXTURE_BINDING_2D, &texture2);
-		GLActiveTexture(GL_TEXTURE1);
-		GLGetIntegerv(GL_TEXTURE_BINDING_2D, &texture1);
-		GLActiveTexture(GL_TEXTURE0);
-		GLGetIntegerv(GL_TEXTURE_BINDING_2D, &texture0);
-
-		BOOL shown = FALSE;
+		Saved saved;
+		SaveState(&saved);
 		if (InitGL())
 		{
-			gl.target = TWIN_NONE;
-			gl.program = 0;
-			GLUseProgram(0);
-			GLBindVertexArray(gl.vao);
-			GLBindBuffer(GL_ARRAY_BUFFER, gl.vbo);
-			GLDisable(GL_BLEND);
-			GLDisable(GL_SCISSOR_TEST);
+			BeginGL();
 			for (List* list = lists; list; list = list->next)
 				Replay(list);
 			DumpTwins();
-			if (shared.show)
-				shown = Show(rect, offset, frameWidth, frameHeight, drawFbo);
 		}
-
-		GLBindFramebuffer(GL_DRAW_FRAMEBUFFER, drawFbo);
-		GLBindFramebuffer(GL_READ_FRAMEBUFFER, readFbo);
-		GLViewport(viewport[0], viewport[1], viewport[2], viewport[3]);
-		glScissor(scissor[0], scissor[1], scissor[2], scissor[3]);
-		GLClearColor(clear[0], clear[1], clear[2], clear[3]);
-		GLBlendFunc(blendSrc, blendDst);
-		if (blend)
-			GLEnable(GL_BLEND);
-		else
-			GLDisable(GL_BLEND);
-		if (scissorTest)
-			GLEnable(GL_SCISSOR_TEST);
-		else
-			GLDisable(GL_SCISSOR_TEST);
-		GLActiveTexture(GL_TEXTURE2);
-		GLBindTexture(GL_TEXTURE_2D, texture2);
-		GLActiveTexture(GL_TEXTURE1);
-		GLBindTexture(GL_TEXTURE_2D, texture1);
-		GLActiveTexture(GL_TEXTURE0);
-		GLBindTexture(GL_TEXTURE_2D, texture0);
-		GLActiveTexture(active);
-		GLBindBuffer(GL_ARRAY_BUFFER, buffer);
-		GLBindVertexArray(vao);
-		GLUseProgram(program);
+		RestoreState(&saved);
 
 		Lock();
 		while (lists)
@@ -1310,7 +1337,41 @@ namespace TwinGL
 			lists = next;
 		}
 		Unlock();
+	}
+
+	BOOL GetSource(Source* source)
+	{
+		if (shared.state != 2 || !gl.ready || !shared.show || !gl.shown.valid || !Valid(gl.shown.id) || (gl.shown.flags & (PresentBack | PresentZoomed)))
+			return FALSE;
+
+		Gpu* gpu = &gl.twins[gl.shown.id];
+		if (!gpu->fbo || gpu->width < (LONG)config.mode->width || gpu->height < (LONG)config.mode->height)
+			return FALSE;
+
+		source->fbo = gpu->fbo;
+		source->scale = gpu->scale;
+		source->width = config.mode->width * gpu->scale;
+		source->height = config.mode->height * gpu->scale;
+		return TRUE;
+	}
+
+	BOOL Show(const Rect* rect, LONG offset, DWORD frameWidth, DWORD frameHeight)
+	{
+		if (shared.state != 2 || !gl.ready || !shared.show)
+			return FALSE;
+
+		Saved saved;
+		SaveState(&saved);
+		BeginGL();
+		BOOL shown = ShowTwin(rect, offset, frameWidth, frameHeight, saved.drawFbo);
+		RestoreState(&saved);
 		return shown;
+	}
+
+	BOOL Draw(const Rect* rect, LONG offset, DWORD frameWidth, DWORD frameHeight)
+	{
+		Replay();
+		return Show(rect, offset, frameWidth, frameHeight);
 	}
 
 	VOID ReleaseGL()
