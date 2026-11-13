@@ -1069,6 +1069,9 @@ namespace Config
 		if (action == BindBuildStructure && config.screen.buildStruct)
 			return VK_RETURN;
 
+		if (action == BindClosePopup && config.screen.offer && config.screen.popup && config.binds[action] != VK_RETURN)
+			return VK_ESCAPE;
+
 		return config.screen.full && bindsList[action].fullNative ? bindsList[action].fullNative : bindsList[action].native;
 	}
 

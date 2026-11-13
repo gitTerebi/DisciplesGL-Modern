@@ -4210,6 +4210,7 @@ namespace Hooks
 			config.screen.buildStruct = name && !StrCompare(name, ".?AVCBuildStructInterf@@");
 			townClass = config.screen.buildStruct || name && !StrCompare(name, ".?AVCCapitalInterf@@");
 			config.screen.strategic = name && !StrCompare(name, ".?AVCStratInterf@@");
+			config.screen.offer = name && (!StrCompare(name, ".?AVCDiploMsgBox@@") || !StrCompare(name, ".?AVCOfferInterf@@"));
 			loadClass = name && (!StrCompare(name, ".?AVCLoadGameInterf@@") || !StrCompareNum(name, ".?AVCMenuLoad", 13));
 		}
 
