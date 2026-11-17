@@ -584,38 +584,6 @@ namespace Twin
 			--game.top;
 	}
 
-	VOID CreateTwin(StateBuffer* buffer, LONG width, LONG height)
-	{
-		ChooseScale();
-
-		DWORD id;
-		Record* twin = Find(buffer, &id);
-		if (twin)
-			Release(twin, id);
-
-		for (id = 0; id < TWIN_MAX && game.twins[id].owner; ++id)
-			;
-		if (id == TWIN_MAX || width * game.scale > TWIN_MAX_SIZE || height * game.scale > TWIN_MAX_SIZE)
-		{
-			if (game.errors++ < ERROR_LOGS)
-				DebugLog("twin skipped: %dx%d at N=%d %s", width, height, game.scale, id == TWIN_MAX ? "finds no free twin slot" : "is too large");
-			return;
-		}
-
-		twin = &game.twins[id];
-		MemoryZero(twin, sizeof(Record));
-		twin->owner = buffer;
-		twin->base = (BYTE*)buffer->data;
-		twin->pitch = width;
-		twin->width = width;
-		twin->height = height;
-		twin->lastUse = game.frameNo;
-		twin->stamp = ++game.stamp;
-		if (id >= game.top)
-			game.top = id + 1;
-		EmitCreate(twin, id);
-	}
-
 	struct Dropped {
 		const BYTE* lo;
 		const BYTE* hi;
@@ -643,6 +611,60 @@ namespace Twin
 		delete owner;
 	}
 
+	BOOL EvictMemoryTwin(const CHAR* why)
+	{
+		Record* oldest = NULL;
+		DWORD oldestId = 0;
+		for (DWORD i = 0; i < game.top; ++i)
+		{
+			Record* twin = &game.twins[i];
+			if (twin->owner && twin->memory && twin->lastUse != game.frameNo && (!oldest || twin->lastUse < oldest->lastUse))
+			{
+				oldest = twin;
+				oldestId = i;
+			}
+		}
+		if (!oldest)
+			return FALSE;
+		DestroyMemoryTwin(oldest, oldestId, why);
+		return TRUE;
+	}
+
+	VOID CreateTwin(StateBuffer* buffer, LONG width, LONG height)
+	{
+		ChooseScale();
+
+		DWORD id;
+		Record* twin = Find(buffer, &id);
+		if (twin)
+			Release(twin, id);
+
+		for (id = 0; id < TWIN_MAX && game.twins[id].owner; ++id)
+			;
+		if (id == TWIN_MAX && EvictMemoryTwin("twin slots full"))
+			for (id = 0; id < TWIN_MAX && game.twins[id].owner; ++id)
+				;
+		if (id == TWIN_MAX || width * game.scale > TWIN_MAX_SIZE || height * game.scale > TWIN_MAX_SIZE)
+		{
+			if (game.errors++ < ERROR_LOGS)
+				DebugLog("twin skipped: %dx%d at N=%d %s", width, height, game.scale, id == TWIN_MAX ? "finds no free twin slot" : "is too large");
+			return;
+		}
+
+		twin = &game.twins[id];
+		MemoryZero(twin, sizeof(Record));
+		twin->owner = buffer;
+		twin->base = (BYTE*)buffer->data;
+		twin->pitch = width;
+		twin->width = width;
+		twin->height = height;
+		twin->lastUse = game.frameNo;
+		twin->stamp = ++game.stamp;
+		if (id >= game.top)
+			game.top = id + 1;
+		EmitCreate(twin, id);
+	}
+
 	Record* CreateMemoryTwin(const VOID* base, LONG pitch, LONG width, LONG height, DWORD* id)
 	{
 		if (IsBadReadPtr(base, ((height - 1) * pitch + width) * sizeof(DWORD)))
@@ -650,23 +672,8 @@ namespace Twin
 
 		ChooseScale();
 		LONGLONG bytes = (LONGLONG)width * height * sizeof(DWORD) * game.scale * game.scale;
-		while (game.memoryBytes + bytes > MEMORY_BUDGET)
-		{
-			Record* oldest = NULL;
-			DWORD oldestId = 0;
-			for (DWORD i = 0; i < game.top; ++i)
-			{
-				Record* twin = &game.twins[i];
-				if (twin->owner && twin->memory && twin->lastUse != game.frameNo && (!oldest || twin->lastUse < oldest->lastUse))
-				{
-					oldest = twin;
-					oldestId = i;
-				}
-			}
-			if (!oldest)
-				break;
-			DestroyMemoryTwin(oldest, oldestId, "memory budget");
-		}
+		while (game.memoryBytes + bytes > MEMORY_BUDGET && EvictMemoryTwin("memory budget"))
+			;
 
 		StateBuffer* owner = new StateBuffer((VOID*)base);
 		CreateTwin(owner, width, height);

@@ -2372,6 +2372,8 @@
 		{
 		case WM_SHOWWINDOW:
 			StartMaximizedWindowTimer(hWnd);
+			if (wParam && GetForegroundWindow() != hWnd)
+				PostMessage(hWnd, WM_ACTIVATEAPP, TRUE, 0);
 			return CallWindowProc(OldWindowProc, hWnd, uMsg, wParam, lParam);
 
 		case WM_TIMER:
