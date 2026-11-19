@@ -51,6 +51,7 @@
 #include "BattleSpeed.h"
 #include "FastAI.h"
 #include "Ground.h"
+#include "BatchTextures.h"
 #include "Seed.h"
 #include "Twin.h"
 
@@ -512,6 +513,7 @@ namespace Hooks
 			0x005A703B, 0x005A70BF, 0x005B5C74, 0x006E28E4, 0x005B5FC6, 0x006D7B60, 0x0053F509, // ground
 			0x005AC9E3, // face_load
 			0x0053C5F3, 0x0053C96A, 0x0082FE3C, 0x0082FF20, // map_order
+			0x00514633, // batch_texture_search
 		},
 #pragma endregion
 
@@ -737,6 +739,10 @@ namespace Hooks
 			0x0052E663, 0x0052E798, 0x006E2F78, 0x0052E4C6, 0x006E2CC8, 0x0052E159, // image_trace
 			0x00000000, 0x00000000, 0x00000000, 0x00000000, // image_store
 			0x00000000, 0x00000000, 0x00000000, 0x00000000, // image_free
+			0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, // ground
+			0x00000000, // face_load
+			0x00000000, 0x00000000, 0x00000000, 0x00000000, // map_order
+			0x00518A13, // batch_texture_search
 		},
 #pragma endregion
 
@@ -831,6 +837,7 @@ namespace Hooks
 			0x005AB6CA, 0x005AB74E, 0x005BA584, 0x006ECE64, 0x005BA8F2, 0x006E2068, 0x0054361D, // ground
 			0x005B1079, // face_load
 			0x00540757, 0x00540ACE, 0x00838554, 0x00838638, // map_order
+			0x00517FA3, // batch_texture_search
 		},
 #pragma endregion
 
@@ -4780,7 +4787,7 @@ namespace Hooks
 
 		POINT tick;
 		GetScrollTickOffset(&tick);
-		if (!ScrollPacing::Step(hWndMain, tick.x, tick.y, config.speed.frequency, &pacedOffset))
+		if (!ScrollPacing::Step(tick.x, tick.y, config.speed.frequency, &pacedOffset))
 			return ScrollCenter;
 
 		pacedPending = TRUE;
@@ -9324,6 +9331,7 @@ namespace Hooks
 
 		Seed::Load(hooker, hookSpace, baseOffset);
 		Ground::Load(hooker, hookSpace, baseOffset);
+		BatchTextures::Load(hooker, hookSpace, baseOffset);
 
 		ShopFrame::Load(hooker, hookSpace, baseOffset);
 

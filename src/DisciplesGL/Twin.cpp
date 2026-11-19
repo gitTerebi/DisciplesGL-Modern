@@ -1513,18 +1513,20 @@ namespace Twin
 		else
 			id = TWIN_NONE;
 
+		StateBufferAligned* aligned = (StateBufferAligned*)screen;
+		aligned->twinFrame = game.frameNo;
 		Cmd* cmd = Emit(CmdPresent);
 		if (cmd)
 		{
-			StateBufferAligned* aligned = (StateBufferAligned*)screen;
 			cmd->dst = id;
 			Config::GetMapZoomRect(&cmd->rect);
 			cmd->flags = (Config::IsMapZoomed() ? PresentMapZoom : 0) | (aligned->isBack ? PresentBack : 0) | (aligned->isZoomed ? PresentZoomed : 0);
 		}
-		++game.frameNo;
-
 		List* list = game.list;
 		game.list = NULL;
+		if (list)
+			list->frame = game.frameNo;
+		++game.frameNo;
 		if (!list)
 			return;
 

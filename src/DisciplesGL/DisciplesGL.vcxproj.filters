@@ -94,6 +94,9 @@
     <ClCompile Include="TurnOrder.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="BatchTextures.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="FasterEndTurn.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -241,6 +244,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="TurnOrder.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="BatchTextures.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="FasterEndTurn.h">

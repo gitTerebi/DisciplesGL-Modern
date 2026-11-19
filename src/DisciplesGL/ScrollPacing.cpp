@@ -15,22 +15,19 @@ namespace ScrollPacing
 	LONGLONG dwmAnchor;
 	LONGLONG dwmRefreshedAt;
 
-	LONGLONG period;
-	LONGLONG anchor;
-	LONGLONG monitorCheckedAt;
-	HMONITOR monitor;
-	BOOL fixedPeriod;
+	LONGLONG flushTarget;
+	LONGLONG flushStep;
+	DWORD flushes;
+	DWORD steppedAt;
 
 	LONGLONG last;
 	DOUBLE ax, ay;
 
-	VOID Init(LONGLONG now)
+	VOID Init()
 	{
 		if (freq)
 			return;
 		QueryPerformanceFrequency((LARGE_INTEGER*)&freq);
-		period = freq / 240;
-		anchor = now;
 		HMODULE dwm = LoadLibrary("DWMAPI.dll");
 		if (dwm)
 			getTiming = (DWMGETCOMPOSITIONTIMINGINFO)GetProcAddress(dwm, "DwmGetCompositionTimingInfo");
@@ -38,7 +35,7 @@ namespace ScrollPacing
 
 	VOID RefreshDwm(LONGLONG now)
 	{
-		Init(now);
+		Init();
 		if (dwmRefreshedAt && now - dwmRefreshedAt < freq / 4)
 			return;
 		dwmRefreshedAt = now;
@@ -54,33 +51,6 @@ namespace ScrollPacing
 		dwmAnchor = (LONGLONG)info.qpcVBlank + (LONGLONG)(dwmPeriod * UPLOAD_PHASE_AFTER_VBLANK);
 	}
 
-	VOID CheckMonitor(HWND hWnd, LONGLONG now)
-	{
-		if (monitorCheckedAt && now - monitorCheckedAt < freq / 4)
-			return;
-		monitorCheckedAt = now;
-
-		HMONITOR current = MonitorFromWindow(hWnd, MONITOR_DEFAULTTONEAREST);
-		if (current == monitor)
-			return;
-		monitor = current;
-		fixedPeriod = FALSE;
-
-		MONITORINFOEX info;
-		info.cbSize = sizeof(info);
-		if (!GetMonitorInfo(current, &info) || (info.dwFlags & MONITORINFOF_PRIMARY))
-			return;
-
-		DEVMODE mode = {};
-		mode.dmSize = sizeof(mode);
-		if (!EnumDisplaySettings(info.szDevice, ENUM_CURRENT_SETTINGS, &mode) || mode.dmDisplayFrequency <= 1)
-			return;
-
-		period = freq / mode.dmDisplayFrequency;
-		anchor = now;
-		fixedPeriod = TRUE;
-	}
-
 	LONGLONG NextBoundary(LONGLONG now, LONGLONG step, LONGLONG origin)
 	{
 		LONGLONG offset = (now - origin) % step;
@@ -89,22 +59,14 @@ namespace ScrollPacing
 		return now - offset + step;
 	}
 
-	LONGLONG Target(HWND hWnd, LONGLONG now)
-	{
-		RefreshDwm(now);
-		CheckMonitor(hWnd, now);
-		if (!fixedPeriod && dwmPeriod)
-		{
-			period = dwmPeriod;
-			anchor = dwmAnchor - dwmPeriod / 2;
-		}
-		return NextBoundary(now, period, anchor);
-	}
-
 	LONGLONG NextFlush(LONGLONG now, LONGLONG step, BOOL capped)
 	{
 		RefreshDwm(now);
-		return dwmPeriod && !capped ? NextBoundary(now, dwmPeriod, dwmAnchor) : step * (now / step + 1);
+		BOOL vblank = dwmPeriod && !capped;
+		flushStep = vblank ? dwmPeriod : step;
+		flushTarget = vblank ? NextBoundary(now, dwmPeriod, dwmAnchor) : step * (now / step + 1);
+		++flushes;
+		return flushTarget;
 	}
 
 	VOID Reset()
@@ -113,17 +75,14 @@ namespace ScrollPacing
 		ax = ay = 0.0;
 	}
 
-	BOOL Step(HWND hWnd, LONG tickX, LONG tickY, DWORD ticksPerSecond, POINT* offset)
+	BOOL Step(LONG tickX, LONG tickY, DWORD ticksPerSecond, POINT* offset)
 	{
-		LONGLONG now;
-		QueryPerformanceCounter((LARGE_INTEGER*)&now);
-		LONGLONG target = Target(hWnd, now);
-
-		if (target == last)
+		if (!flushTarget || steppedAt == flushes)
 			return FALSE;
+		steppedAt = flushes;
 
-		DOUBLE dt = last ? DOUBLE(target - last) / freq : DOUBLE(period) / freq;
-		last = target;
+		DOUBLE dt = DOUBLE(last ? flushTarget - last : flushStep) / freq;
+		last = flushTarget;
 		if (dt > MAX_STEP_SECONDS)
 			dt = MAX_STEP_SECONDS;
 

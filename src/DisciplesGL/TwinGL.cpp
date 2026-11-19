@@ -1183,13 +1183,18 @@ namespace TwinGL
 		return TRUE;
 	}
 
-	BOOL Prepare()
+	BOOL Due(const List* list, DWORD frame)
+	{
+		return (LONG)(list->frame - frame) <= 0;
+	}
+
+	BOOL Prepare(DWORD frame)
 	{
 		if (shared.state != 2)
 			return FALSE;
 
 		Lock();
-		BOOL pending = shared.head != NULL;
+		BOOL pending = shared.head && Due(shared.head, frame);
 		Unlock();
 		return pending;
 	}
@@ -1304,15 +1309,31 @@ namespace TwinGL
 		GLDisable(GL_SCISSOR_TEST);
 	}
 
-	VOID Replay()
+	VOID Replay(DWORD frame)
 	{
 		if (shared.state != 2)
 			return;
 
 		Lock();
-		List* lists = shared.head;
-		shared.head = shared.tail = NULL;
-		shared.bytes = 0;
+		List* lists = NULL;
+		List* last = NULL;
+		while (shared.head && Due(shared.head, frame))
+		{
+			List* list = shared.head;
+			shared.head = list->next;
+			shared.bytes -= list->size + list->count * sizeof(Cmd);
+			list->next = NULL;
+			if (last)
+				last->next = list;
+			else
+				lists = list;
+			last = list;
+		}
+		if (!shared.head)
+		{
+			shared.tail = NULL;
+			shared.bytes = 0;
+		}
 		Unlock();
 
 		if (!lists && !gl.shown.valid)
@@ -1368,9 +1389,9 @@ namespace TwinGL
 		return shown;
 	}
 
-	BOOL Draw(const Rect* rect, LONG offset, DWORD frameWidth, DWORD frameHeight)
+	BOOL Draw(DWORD frame, const Rect* rect, LONG offset, DWORD frameWidth, DWORD frameHeight)
 	{
-		Replay();
+		Replay(frame);
 		return Show(rect, offset, frameWidth, frameHeight);
 	}
 

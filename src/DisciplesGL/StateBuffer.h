@@ -47,6 +47,7 @@ public:
 	BordersType borders;
 	BOOL isBack;
 	HDC hDc;
+	DWORD twinFrame;
 
 	Size size;
 

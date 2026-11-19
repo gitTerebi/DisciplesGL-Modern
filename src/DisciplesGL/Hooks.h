@@ -446,6 +446,7 @@ namespace Hooks
 		DWORD map_key_change;
 		DWORD map_trees_layer;
 		DWORD map_stacks_layer;
+		DWORD batch_texture_search;
 	};
 
 	struct BlendData {

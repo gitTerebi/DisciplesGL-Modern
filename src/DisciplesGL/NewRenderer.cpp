@@ -407,7 +407,7 @@ BOOL NewRenderer::RenderInner(BOOL ready, BOOL force, StateBufferAligned** lpSta
 		BOOL textUpActive = this->isTrueColor;
 		BOOL textUpChanged = TextReplace::Prepare(stateBuffer, textUpActive);
 		textUpChanged |= Pack::Prepare();
-		textUpChanged |= TwinGL::Prepare();
+		textUpChanged |= TwinGL::Prepare(stateBuffer->twinFrame);
 		if (this->pixelBuffer->Update(lpStateBuffer, ready && !Twin::Active(), TRUE) || state.flags || stateChanged || mapZoomChanged || textUpChanged)
 		{
 			BOOL clearBackTransition = this->backStatus && !stateBuffer->isBack;
@@ -702,7 +702,7 @@ BOOL NewRenderer::RenderInner(BOOL ready, BOOL force, StateBufferAligned** lpSta
 
 				if (textUpActive)
 				{
-					TwinGL::Draw(&this->ddraw->viewport.rectangle, this->ddraw->viewport.offset, frameSize.width, frameSize.height);
+					TwinGL::Draw(stateBuffer->twinFrame, &this->ddraw->viewport.rectangle, this->ddraw->viewport.offset, frameSize.width, frameSize.height);
 					Pack::Draw();
 					TextReplace::Draw(&this->ddraw->viewport.rectangle, this->ddraw->viewport.offset, frameSize.width, frameSize.height);
 				}
@@ -743,7 +743,7 @@ BOOL NewRenderer::RenderInner(BOOL ready, BOOL force, StateBufferAligned** lpSta
 		BOOL textActive = this->isTrueColor;
 		BOOL textChanged = TextReplace::Prepare(stateBuffer, textActive);
 		textChanged |= Pack::Prepare();
-		textChanged |= TwinGL::Prepare();
+		textChanged |= TwinGL::Prepare(stateBuffer->twinFrame);
 		if (this->pixelBuffer->Update(lpStateBuffer, ready && !Twin::Active()) || state.flags || stateChanged || mapZoomChanged || textChanged)
 		{
 			if (this->isVSync != config.image.vSync)
@@ -812,7 +812,7 @@ BOOL NewRenderer::RenderInner(BOOL ready, BOOL force, StateBufferAligned** lpSta
 			BOOL twinSource = FALSE;
 			if (textActive)
 			{
-				TwinGL::Replay();
+				TwinGL::Replay(stateBuffer->twinFrame);
 				twinSource = state.interpolation != InterpolateNearest && !stateBuffer->isBack && !stateBuffer->isZoomed && TwinGL::GetSource(&twin);
 				if (twinSource)
 				{

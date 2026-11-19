@@ -41,6 +41,7 @@ namespace Twin
 
 	struct List {
 		List* next;
+		DWORD frame;
 		Cmd* cmds;
 		DWORD count, capacity;
 		BYTE* arena;
