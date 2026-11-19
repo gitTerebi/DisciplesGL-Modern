@@ -1311,22 +1311,25 @@ namespace TextReplace
 			{
 				FLOAT threshold = InkCount(symbol) < 8 ? 0.34f : 0.55f;
 				LONG bx, by;
-				if (MatchGlyph(symbol, &SheetGlyphs(cal->index, cal->base)[ch], cal->offX, cal->offY, threshold, &bx, &by) >= threshold)
+				FLOAT best = MatchGlyph(symbol, &SheetGlyphs(cal->index, cal->base)[ch], cal->offX, cal->offY, threshold, &bx, &by);
+				cal->set[ch] = (BYTE)cal->base;
+				if (ch >= 0x80)
+					for (DWORD set = 0; set < sheet.header->charsetCount; ++set)
+					{
+						LONG sx, sy;
+						FLOAT score;
+						if (set != cal->base && (score = MatchGlyph(symbol, &SheetGlyphs(cal->index, set)[ch], cal->offX, cal->offY, threshold, &sx, &sy)) > best)
+						{
+							best = score;
+							bx = sx;
+							by = sy;
+							cal->set[ch] = (BYTE)set;
+						}
+					}
+
+				if (best >= threshold)
 				{
 					cal->ok[ch] = 1;
-					cal->set[ch] = (BYTE)cal->base;
-				}
-				else if (ch >= 0x80)
-					for (DWORD set = 0; set < sheet.header->charsetCount; ++set)
-						if (set != cal->base && MatchGlyph(symbol, &SheetGlyphs(cal->index, set)[ch], cal->offX, cal->offY, threshold, &bx, &by) >= threshold)
-						{
-							cal->ok[ch] = 1;
-							cal->set[ch] = (BYTE)set;
-							break;
-						}
-
-				if (cal->ok[ch] == 1)
-				{
 					cal->charX[ch] = (CHAR)bx;
 					cal->charY[ch] = (CHAR)by;
 				}
