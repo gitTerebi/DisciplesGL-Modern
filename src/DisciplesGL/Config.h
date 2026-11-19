@@ -94,4 +94,5 @@ namespace Config
 	BOOL IsBindActive(BindAction);
 	BOOL IsBindBlocked(UINT, WPARAM);
 	BOOL IsBindHeld(BindAction);
+	BOOL IsTwinChord(WPARAM);
 }

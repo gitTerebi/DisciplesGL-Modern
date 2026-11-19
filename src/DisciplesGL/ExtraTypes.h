@@ -502,6 +502,7 @@ struct ConfigItems {
 		BOOL mainMenu;
 		BOOL strategic;
 		BOOL buildStruct;
+		BOOL offer;
 	} screen;
 
 	struct {

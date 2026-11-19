@@ -100,6 +100,9 @@
     <ClCompile Include="TurnSummary.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="MapOrder.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="TurnIncome.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -119,6 +122,24 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="FastAI.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Ground.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Pack.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Flip.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Seed.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Twin.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="TwinGL.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="TurnArt.cpp">
@@ -228,6 +249,9 @@
     <ClInclude Include="TurnSummary.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="MapOrder.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="TurnIncome.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -247,6 +271,24 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="FastAI.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Ground.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Pack.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Flip.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Seed.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Twin.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="TwinGL.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="TurnArt.h">
@@ -317,5 +359,15 @@
     <Manifest Include="module.manifest">
       <Filter>Resource Files</Filter>
     </Manifest>
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="zstd">
+      <UniqueIdentifier>{6b1f3c2a-9d4e-4c8b-a7f1-2e5d8c9b0a14}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\zstd\zstddeclib.c">
+      <Filter>zstd</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>

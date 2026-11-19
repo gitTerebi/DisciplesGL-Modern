@@ -75,6 +75,11 @@ private:
 	} fsr;
 
 	struct {
+		GLuint textureId;
+		DWORD side;
+	} twinFrame;
+
+	struct {
 		GLuint back;
 		GLuint primary;
 		GLuint secondary;

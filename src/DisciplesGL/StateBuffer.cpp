@@ -49,9 +49,7 @@ StateBuffer::StateBuffer(VOID* data)
 StateBuffer::~StateBuffer()
 {
 	if (this->isAllocated)
-	{
 		MemoryFree(this->data);
-	}
 }
 
 StateBufferAligned::StateBufferAligned()

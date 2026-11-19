@@ -223,6 +223,8 @@
       <AdditionalLibraryDirectories>$(ProjectDir)..\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <GenerateDebugInformation>false</GenerateDebugInformation>
       <AssemblyDebug>false</AssemblyDebug>
+      <GenerateMapFile>true</GenerateMapFile>
+      <MapFileName>$(OutDir)C4dll-R.map</MapFileName>
       <SectionAlignment>4096</SectionAlignment>
       <BaseAddress>0x60000000</BaseAddress>
       <RandomizedBaseAddress>false</RandomizedBaseAddress>
@@ -269,6 +271,7 @@
     <ClCompile Include="TurnOrder.cpp" />
     <ClCompile Include="FasterEndTurn.cpp" />
     <ClCompile Include="TurnSummary.cpp" />
+    <ClCompile Include="MapOrder.cpp" />
     <ClCompile Include="TurnIncome.cpp" />
     <ClCompile Include="TextReplace.cpp" />
     <ClCompile Include="ShopFrame.cpp" />
@@ -276,6 +279,12 @@
     <ClCompile Include="ScrollPacing.cpp" />
     <ClCompile Include="BattleSpeed.cpp" />
     <ClCompile Include="FastAI.cpp" />
+    <ClCompile Include="Ground.cpp" />
+    <ClCompile Include="Pack.cpp" />
+    <ClCompile Include="Flip.cpp" />
+    <ClCompile Include="Seed.cpp" />
+    <ClCompile Include="Twin.cpp" />
+    <ClCompile Include="TwinGL.cpp" />
     <ClCompile Include="NewRenderer.cpp" />
     <ClCompile Include="OGLRenderer.cpp" />
     <ClCompile Include="OldRenderer.cpp" />
@@ -315,6 +324,7 @@
     <ClInclude Include="TurnOrder.h" />
     <ClInclude Include="FasterEndTurn.h" />
     <ClInclude Include="TurnSummary.h" />
+    <ClInclude Include="MapOrder.h" />
     <ClInclude Include="TurnIncome.h" />
     <ClInclude Include="TextReplace.h" />
     <ClInclude Include="ShopFrame.h" />
@@ -322,6 +332,12 @@
     <ClInclude Include="ScrollPacing.h" />
     <ClInclude Include="BattleSpeed.h" />
     <ClInclude Include="FastAI.h" />
+    <ClInclude Include="Ground.h" />
+    <ClInclude Include="Pack.h" />
+    <ClInclude Include="Flip.h" />
+    <ClInclude Include="Seed.h" />
+    <ClInclude Include="Twin.h" />
+    <ClInclude Include="TwinGL.h" />
     <ClInclude Include="NewRenderer.h" />
     <ClInclude Include="OGLRenderer.h" />
     <ClInclude Include="OldRenderer.h" />
@@ -352,6 +368,12 @@
   </ItemGroup>
   <ItemGroup>
     <Manifest Include="module.manifest" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\zstd\zstddeclib.c">
+      <CompileAs>CompileAsC</CompileAs>
+      <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

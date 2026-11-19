@@ -29,6 +29,13 @@
 #include "Main.h"
 #include "Resource.h"
 #include "TextReplace.h"
+#include "Pack.h"
+#include "Twin.h"
+#include "TwinGL.h"
+
+#ifndef GL_READ_FRAMEBUFFER
+#define GL_READ_FRAMEBUFFER 0x8CA8
+#endif
 
 NewRenderer::NewRenderer(OpenDraw* ddraw)
 	: OGLRenderer(ddraw)
@@ -37,6 +44,7 @@ NewRenderer::NewRenderer(OpenDraw* ddraw)
 
 VOID NewRenderer::Begin()
 {
+	CrashArm();
 	config.zoom.glallow = TRUE;
 	config.mapZoom.allowed = MAP_ZOOM_ENABLED;
 	this->mapZoomDrawn = 1.0f;
@@ -178,6 +186,8 @@ VOID NewRenderer::Begin()
 								this->program = NULL;
 								this->zoomSize = { 0, 0 };
 								this->zoomFbSize = { 0, 0 };
+								this->twinFrame.textureId = 0;
+								this->twinFrame.side = 0;
 
 								GLClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 
@@ -197,12 +207,17 @@ VOID NewRenderer::End()
 {
 	TextReplace::SetRenderer(FALSE);
 	TextReplace::ReleaseGL();
+	Pack::ReleaseGL();
+	TwinGL::ReleaseGL();
 
 	if (this->fsr.fboId)
 	{
 		GLDeleteTextures(1, &this->fsr.textureId);
 		GLDeleteFramebuffers(1, &this->fsr.fboId);
 	}
+
+	if (this->twinFrame.textureId)
+		GLDeleteTextures(1, &this->twinFrame.textureId);
 
 	{
 		{
@@ -391,7 +406,9 @@ BOOL NewRenderer::RenderInner(BOOL ready, BOOL force, StateBufferAligned** lpSta
 
 		BOOL textUpActive = this->isTrueColor;
 		BOOL textUpChanged = TextReplace::Prepare(stateBuffer, textUpActive);
-		if (this->pixelBuffer->Update(lpStateBuffer, ready, TRUE) || state.flags || stateChanged || mapZoomChanged || textUpChanged)
+		textUpChanged |= Pack::Prepare();
+		textUpChanged |= TwinGL::Prepare();
+		if (this->pixelBuffer->Update(lpStateBuffer, ready && !Twin::Active(), TRUE) || state.flags || stateChanged || mapZoomChanged || textUpChanged)
 		{
 			BOOL clearBackTransition = this->backStatus && !stateBuffer->isBack;
 			BOOL zoomChanged = this->zoomStatus != stateBuffer->isZoomed;
@@ -684,7 +701,11 @@ BOOL NewRenderer::RenderInner(BOOL ready, BOOL force, StateBufferAligned** lpSta
 					this->DrawMapZoom(textureId.primaryBO, this->viewSize, TRUE, state.interpolation == InterpolateFsr);
 
 				if (textUpActive)
+				{
+					TwinGL::Draw(&this->ddraw->viewport.rectangle, this->ddraw->viewport.offset, frameSize.width, frameSize.height);
+					Pack::Draw();
 					TextReplace::Draw(&this->ddraw->viewport.rectangle, this->ddraw->viewport.offset, frameSize.width, frameSize.height);
+				}
 			}
 			isSwap = TRUE;
 		}
@@ -721,7 +742,9 @@ BOOL NewRenderer::RenderInner(BOOL ready, BOOL force, StateBufferAligned** lpSta
 		lbl_noup:;
 		BOOL textActive = this->isTrueColor;
 		BOOL textChanged = TextReplace::Prepare(stateBuffer, textActive);
-		if (this->pixelBuffer->Update(lpStateBuffer, ready) || state.flags || stateChanged || mapZoomChanged || textChanged)
+		textChanged |= Pack::Prepare();
+		textChanged |= TwinGL::Prepare();
+		if (this->pixelBuffer->Update(lpStateBuffer, ready && !Twin::Active()) || state.flags || stateChanged || mapZoomChanged || textChanged)
 		{
 			if (this->isVSync != config.image.vSync)
 			{
@@ -785,6 +808,34 @@ BOOL NewRenderer::RenderInner(BOOL ready, BOOL force, StateBufferAligned** lpSta
 				this->zoomStatus = stateBuffer->isZoomed;
 			}
 
+			TwinGL::Source twin;
+			BOOL twinSource = FALSE;
+			if (textActive)
+			{
+				TwinGL::Replay();
+				twinSource = state.interpolation != InterpolateNearest && !stateBuffer->isBack && !stateBuffer->isZoomed && TwinGL::GetSource(&twin);
+				if (twinSource)
+				{
+					DWORD side = this->maxTexSize * twin.scale;
+					GLActiveTexture(GL_TEXTURE0);
+					if (!this->twinFrame.textureId)
+						GLGenTextures(1, &this->twinFrame.textureId);
+					if (this->twinFrame.side != side)
+					{
+						this->twinFrame.side = side;
+						GLBindTexParameter(this->twinFrame.textureId, GL_NEAREST);
+						GLTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, side, side, GL_NONE, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+					}
+					else
+						GLBindTexture(GL_TEXTURE_2D, this->twinFrame.textureId);
+
+					GLBindFramebuffer(GL_READ_FRAMEBUFFER, twin.fbo);
+					glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0, twin.width, twin.height);
+					GLBindFramebuffer(GL_READ_FRAMEBUFFER, NULL);
+					GLBindTexture(GL_TEXTURE_2D, textureId.primary);
+				}
+			}
+
 			if (stateBuffer->isBack)
 			{
 				GLViewport(0, this->ddraw->viewport.offset, this->ddraw->viewport.width, this->ddraw->viewport.height);
@@ -802,7 +853,27 @@ BOOL NewRenderer::RenderInner(BOOL ready, BOOL force, StateBufferAligned** lpSta
 				GLBindTexFilter(textureId.primary, state.interpolation == InterpolateLinear || state.interpolation == InterpolateHermite ? GL_LINEAR : GL_NEAREST);
 			}
 
-			if (stateBuffer->isZoomed)
+			if (twinSource)
+			{
+				DWORD twinSize = (this->twinFrame.side & 0xFFFF) | (this->twinFrame.side << 16);
+				GLActiveTexture(GL_TEXTURE0);
+				if (state.interpolation == InterpolateFsr)
+				{
+					FLOAT texWidth = (FLOAT)config.mode->width / this->maxTexSize;
+					FLOAT texHeight = (FLOAT)config.mode->height / this->maxTexSize;
+					GLBindTexFilter(this->twinFrame.textureId, GL_NEAREST);
+					this->DrawFsr(this->twinFrame.textureId, twinSize, 0, texWidth, texHeight, texWidth, texHeight, FALSE);
+				}
+				else
+				{
+					this->program->Use(twinSize, FALSE);
+					GLBindTexFilter(this->twinFrame.textureId, state.interpolation == InterpolateLinear || state.interpolation == InterpolateHermite ? GL_LINEAR : GL_NEAREST);
+					GLDrawArrays(GL_TRIANGLE_FAN, 0, 4);
+					this->program->Use(this->texSize, FALSE);
+				}
+				GLBindTexFilter(textureId.primary, state.interpolation == InterpolateLinear || state.interpolation == InterpolateHermite ? GL_LINEAR : GL_NEAREST);
+			}
+			else if (stateBuffer->isZoomed)
 			{
 				if (this->zoomSize.width != frameSize.width || this->zoomSize.height != frameSize.height)
 				{
@@ -839,7 +910,12 @@ BOOL NewRenderer::RenderInner(BOOL ready, BOOL force, StateBufferAligned** lpSta
 				this->DrawMapZoom(textureId.primary, this->texSize, FALSE, state.interpolation == InterpolateFsr);
 
 			if (textActive)
+			{
+				if (!twinSource)
+					TwinGL::Show(&this->ddraw->viewport.rectangle, this->ddraw->viewport.offset, frameSize.width, frameSize.height);
+				Pack::Draw();
 				TextReplace::Draw(&this->ddraw->viewport.rectangle, this->ddraw->viewport.offset, frameSize.width, frameSize.height);
+			}
 
 			isSwap = TRUE;
 		}

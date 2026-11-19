@@ -2372,6 +2372,8 @@
 		{
 		case WM_SHOWWINDOW:
 			StartMaximizedWindowTimer(hWnd);
+			if (wParam && GetForegroundWindow() != hWnd)
+				PostMessage(hWnd, WM_ACTIVATEAPP, TRUE, 0);
 			return CallWindowProc(OldWindowProc, hWnd, uMsg, wParam, lParam);
 
 		case WM_TIMER:
@@ -2543,6 +2545,9 @@
 
 		case WM_SYSKEYDOWN:
 		case WM_KEYDOWN: {
+			if (Config::IsTwinChord(wParam))
+				return NULL;
+
 			if (config.keys.windowedMode && config.keys.windowedMode + VK_F1 - 1 == wParam)
 			{
 				return WindowProc(hWnd, WM_COMMAND, IDM_RES_FULL_SCREEN, NULL);

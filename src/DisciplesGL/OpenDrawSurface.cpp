@@ -34,6 +34,9 @@
 #include "PngLib.h"
 #include "Mods.h"
 #include "TextReplace.h"
+#include "Ground.h"
+#include "Twin.h"
+#include "Flip.h"
 
 OpenDrawSurface::OpenDrawSurface(IDrawUnknown** list, OpenDraw* lpDD, SurfaceType type, OpenDrawSurface* attached)
 	: IDrawSurface7(list)
@@ -367,12 +370,28 @@ VOID OpenDrawSurface::CreateBuffer(DWORD width, DWORD height, DWORD bpp, VOID* b
 		}
 	}
 
+	if (config.bpp32Hooked)
+	{
+		if (!buffer && (this->mode.bpp == 16 || this->mode.bpp == 32))
+			Twin::OnCreate(this->indexBuffer, this->mode.width, this->mode.height);
+
+		if (this->type == SurfacePrimary && !buffer)
+		{
+			Twin::OnCreate(this->secondaryBuffer, config.mode->width, config.mode->height);
+			Twin::OnCreate(this->backBuffer, config.mode->width, config.mode->height);
+		}
+	}
+
 	TextReplace::OnBuffer(this);
 }
 
 VOID OpenDrawSurface::ReleaseBuffer()
 {
 	TextReplace::OnRelease(this);
+	Ground::OnRelease(this);
+	Twin::OnRelease(this->indexBuffer);
+	Twin::OnRelease(this->secondaryBuffer);
+	Twin::OnRelease(this->backBuffer);
 
 	delete this->indexBuffer;
 	this->indexBuffer = NULL;
@@ -380,6 +399,63 @@ VOID OpenDrawSurface::ReleaseBuffer()
 	this->secondaryBuffer = NULL;
 	delete this->backBuffer;
 	this->backBuffer = NULL;
+}
+
+static VOID DumpScreen1x(StateBuffer* screen)
+{
+	static BOOL dumped;
+	CHAR path[MAX_PATH];
+	DWORD length = GetModuleFileName(NULL, path, MAX_PATH);
+	while (length && path[length - 1] != '\\')
+		--length;
+	StrCopy(path + length, "DisciplesGL-dump.flag");
+	if (GetFileAttributes(path) == INVALID_FILE_ATTRIBUTES)
+	{
+		dumped = FALSE;
+		return;
+	}
+	if (dumped)
+		return;
+	dumped = TRUE;
+
+	LONG w = config.mode->width, h = config.mode->height;
+	BOOL trueColor = config.mode->bpp != 16 || config.bpp32Hooked;
+	BOOL bgr = config.renderer == RendererGDI;
+	BYTE* pixels = (BYTE*)MemoryAlloc(w * h * 4);
+	if (!pixels)
+		return;
+	BYTE* dst = pixels;
+	for (LONG i = 0; i < w * h; ++i, dst += 4)
+	{
+		if (trueColor)
+		{
+			DWORD p = ((DWORD*)screen->data)[i];
+			dst[0] = BYTE(bgr ? p >> 16 : p);
+			dst[1] = BYTE(p >> 8);
+			dst[2] = BYTE(bgr ? p : p >> 16);
+		}
+		else
+		{
+			WORD p = ((WORD*)screen->data)[i];
+			dst[0] = BYTE(((p >> 11) & 31) * 255 / 31);
+			dst[1] = BYTE(((p >> 5) & 63) * 255 / 63);
+			dst[2] = BYTE((p & 31) * 255 / 31);
+		}
+		dst[3] = 255;
+	}
+
+	StrPrint(path + length, "screen1x-%dx%d.raw", w, h);
+	HANDLE file = CreateFile(path, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, 0, NULL);
+	if (file != INVALID_HANDLE_VALUE)
+	{
+		DWORD written;
+		LONG size[2] = { w, h };
+		WriteFile(file, size, sizeof(size), &written, NULL);
+		WriteFile(file, pixels, w * h * 4, &written, NULL);
+		CloseHandle(file);
+	}
+	MemoryFree(pixels);
+	DebugLog("screen1x dumped %dx%d format %s", w, h, trueColor ? (bgr ? "32-bit BGRX" : "32-bit RGBX") : "16-bit 565");
 }
 
 VOID OpenDrawSurface::SwapBuffers()
@@ -404,8 +480,12 @@ VOID OpenDrawSurface::SwapBuffers()
 			lpBuffer = (WORD*)stateBuffer->data + offset;
 		}
 
+		// whatever a mod draws here is found and repaired by the twin tile check at present; marking the whole frame dirty would re-upload 1x over all 4K art every frame
 		Mods::DrawFrame((config.mode->width - stateBuffer->size.width) >> 1, (config.mode->height - stateBuffer->size.height) >> 1, stateBuffer->size.width, stateBuffer->size.height, *(LONG*)&pitch, fomat, lpBuffer);
 	}
+
+	DumpScreen1x(stateBuffer);
+	Twin::OnPresent(stateBuffer, (config.mode->width - stateBuffer->size.width) >> 1, (config.mode->height - stateBuffer->size.height) >> 1);
 
 	stateBuffer->isReady = TRUE;
 
@@ -448,6 +528,7 @@ VOID OpenDrawSurface::Flush()
 		surfaceBuffer->isZoomed = Config::IsZoomed();
 		surfaceBuffer->size = surfaceBuffer->isZoomed ? config.zoom.size : *(Size*)config.mode;
 
+		Twin::OnWriteAll(this->backBuffer);
 		this->SwapBuffers();
 		Sleep(0);
 	}
@@ -534,6 +615,8 @@ VOID OpenDrawSurface::Flush()
 				src += sctPitch;
 			} while (--height);
 
+			Twin::OnWriteAll(this->backBuffer);
+
 			StateBufferAligned* back = (StateBufferAligned*)this->backBuffer;
 			back->isZoomed = surfaceBuffer->isZoomed;
 			back->borders = surfaceBuffer->borders;
@@ -610,6 +693,30 @@ HRESULT __stdcall OpenDrawSurface::IsLost()
 {
 	TextReplace::OnIsLost(this);
 	return DD_OK;
+}
+
+// the game reaches Blt and BltFast through one wrapper, so the wrapper's caller is what tells the paths apart; it is the first return address above it on the stack
+static DWORD LockOuterCaller(const DWORD* slot, DWORD ret)
+{
+	static DWORD low, high;
+	if (!high)
+	{
+		const BYTE* module = (const BYTE*)GetModuleHandle(NULL);
+		const IMAGE_NT_HEADERS* nt = (const IMAGE_NT_HEADERS*)(module + ((const IMAGE_DOS_HEADER*)module)->e_lfanew);
+		low = (DWORD)module + nt->OptionalHeader.BaseOfCode;
+		high = low + nt->OptionalHeader.SizeOfCode;
+	}
+
+	for (DWORD i = 1; i < 48; ++i)
+	{
+		DWORD value = slot[i];
+		if (value == ret || value < low + 8 || value >= high)
+			continue;
+		const BYTE* code = (const BYTE*)value;
+		if (code[-5] == 0xE8 || code[-6] == 0xFF || code[-3] == 0xFF || code[-2] == 0xFF)
+			return value;
+	}
+	return 0;
 }
 
 HRESULT __stdcall OpenDrawSurface::Lock(LPRECT lpDestRect, LPDDSURFACEDESC2 lpDDSurfaceDesc, DWORD dwFlags, HANDLE hEvent)
@@ -766,6 +873,7 @@ HRESULT __stdcall OpenDrawSurface::Blt(LPRECT lpDestRect, IDrawSurface7* lpDDSrc
 {
 	// 16778240 - DDBLT_WAIT | DDBLT_COLORFILL
 	TextReplace::TraceBlt("blt", this, lpDestRect, 0, 0, (OpenDrawSurface*)lpDDSrcSurface, lpSrcRect, dwFlags, _ReturnAddress());
+	Flip::OnBlt("blt", this->indexBuffer, lpDDSrcSurface ? ((OpenDrawSurface*)lpDDSrcSurface)->indexBuffer : NULL, lpDestRect, 0, 0, lpSrcRect, dwFlags, lpDDBltFx);
 	if (dwFlags & DDBLT_COLORFILL)
 	{
 		if (this->drawEnabled)
@@ -774,11 +882,14 @@ HRESULT __stdcall OpenDrawSurface::Blt(LPRECT lpDestRect, IDrawSurface7* lpDDSrc
 
 			DWORD size = this->mode.width * this->mode.height * (this->mode.bpp == 8 ? 1 : (config.bpp32Hooked ? sizeof(DWORD) : sizeof(WORD)));
 			MemoryZero(this->indexBuffer->data, size);
+			Twin::OnFill(this->indexBuffer, NULL, 0);
 
 			if (this->type == SurfaceSecondary)
 			{
 				((StateBufferAligned*)this->indexBuffer)->borders = config.borders.active ? config.borders.type : BordersNone;
 				this->DrawBorders(this->indexBuffer->data, this->mode.width, this->mode.height);
+				if (config.borders.allowed && config.borders.active)
+					Twin::OnWriteAll(this->indexBuffer);
 			}
 		}
 	}
@@ -842,6 +953,15 @@ HRESULT __stdcall OpenDrawSurface::Blt(LPRECT lpDestRect, IDrawSurface7* lpDDSrc
 			DWORD* src = (DWORD*)surface->indexBuffer->data + lpSrcRect->top * sWidth + lpSrcRect->left;
 			DWORD* dst = (DWORD*)this->indexBuffer->data + lpDestRect->top * dWidth + lpDestRect->left;
 
+			if (sWidth == surface->mode.width && dWidth == this->mode.width)
+			{
+				DWORD ret = (DWORD)_ReturnAddress();
+				Twin::OnCopyCaller(ret, LockOuterCaller((const DWORD*)_AddressOfReturnAddress(), ret));
+				Twin::OnCopy(this->indexBuffer, lpDestRect->left, lpDestRect->top, surface->indexBuffer, lpSrcRect, FALSE, 0);
+			}
+			else
+				Twin::OnWrite(dst, dWidth, width, height);
+
 			width *= sizeof(DWORD);
 			do
 			{
@@ -865,6 +985,7 @@ HRESULT __stdcall OpenDrawSurface::Blt(LPRECT lpDestRect, IDrawSurface7* lpDDSrc
 		}
 	}
 
+	Flip::Settle();
 	return DD_OK;
 }
 
@@ -872,6 +993,7 @@ HRESULT __stdcall OpenDrawSurface::BltFast(DWORD dwX, DWORD dwY, IDrawSurface7* 
 {
 	// 17 - DDBLTFAST_WAIT | DDBLTFAST_SRCCOLORKEY
 	TextReplace::TraceBlt("bltfast", this, NULL, dwX, dwY, (OpenDrawSurface*)lpDDSrcSurface, lpSrcRect, dwTrans, _ReturnAddress());
+	Flip::OnBlt("bltfast", this->indexBuffer, lpDDSrcSurface ? ((OpenDrawSurface*)lpDDSrcSurface)->indexBuffer : NULL, NULL, dwX, dwY, lpSrcRect, dwTrans, NULL);
 	if (this->drawEnabled)
 	{
 		OpenDrawSurface* surface = (OpenDrawSurface*)lpDDSrcSurface;
@@ -905,6 +1027,9 @@ HRESULT __stdcall OpenDrawSurface::BltFast(DWORD dwX, DWORD dwY, IDrawSurface7* 
 		if (config.bpp32Hooked)
 		{
 			TextReplace::OnBlit(this, dwX, dwY, surface, lpSrcRect, sWidth, surface->colorKey.enabled, surface->colorKey.high);
+			DWORD ret = (DWORD)_ReturnAddress();
+			Twin::OnCopyCaller(ret, LockOuterCaller((const DWORD*)_AddressOfReturnAddress(), ret));
+			Twin::OnCopy(this->indexBuffer, dwX, dwY, surface->indexBuffer, lpSrcRect, surface->colorKey.enabled, surface->colorKey.high);
 
 			DWORD* src = (DWORD*)surface->indexBuffer->data + lpSrcRect->top * sWidth + lpSrcRect->left;
 			DWORD* dst = (DWORD*)this->indexBuffer->data + lpDestRect->top * dWidth + lpDestRect->left;
@@ -1069,5 +1194,6 @@ HRESULT __stdcall OpenDrawSurface::BltFast(DWORD dwX, DWORD dwY, IDrawSurface7* 
 		}
 	}
 
+	Flip::Settle();
 	return DD_OK;
 }

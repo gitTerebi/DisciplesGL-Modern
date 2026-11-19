@@ -42,6 +42,7 @@
 #include "TurnOrder.h"
 #include "FasterEndTurn.h"
 #include "TurnSummary.h"
+#include "MapOrder.h"
 #include "TurnIncome.h"
 #include "SaveList.h"
 #include "ShopFrame.h"
@@ -49,6 +50,9 @@
 #include "ScrollPacing.h"
 #include "BattleSpeed.h"
 #include "FastAI.h"
+#include "Ground.h"
+#include "Seed.h"
+#include "Twin.h"
 
 #define PANEL_WIDTH 160
 #define NUM(a, b) ((a << 16) | b)
@@ -502,6 +506,12 @@ namespace Hooks
 			0x0048929C, 0x004892CA, 0x00486088, 0x00486A9F, 0x00486344, 0x00486391, 0x004863D3, 0x00486415, 0x00486457,
 			0x00507786, 0x0052F6CC, 0x0078D428, 0x0057EBD3, 0x004892B4, 0x00485597, 0x00000010, 0x00000034, 0x00512D71, 0x00000000, // income
 			0x00524787, // turn_order_text
+			0x00529C8B, 0x00529DBD, 0x006D6A10, 0x00529AF1, 0x006D6760, 0x0052978C, // image_trace
+			0x006D67A0, 0x0051FA34, 0x006D6854, 0x00520C53, // image_store
+			0x006D6844, 0x00520BB4, 0x006D69FC, 0x00529BF7, // image_free
+			0x005A703B, 0x005A70BF, 0x005B5C74, 0x006E28E4, 0x005B5FC6, 0x006D7B60, 0x0053F509, // ground
+			0x005AC9E3, // face_load
+			0x0053C5F3, 0x0053C96A, 0x0082FE3C, 0x0082FF20, // map_order
 		},
 #pragma endregion
 
@@ -724,6 +734,9 @@ namespace Hooks
 			0x00000000, 0x0048C088, 0x00000000, 0x00489590, 0x00489603, 0x00489650, 0x00489692, 0x004896D4, 0x00489716,
 			0x0050BB0F, 0x005341D6, 0x0079B984, 0x005FFC5F, 0x0048C072, 0x0048827B, 0x00000010, 0x00000034, 0x00517111, 0x00489758, // income
 			0x00529175, // turn_order_text
+			0x0052E663, 0x0052E798, 0x006E2F78, 0x0052E4C6, 0x006E2CC8, 0x0052E159, // image_trace
+			0x00000000, 0x00000000, 0x00000000, 0x00000000, // image_store
+			0x00000000, 0x00000000, 0x00000000, 0x00000000, // image_free
 		},
 #pragma endregion
 
@@ -812,6 +825,12 @@ namespace Hooks
 			0x00000000, 0x0048BC71, 0x00000000, 0x00489179, 0x004891EC, 0x00489239, 0x0048927B, 0x004892BD, 0x004892FF,
 			0x0050B013, 0x005337B0, 0x0079992C, 0x00597FBB, 0x0048BC5B, 0x00487E69, 0x00000010, 0x00000034, 0x00516621, 0x00489341, // income
 			0x00528680, // turn_order_text
+			0x0052DC06, 0x0052DD56, 0x006E0F18, 0x0052DA6C, 0x006E0C68, 0x0052D707, // image_trace
+			0x006E0CA8, 0x005233A0, 0x006E0D5C, 0x005245B9, // image_store
+			0x006E0D4C, 0x0052451A, 0x006E0F04, 0x0052DB72, // image_free
+			0x005AB6CA, 0x005AB74E, 0x005BA584, 0x006ECE64, 0x005BA8F2, 0x006E2068, 0x0054361D, // ground
+			0x005B1079, // face_load
+			0x00540757, 0x00540ACE, 0x00838554, 0x00838638, // map_order
 		},
 #pragma endregion
 
@@ -1733,8 +1752,10 @@ namespace Hooks
 
 #pragma region 32 BPP
 	DWORD pBinkCopyToBuffer;
+	// Bink writes the video frame from its own buffers, never from a twin, so it is a 1x write; announcing it first opens the trapped pages instead of faulting inside binkw32
 	LONG __stdcall BinkCopyToBufferHook(VOID* hBnk, DWORD* dst, DWORD pitch, DWORD height, DWORD x, DWORD y, DWORD flags)
 	{
+		Twin::OnWrite(dst, pitch >> 1, pitch >> 1, height);
 		LONG res = ((LONG(__stdcall*)(VOID*, DWORD*, DWORD, DWORD, DWORD, DWORD, DWORD))pBinkCopyToBuffer)(hBnk, dst, pitch << 1, height, x, y, BINKCOPYALL | (config.renderer == RendererGDI ? BINKSURFACE32 : BINKSURFACE32R));
 		if (!res)
 		{
@@ -1749,6 +1770,7 @@ namespace Hooks
 
 	LONG __stdcall BinkCopyToBufferHook_SSE(VOID* hBnk, DWORD* dst, DWORD pitch, DWORD height, DWORD x, DWORD y, DWORD flags)
 	{
+		Twin::OnWrite(dst, pitch >> 1, pitch >> 1, height);
 		LONG res = ((LONG(__stdcall*)(VOID*, DWORD*, DWORD, DWORD, DWORD, DWORD, DWORD))pBinkCopyToBuffer)(hBnk, dst, pitch << 1, height, x, y, BINKCOPYALL | (config.renderer == RendererGDI ? BINKSURFACE32 : BINKSURFACE32R));
 		if (!res)
 		{
@@ -2005,6 +2027,10 @@ namespace Hooks
 
 		LONG width = rect->right - rect->left;
 		LONG height = rect->bottom - rect->top;
+		Twin::OnWrite(lpDst, dstPitch, width, height);
+		const BYTE* firstSrc = lpSrc;
+		const DWORD* firstDst = lpDst;
+		LONG rows = height;
 
 		if (config.renderer == RendererGDI)
 		{
@@ -2050,6 +2076,9 @@ namespace Hooks
 				lpDst += dstPitch;
 			} while (--height);
 		}
+
+		// the store decodes indexed art; this is where its pixels can reach a surface, so the decode's seed can follow them
+		Seed::OnIndexedBlit(firstSrc, srcPitch, firstDst, dstPitch, width, rows);
 	}
 
 	DWORD __stdcall Pixel_ConvertPixel_565(BYTE red, BYTE green, BYTE blue)
@@ -2120,6 +2149,7 @@ namespace Hooks
 		dstData += rect->left + rect->top * dstPitch;
 
 		LONG height = rect->bottom - rect->top;
+		Twin::OnWrite(dstData, dstPitch, rect->right - rect->left, height);
 		do
 		{
 			BYTE* src = srcData;
@@ -2190,10 +2220,18 @@ namespace Hooks
 		return Blend_SSE(pix, r | (g << 8) | (b << 16), msk, _mm_setzero_si128(), _mm_set1_epi16(0xFF));
 	}
 
+	VOID TwinRows(const BlendData* items, DWORD count, BOOL keyed, DWORD key)
+	{
+		for (; count; --count, ++items)
+			if (items->length)
+				Twin::OnBlendRow(items->srcData, items->dstData, items->length, items->mskData, keyed, key);
+	}
+
 	VOID __stdcall Pixel_BlitBlend(BlendData blendItem)
 	{
 		TextReplace::TracePixel("blend", blendItem.dstData, blendItem.srcData, blendItem.length, 1, 0, _ReturnAddress());
 		TextReplace::OnPixelRows(&blendItem, 1);
+		TwinRows(&blendItem, 1, FALSE, 0);
 
 		for (; blendItem.length; --blendItem.length, ++blendItem.srcData, ++blendItem.dstData, ++blendItem.mskData)
 			*blendItem.dstData = Blend(*blendItem.dstData, *blendItem.srcData, *blendItem.mskData);
@@ -2203,6 +2241,7 @@ namespace Hooks
 	{
 		TextReplace::TracePixel("blend", blendItem.dstData, blendItem.srcData, blendItem.length, 1, 0, _ReturnAddress());
 		TextReplace::OnPixelRows(&blendItem, 1);
+		TwinRows(&blendItem, 1, FALSE, 0);
 
 		__m128i zero = _mm_setzero_si128();
 		__m128i and1 = _mm_set1_epi16(0xFF);
@@ -2214,6 +2253,7 @@ namespace Hooks
 	{
 		TextReplace::TracePixel("blendkey", count ? blendItem->dstData : NULL, count ? blendItem->srcData : NULL, count ? blendItem->length : 0, count, 0, _ReturnAddress());
 		TextReplace::OnPixelRows(blendItem, count);
+		TwinRows(blendItem, count, TRUE, Convert565toRGB(colorKey));
 
 		if (count)
 		{
@@ -2248,6 +2288,7 @@ namespace Hooks
 	{
 		TextReplace::TracePixel("blendkey", count ? blendItem->dstData : NULL, count ? blendItem->srcData : NULL, count ? blendItem->length : 0, count, 0, _ReturnAddress());
 		TextReplace::OnPixelRows(blendItem, count);
+		TwinRows(blendItem, count, TRUE, Convert565toRGB(colorKey));
 
 		if (count)
 		{
@@ -2297,6 +2338,7 @@ namespace Hooks
 
 		DWORD* src = srcData + srcPitch * srcPos->y + srcPos->x;
 		DWORD* dst = dstData + dstPitch * dstPos->y + dstPos->x;
+		Twin::OnPixelCopy(Twin::PixelAverage, src, srcPitch, dst, dstPitch, size->cx, size->cy, colorKey, flag);
 
 		srcPitch -= size->cx;
 		dstPitch -= size->cx;
@@ -2358,6 +2400,7 @@ namespace Hooks
 
 		DWORD* src = srcData + srcPitch * srcPos->y + srcPos->x;
 		DWORD* dst = dstData + dstPitch * dstPos->y + dstPos->x;
+		Twin::OnPixelCopy(Twin::PixelAverage, src, srcPitch, dst, dstPitch, size->cx, size->cy, colorKey, flag);
 
 		LONG width = size->cx;
 		LONG height = size->cy;
@@ -2520,6 +2563,7 @@ namespace Hooks
 
 		src += srcPitch * srcPos->y + srcPos->x;
 		dst += dstPitch * dstPos->y + dstPos->x;
+		Twin::OnPixelCopy(Twin::PixelAdd, src, srcPitch, dst, dstPitch, size->cx, size->cy, 0, 0);
 
 		srcPitch -= size->cx;
 		dstPitch -= size->cx;
@@ -2565,6 +2609,7 @@ namespace Hooks
 
 		src += srcPitch * srcPos->y + srcPos->x;
 		dst += dstPitch * dstPos->y + dstPos->x;
+		Twin::OnPixelCopy(Twin::PixelAdd, src, srcPitch, dst, dstPitch, size->cx, size->cy, 0, 0);
 
 		srcPitch -= size->cx;
 		dstPitch -= size->cx;
@@ -2609,6 +2654,7 @@ namespace Hooks
 
 		src += srcPitch * srcPos->y + srcPos->x;
 		dst += dstPitch * dstPos->y + dstPos->x;
+		Twin::OnPixelCopy(Twin::PixelSub, src, srcPitch, dst, dstPitch, size->cx, size->cy, 0, 0);
 
 		srcPitch -= size->cx;
 		dstPitch -= size->cx;
@@ -2654,6 +2700,7 @@ namespace Hooks
 
 		src += srcPitch * srcPos->y + srcPos->x;
 		dst += dstPitch * dstPos->y + dstPos->x;
+		Twin::OnPixelCopy(Twin::PixelSub, src, srcPitch, dst, dstPitch, size->cx, size->cy, 0, 0);
 
 		srcPitch -= size->cx;
 		dstPitch -= size->cx;
@@ -2706,6 +2753,7 @@ namespace Hooks
 
 		srcData += srcPitch * srcPos->y + srcPos->x;
 		dstData += dstPitch * dstPos->y + dstPos->x;
+		Twin::OnPixelCopy(Twin::PixelKeyed, srcData, srcPitch, dstData, dstPitch, size->cx, size->cy, colorKey, flag | (((dstPos->x + dstPos->y + 1) & 1) << 8));
 
 		BOOL check = (~dstPos->y ^ dstPos->x) & 1;
 
@@ -2792,6 +2840,7 @@ namespace Hooks
 
 		srcData += srcPitch * srcPos->y + srcPos->x;
 		dstData += dstPitch * dstPos->y + dstPos->x;
+		Twin::OnPixelCopy(Twin::PixelKeyed, srcData, srcPitch, dstData, dstPitch, size->cx, size->cy, colorKey, flag | (((dstPos->x + dstPos->y + 1) & 1) << 8));
 
 		BOOL check = (~dstPos->y ^ dstPos->x) & 1;
 
@@ -2880,6 +2929,7 @@ namespace Hooks
 
 		srcData += srcPitch * srcPos->y + srcPos->x;
 		dstData += dstPitch * dstPos->y + dstPos->x;
+		Twin::OnPixelCopy(Twin::PixelEmpty, srcData, srcPitch, dstData, dstPitch, size->cx, size->cy, 0, (dstPos->x + dstPos->y + 1) & 1);
 
 		BOOL check = (~dstPos->y ^ dstPos->x) & 1;
 
@@ -2922,6 +2972,7 @@ namespace Hooks
 
 		colorKey = Convert565toRGB(colorKey);
 		pitch /= 2;
+		Twin::OnLighter(data, pitch, size->cx, size->cy, colorKey, flag);
 		pitch -= size->cx;
 
 		LONG height = size->cy;
@@ -3042,6 +3093,12 @@ namespace Hooks
 
 			if (Clip(&shift, &pt, &size, &obj->rect))
 			{
+				if (obj->isTrueColor)
+					Twin::OnPixelCopy(colorKey == 0xFFFFFFFF ? Twin::PixelCopy : Twin::PixelKeyedCopy,
+						(DWORD*)data + shift.y * (pitch >> 1) + shift.x, pitch >> 1,
+						(DWORD*)obj->data + pt.y * (obj->pitch >> 1) + pt.x, obj->pitch >> 1,
+						size.cx, size.cy, colorKey == 0xFFFFFFFF ? 0 : Convert565toRGB(colorKey), 0);
+
 				if (colorKey == 0xFFFFFFFF)
 				{
 					if (obj->isTrueColor)
@@ -3166,7 +3223,11 @@ namespace Hooks
 	VOID __fastcall FillColor(BlitObject* obj, DWORD /*edx*/, DWORD color, RECT* rect)
 	{
 		if (obj->isTrueColor)
+		{
 			TextReplace::OnFillRect(obj->data, rect);
+			Ground::OnFill(obj, color == COLORKEY_CHECK_16 ? 0 : Convert565toRGB(color) | ALPHA_COMPONENT, rect);
+			Twin::OnFillRect((DWORD*)obj->data + rect->top * (obj->pitch >> 1) + rect->left, obj->pitch >> 1, rect->right - rect->left, rect->bottom - rect->top, Convert565toRGB(color));
+		}
 
 		LONG width = rect->right - rect->left;
 		LONG height = rect->bottom - rect->top;
@@ -3207,9 +3268,19 @@ namespace Hooks
 		}
 	}
 
+	VOID TwinDiamond(BlitObject* obj, POINT* loc, RECT* rect)
+	{
+		LONG l = max(loc->x, rect->left), t = max(loc->y, rect->top);
+		LONG r = min(loc->x + 64, rect->right), b = min(loc->y + 32, rect->bottom);
+		if (l < r && t < b)
+			Twin::OnWrite((DWORD*)obj->data + t * (obj->pitch >> 1) + l, obj->pitch >> 1, r - l, b - t);
+	}
+
 	VOID __fastcall DrawWaterBorders(DWORD* thisObj, DWORD /*edx*/, BlitObject* obj, POINT* loc, RECT* rect)
 	{
 		TextReplace::OnDiamond(obj->data, loc, rect);
+		TwinDiamond(obj, loc, rect);
+		Ground::OnGround(Ground::OpBorder, thisObj, obj, NULL, loc, rect, NULL, NULL);
 
 		DWORD pitch = obj->pitch >> 1;
 
@@ -3277,6 +3348,8 @@ namespace Hooks
 	VOID __fastcall DrawGround(DWORD* thisObj, DWORD /*edx*/, BlitObject* obj, POINT* srcLoc, POINT* dstLoc, RECT* rect, BYTE* blendMask, DWORD* alphaMask)
 	{
 		TextReplace::OnDiamond(obj->data, dstLoc, rect);
+		TwinDiamond(obj, dstLoc, rect);
+		Ground::OnGround(Ground::OpCopy, thisObj, obj, srcLoc, dstLoc, rect, blendMask, alphaMask);
 
 		static BlendData blendList[32];
 
@@ -3389,6 +3462,8 @@ namespace Hooks
 	VOID __stdcall ClearGround(BlitObject* obj, POINT* loc, RECT* rect)
 	{
 		TextReplace::OnDiamond(obj->data, loc, rect);
+		TwinDiamond(obj, loc, rect);
+		Ground::OnGround(Ground::OpClear, NULL, obj, NULL, loc, rect, NULL, NULL);
 
 		DWORD pitch = obj->pitch >> 1;
 
@@ -3469,6 +3544,16 @@ namespace Hooks
 				dstPitch /= 2;
 				DWORD* dst = (DWORD*)data + pt.y * dstPitch + pt.x;
 
+				LONG l = pt.x, t = pt.y, r = pt.x + size.cx, b = pt.y + size.cy;
+				if (castShadow)
+				{
+					l = min(l, max(l - 1, rect->left));
+					t = min(t, max(t - 1, rect->top));
+					r = max(r, min(r + 1, rect->right));
+					b = max(b, min(b + 1, rect->bottom));
+				}
+				Twin::OnWrite((DWORD*)data + t * dstPitch + l, dstPitch, r - l, b - t);
+
 				LONG height = size.cy;
 				LONG y = pt.y;
 				do
@@ -3535,6 +3620,7 @@ namespace Hooks
 			colorFill = Convert565toRGB(colorFill);
 
 			DWORD* dst = (DWORD*)data + pt.y * sizePitch->cx + pt.x;
+			Twin::OnFillRect(dst, sizePitch->cx, width, 1, colorFill);
 			do
 				*dst++ = colorFill;
 			while (--width);
@@ -3552,6 +3638,7 @@ namespace Hooks
 			colorFill = Convert565toRGB(colorFill);
 
 			DWORD* dst = (DWORD*)data + pt.y * sizePitch->cx + pt.x;
+			Twin::OnFillRect(dst, sizePitch->cx, 1, height, colorFill);
 			do
 			{
 				*dst = colorFill;
@@ -3581,6 +3668,7 @@ namespace Hooks
 
 			LONG dstPitch = obj->pitch >> 1;
 			DWORD* dstData = (DWORD*)obj->data + top * dstPitch + left;
+			Twin::OnWrite(dstData, dstPitch, 4, 2);
 
 			DWORD y = 1;
 
@@ -3667,6 +3755,7 @@ namespace Hooks
 
 			DWORD* srcData = *((DWORD**)thisObj[11] + 1);
 			DWORD* dstData = (DWORD*)obj->data;
+			Twin::OnPixelCopy(isBlend ? Twin::PixelTint : Twin::PixelKeyedCopy, srcData, srcPitch, dstData, dstPitch, size->cx, size->cy, COLORKEY_CHECK, isBlend ? blend : 0);
 
 			if (!isBlend)
 			{
@@ -3751,6 +3840,7 @@ namespace Hooks
 
 			DWORD* srcData = *((DWORD**)thisObj[11] + 1);
 			DWORD* dstData = (DWORD*)obj->data;
+			Twin::OnPixelCopy(isBlend ? Twin::PixelTint : Twin::PixelKeyedCopy, srcData, srcPitch, dstData, dstPitch, size->cx, size->cy, COLORKEY_CHECK, isBlend ? blend : 0);
 
 			if (!isBlend)
 			{
@@ -3801,11 +3891,42 @@ namespace Hooks
 		*(BYTE*)&thisObj[9] = 0;
 	}
 
+	DWORD FaceColor(const PixObject* pix)
+	{
+		if (!pix->exists)
+			return ALPHA_COMPONENT;
+		return config.renderer == RendererGDI ? _byteswap_ulong(_rotl(pix->color, 8)) : pix->color;
+	}
+
+	VOID TwinFace(const DWORD* dstData, LONG dstPitch, const DWORD* srcData, LONG srcPitch, LONG top, LONG bottom, LONG width, BYTE isMirror, DWORD flag, DWORD minIdx, const PixObject* pixData_1, const PixObject* pixData_2, const DWORD* mskData, LONG mskPitch)
+	{
+		const DWORD* first = dstData + top * dstPitch;
+		LONG rows = bottom - top;
+		DWORD mirror = isMirror ? Twin::PixelMirror : 0;
+		Twin::OnPixelCopy(Twin::PixelCopy, srcData + top * srcPitch, srcPitch, first, dstPitch, width, rows, 0, mirror);
+
+		DWORD weight = (flag + 1) & 0xFF;
+		if (!weight)
+			return;
+
+		if (mskData)
+			Twin::OnPixelCopy(Twin::PixelBlend, mskData + top * mskPitch, mskPitch, first, dstPitch, width, rows, 0, weight | mirror);
+		else if (pixData_1->exists)
+			Twin::OnTintRect(first, dstPitch, width, rows, FaceColor(pixData_1), weight);
+
+		if (pixData_2->exists && minIdx < (DWORD)rows)
+			Twin::OnTintRect(first + minIdx * dstPitch, dstPitch, width, rows - minIdx, FaceColor(pixData_2), weight);
+	}
+
 	VOID __stdcall DrawFaces(DWORD* dstData, LONG dstPitch, DWORD* srcData, LONG srcPitch, LONG top, LONG bottom, LONG width, BYTE isMirror, DWORD flag, DWORD minIdx, PixObject* pixData_1, PixObject* pixData_2, DWORD* mskData, LONG mskPitch)
 	{
+		Seed::OnFaceCopy(srcData, srcPitch);
+
 		if (!flag)
 			return;
 
+		Twin::OnMemory(dstData, dstPitch, width, bottom);
+		TwinFace(dstData, dstPitch, srcData, srcPitch, top, bottom, width, isMirror, flag, minIdx, pixData_1, pixData_2, mskData, mskPitch);
 		srcData += top * srcPitch;
 		dstData += top * dstPitch + (isMirror ? width - 1 : 0);
 
@@ -3877,9 +3998,13 @@ namespace Hooks
 
 	VOID __stdcall DrawFaces_SSE(DWORD* dstData, LONG dstPitch, DWORD* srcData, LONG srcPitch, LONG top, LONG bottom, LONG width, BYTE isMirror, DWORD flag, DWORD minIdx, PixObject* pixData_1, PixObject* pixData_2, DWORD* mskData, LONG mskPitch)
 	{
+		Seed::OnFaceCopy(srcData, srcPitch);
+
 		if (!flag)
 			return;
 
+		Twin::OnMemory(dstData, dstPitch, width, bottom);
+		TwinFace(dstData, dstPitch, srcData, srcPitch, top, bottom, width, isMirror, flag, minIdx, pixData_1, pixData_2, mskData, mskPitch);
 		srcData += top * srcPitch;
 		dstData += top * dstPitch + (isMirror ? width - 1 : 0);
 
@@ -3958,6 +4083,7 @@ namespace Hooks
 	{
 		DWORD pitch = obj->pitch >> 1;
 		color = Convert565toRGB(color);
+		Twin::OnFillRect((DWORD*)obj->data + loc->y * pitch + loc->x, pitch, count, 1, color);
 
 		for (DWORD* data = (DWORD*)obj->data + loc->y * pitch + loc->x; count; ++data, --count)
 			*data = color;
@@ -3978,6 +4104,11 @@ namespace Hooks
 		}
 	}
 
+	VOID __stdcall TwinPoint(const DWORD* at, DWORD color)
+	{
+		Twin::OnFillRect(at, 1, 1, 1, color);
+	}
+
 	DWORD back_00538413;
 	VOID __declspec(naked) hook_005383F7()
 	{
@@ -3990,6 +4121,16 @@ namespace Hooks
 			mov eax, [ecx]
 			mov ecx, [ebp-0x1C]
 			mov [eax*0x4+esi], ecx
+
+			pushfd
+			pushad
+			lea edx, [eax*0x4+esi]
+			push ecx
+			push edx
+			call TwinPoint
+			popad
+			popfd
+
 			inc edi
 
 			jmp back_00538413
@@ -4069,6 +4210,7 @@ namespace Hooks
 			config.screen.buildStruct = name && !StrCompare(name, ".?AVCBuildStructInterf@@");
 			townClass = config.screen.buildStruct || name && !StrCompare(name, ".?AVCCapitalInterf@@");
 			config.screen.strategic = name && !StrCompare(name, ".?AVCStratInterf@@");
+			config.screen.offer = name && (!StrCompare(name, ".?AVCDiploMsgBox@@") || !StrCompare(name, ".?AVCOfferInterf@@"));
 			loadClass = name && (!StrCompare(name, ".?AVCLoadGameInterf@@") || !StrCompareNum(name, ".?AVCMenuLoad", 13));
 		}
 
@@ -4479,9 +4621,9 @@ namespace Hooks
 
 	VOID GetScrollTickOffset(POINT* offset)
 	{
-		DOUBLE off = config.scroll.value * (1.0 - 0.005 * config.scroll.speed);
+		DOUBLE off = config.scroll.value * (1.75 - 0.0075 * config.scroll.speed);
 		offset->y = (LONG)MathRound(off);
-		offset->x = (LONG)MathRound(off * 2.0);
+		offset->x = offset->y;
 	}
 
 	VOID __fastcall GetScrollOffset(POINT* offset)
@@ -4566,7 +4708,6 @@ namespace Hooks
 		if (dir != ScrollCenter)
 		{
 			wasdEasing = wasdScroll;
-			config.scroll.speed = wasdScroll ? config.scroll.speed + 70 : config.scroll.speed;
 			config.scroll.dir = dir;
 			if (config.scroll.state != ScrollStarted)
 				config.scroll.state = ScrollStarting;
@@ -6951,6 +7092,8 @@ namespace Hooks
 	HANDLE __stdcall CreateFileHook(LPCSTR lpFileName, DWORD dwDesiredAccess, DWORD dwShareMode, LPSECURITY_ATTRIBUTES lpSecurityAttributes, DWORD dwCreationDisposition, DWORD dwFlagsAndAttributes, HANDLE hTemplateFile)
 	{
 		HANDLE hFile = CreateFile(lpFileName, dwDesiredAccess, dwShareMode, lpSecurityAttributes, dwCreationDisposition, dwFlagsAndAttributes, hTemplateFile);
+		if (hFile != INVALID_HANDLE_VALUE)
+			Seed::OnFileOpen(lpFileName, hFile);
 
 		CHAR* p = StrLastChar((CHAR*)lpFileName, '\\');
 		if (p && !StrCompareInsensitive(p, !config.type.editor ? "\\Interf.dlg" : "\\ScenEdit.dlg"))
@@ -7615,7 +7758,12 @@ namespace Hooks
 		if (view)
 		{
 			battleSaveView = NULL;
-			SaveBeforeBattle(view);
+
+			// a4 is move state +0x14; path end +0x24 vs last tile reachable this turn +0x2c (Discipl2.exe v3.01b 0x004CC7C8)
+			POINT* last = (POINT*)(a4 + 0x10);
+			POINT* reach = (POINT*)(a4 + 0x18);
+			if (last->x == reach->x && last->y == reach->y)
+				SaveBeforeBattle(view);
 		}
 
 		((VOID(__thiscall*)(DWORD, DWORD, DWORD, DWORD, DWORD))sub_SendStackMove)(phase, a1, a2, a3, a4);
@@ -9169,9 +9317,13 @@ namespace Hooks
 
 		FasterEndTurn::Load(hooker, hookSpace, baseOffset);
 		TurnSummary::Load(hooker, hookSpace, baseOffset);
+		MapOrder::Load(hooker, hookSpace, baseOffset);
 		TurnIncome::Load(hooker, hookSpace, baseOffset);
 
 		TurnOrder::Load(hooker, hookSpace, baseOffset);
+
+		Seed::Load(hooker, hookSpace, baseOffset);
+		Ground::Load(hooker, hookSpace, baseOffset);
 
 		ShopFrame::Load(hooker, hookSpace, baseOffset);
 

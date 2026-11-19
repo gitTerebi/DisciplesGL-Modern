@@ -30,33 +30,155 @@ HMODULE hDllModule;
 HANDLE hActCtx;
 CHAR snapshotName[MAX_PATH];
 
-void DebugLog(const char* format, ...)
+// The log is written by its own thread. A line used to open, append and close the file on the calling thread, which on the game thread cost about 30 us a line
+// (19:07 run: 100 to 370 lines in each frame that first showed new art). Now a line is formatted into a buffer under a short lock, and the writer appends the
+// buffer to a handle it keeps open, at most every LOG_FLUSH_MS. A full buffer, a crash and the DLL's unload write it out at once (DebugLogFlush).
+#define LOG_BUFFER (512 * 1024)
+#define LOG_ROTATE (8 * 1024 * 1024)
+#define LOG_FLUSH_MS 50
+
+struct {
+	volatile LONG state;
+	CRITICAL_SECTION cs;
+	CRITICAL_SECTION write;
+	HANDLE wake;
+	HANDLE thread;
+	CHAR buffers[2][LOG_BUFFER];
+	DWORD active;
+	DWORD used;
+	HANDLE file;
+	DWORD size;
+	BOOL closed;
+} logs;
+
+volatile DWORD debugLogThread;
+ULONGLONG debugLogCycles;
+DWORD debugLogCalls;
+
+VOID LogPath(CHAR* path)
 {
-	CHAR path[MAX_PATH];
-	DWORD length = GetModuleFileName(NULL, path, sizeof(path));
+	DWORD length = GetModuleFileName(NULL, path, MAX_PATH);
 	while (length && path[length - 1] != '\\')
 		--length;
 	StrCopy(path + length, "DisciplesGL-debug.log");
+}
 
-	HANDLE file = CreateFile(path, FILE_APPEND_DATA | FILE_READ_ATTRIBUTES, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
-	if (file == INVALID_HANDLE_VALUE)
-		return;
-
-	if (GetFileSize(file, NULL) >= 2 * 1024 * 1024)
+// with logs.write held
+VOID LogWriteFile(const CHAR* data, DWORD size)
+{
+	CHAR path[MAX_PATH];
+	if (!logs.file)
 	{
-		CloseHandle(file);
+		LogPath(path);
+		logs.file = CreateFile(path, FILE_APPEND_DATA | FILE_READ_ATTRIBUTES, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+		if (logs.file == INVALID_HANDLE_VALUE)
+		{
+			logs.file = NULL;
+			return;
+		}
+		logs.size = GetFileSize(logs.file, NULL);
+	}
 
+	if (logs.size >= LOG_ROTATE)
+	{
+		CloseHandle(logs.file);
+		logs.file = NULL;
+		LogPath(path);
 		CHAR oldPath[MAX_PATH];
 		StrCopy(oldPath, path);
 		StrCat(oldPath, ".old");
 		MoveFileEx(path, oldPath, MOVEFILE_REPLACE_EXISTING);
-
-		file = CreateFile(path, FILE_APPEND_DATA | FILE_READ_ATTRIBUTES, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
-		if (file == INVALID_HANDLE_VALUE)
+		logs.file = CreateFile(path, FILE_APPEND_DATA | FILE_READ_ATTRIBUTES, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+		if (logs.file == INVALID_HANDLE_VALUE)
+		{
+			logs.file = NULL;
 			return;
+		}
+		logs.size = 0;
 	}
 
-	CHAR text[512];
+	DWORD written = 0;
+	WriteFile(logs.file, data, size, &written, NULL);
+	logs.size += written;
+}
+
+// with logs.write held: takes the filled buffer under the short lock and writes it outside it
+VOID LogDrain()
+{
+	EnterCriticalSection(&logs.cs);
+	DWORD used = logs.used;
+	CHAR* data = logs.buffers[logs.active];
+	logs.active ^= 1;
+	logs.used = 0;
+	LeaveCriticalSection(&logs.cs);
+	if (used)
+		LogWriteFile(data, used);
+}
+
+DWORD __stdcall LogWriter(LPVOID)
+{
+	for (;;)
+	{
+		WaitForSingleObject(logs.wake, LOG_FLUSH_MS);
+		EnterCriticalSection(&logs.write);
+		LogDrain();
+		LeaveCriticalSection(&logs.write);
+	}
+}
+
+BOOL LogReady()
+{
+	if (logs.state == 2)
+		return TRUE;
+	if (InterlockedCompareExchange(&logs.state, 1, 0) == 0)
+	{
+		InitializeCriticalSection(&logs.cs);
+		InitializeCriticalSection(&logs.write);
+		logs.wake = CreateEvent(NULL, FALSE, FALSE, NULL);
+		InterlockedExchange(&logs.state, 2);
+		// created from DllMain too: the thread starts once the loader lock is free, and nothing waits for it
+		logs.thread = CreateThread(NULL, 0, LogWriter, NULL, 0, NULL);
+		return TRUE;
+	}
+	while (logs.state != 2)
+		Sleep(0);
+	return TRUE;
+}
+
+// writes what is buffered now. Used at a crash and at unload, where the writer may be gone or stopped inside its write, so the locks are only tried for a while
+VOID DebugLogFlush()
+{
+	if (logs.state != 2)
+		return;
+	DWORD tries = 0;
+	while (!TryEnterCriticalSection(&logs.write))
+	{
+		if (++tries > 200)
+			return;
+		Sleep(1);
+	}
+	tries = 0;
+	while (!TryEnterCriticalSection(&logs.cs))
+	{
+		if (++tries > 200)
+		{
+			LeaveCriticalSection(&logs.write);
+			return;
+		}
+		Sleep(1);
+	}
+	LeaveCriticalSection(&logs.cs);
+	LogDrain();
+	LeaveCriticalSection(&logs.write);
+}
+
+void DebugLog(const char* format, ...)
+{
+	BOOL timed = debugLogThread && GetCurrentThreadId() == debugLogThread;
+	ULONGLONG start = timed ? __rdtsc() : 0;
+
+	// wvsprintf writes at most 1024 chars
+	CHAR text[1100];
 	SYSTEMTIME time;
 	GetLocalTime(&time);
 	INT offset = wsprintf(text, "%02u:%02u:%02u.%03u ", time.wHour, time.wMinute, time.wSecond, time.wMilliseconds);
@@ -67,10 +189,142 @@ void DebugLog(const char* format, ...)
 	va_end(args);
 
 	StrCat(text, "\r\n");
-	DWORD written;
-	WriteFile(file, text, StrLength(text), &written, NULL);
-	CloseHandle(file);
+	DWORD length = StrLength(text);
+
+	LogReady();
+	for (;;)
+	{
+		EnterCriticalSection(&logs.cs);
+		if (logs.used + length <= LOG_BUFFER)
+		{
+			MemoryCopy(logs.buffers[logs.active] + logs.used, text, length);
+			logs.used += length;
+			BOOL wake = logs.used >= LOG_BUFFER / 2;
+			LeaveCriticalSection(&logs.cs);
+			// without a writer thread every line is written at once, as before
+			if (!logs.thread)
+			{
+				EnterCriticalSection(&logs.write);
+				LogDrain();
+				LeaveCriticalSection(&logs.write);
+			}
+			else if (wake)
+				SetEvent(logs.wake);
+			break;
+		}
+		LeaveCriticalSection(&logs.cs);
+		// the buffer is full: this caller writes it out
+		EnterCriticalSection(&logs.write);
+		LogDrain();
+		LeaveCriticalSection(&logs.write);
+	}
+
+	if (timed)
+	{
+		debugLogCycles += __rdtsc() - start;
+		++debugLogCalls;
+	}
 }
+
+typedef BOOL(__stdcall* MINIDUMPWRITEDUMP)(HANDLE, DWORD, HANDLE, DWORD, VOID*, VOID*, VOID*);
+
+struct CrashDumpInfo {
+	DWORD threadId;
+	EXCEPTION_POINTERS* exception;
+	BOOL clientPointers;
+};
+
+LPTOP_LEVEL_EXCEPTION_FILTER crashPrevious;
+volatile LONG crashOnce;
+
+DWORD CrashModule(DWORD address, CHAR* name, DWORD size)
+{
+	HMODULE module = NULL;
+	if (!GetModuleHandleEx(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, (LPCSTR)address, &module) || !module)
+	{
+		lstrcpyn(name, "?", size);
+		return 0;
+	}
+
+	CHAR path[MAX_PATH];
+	DWORD length = GetModuleFileName(module, path, MAX_PATH);
+	const CHAR* file = path + length;
+	while (file > path && file[-1] != '\\')
+		--file;
+	lstrcpyn(name, file, size);
+	return (DWORD)module;
+}
+
+LONG __stdcall CrashFilter(EXCEPTION_POINTERS* info)
+{
+	if (InterlockedExchange(&crashOnce, 1))
+		return crashPrevious ? crashPrevious(info) : EXCEPTION_CONTINUE_SEARCH;
+
+	EXCEPTION_RECORD* record = info->ExceptionRecord;
+	CONTEXT* context = info->ContextRecord;
+	CHAR name[64];
+	DWORD base = CrashModule((DWORD)record->ExceptionAddress, name, sizeof(name));
+	DebugLog("CRASH code %08X at %08X %s+%X thread %u", record->ExceptionCode, (DWORD)record->ExceptionAddress, name, (DWORD)record->ExceptionAddress - base, GetCurrentThreadId());
+	if (record->ExceptionCode == EXCEPTION_ACCESS_VIOLATION && record->NumberParameters >= 2)
+		DebugLog("CRASH %s of %08X", record->ExceptionInformation[0] == 8 ? "execute" : (record->ExceptionInformation[0] ? "write" : "read"), (DWORD)record->ExceptionInformation[1]);
+	DebugLog("CRASH eax=%08X ebx=%08X ecx=%08X edx=%08X esi=%08X edi=%08X ebp=%08X esp=%08X eip=%08X",
+		context->Eax, context->Ebx, context->Ecx, context->Edx, context->Esi, context->Edi, context->Ebp, context->Esp, context->Eip);
+	DebugLogFlush();
+
+	const DWORD* stack = (const DWORD*)context->Esp;
+	DWORD found = 0;
+	for (DWORD i = 0; i < 4096 && found < 32; ++i)
+	{
+		if (IsBadReadPtr(stack + i, sizeof(DWORD)))
+			break;
+
+		DWORD value = stack[i];
+		MEMORY_BASIC_INFORMATION memory;
+		if (value < 0x10000 || !VirtualQuery((LPCVOID)value, &memory, sizeof(memory)) || memory.State != MEM_COMMIT
+			|| !(memory.Protect & (PAGE_EXECUTE | PAGE_EXECUTE_READ | PAGE_EXECUTE_READWRITE | PAGE_EXECUTE_WRITECOPY)))
+			continue;
+
+		base = CrashModule(value, name, sizeof(name));
+		if (!base)
+			continue;
+
+		DebugLog("CRASH stack +%04X %08X %s+%X", i * 4, value, name, value - base);
+		++found;
+	}
+
+	DebugLogFlush();
+	HMODULE dbghelp = LoadLibrary("dbghelp.dll");
+	MINIDUMPWRITEDUMP write = dbghelp ? (MINIDUMPWRITEDUMP)GetProcAddress(dbghelp, "MiniDumpWriteDump") : NULL;
+	if (write)
+	{
+		CHAR path[MAX_PATH];
+		DWORD length = GetModuleFileName(NULL, path, sizeof(path));
+		while (length && path[length - 1] != '\\')
+			--length;
+		StrCopy(path + length, "DisciplesGL-crash.dmp");
+
+		HANDLE file = CreateFile(path, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+		if (file != INVALID_HANDLE_VALUE)
+		{
+			CrashDumpInfo dump = { GetCurrentThreadId(), info, FALSE };
+			// MiniDumpWithIndirectlyReferencedMemory: stacks plus the memory they point at, small enough to send with the logs
+			BOOL ok = write(GetCurrentProcess(), GetCurrentProcessId(), file, 0x40, &dump, NULL, NULL);
+			CloseHandle(file);
+			DebugLog("CRASH minidump %s", ok ? "written" : "failed");
+		}
+	}
+
+	DebugLogFlush();
+	return crashPrevious ? crashPrevious(info) : EXCEPTION_CONTINUE_SEARCH;
+}
+
+VOID CrashArm()
+{
+	LPTOP_LEVEL_EXCEPTION_FILTER previous = SetUnhandledExceptionFilter(CrashFilter);
+	if (previous != CrashFilter)
+		crashPrevious = previous;
+}
+
 
 CREATEACTCTXA CreateActCtxC;
 RELEASEACTCTX ReleaseActCtxC;
