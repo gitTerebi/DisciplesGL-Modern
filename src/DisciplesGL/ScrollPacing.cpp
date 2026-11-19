@@ -101,10 +101,10 @@ namespace ScrollPacing
 		return NextBoundary(now, period, anchor);
 	}
 
-	LONGLONG NextFlush(LONGLONG now, LONGLONG fallbackStep)
+	LONGLONG NextFlush(LONGLONG now, LONGLONG step, BOOL capped)
 	{
 		RefreshDwm(now);
-		return dwmPeriod ? NextBoundary(now, dwmPeriod, dwmAnchor) : fallbackStep * (now / fallbackStep + 1);
+		return dwmPeriod && !capped ? NextBoundary(now, dwmPeriod, dwmAnchor) : step * (now / step + 1);
 	}
 
 	VOID Reset()

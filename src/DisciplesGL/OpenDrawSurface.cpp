@@ -562,7 +562,7 @@ VOID OpenDrawSurface::Flush()
 			QueryPerformanceCounter((LARGE_INTEGER*)&time);
 			if (time >= this->ddraw->flushTime)
 			{
-				this->ddraw->flushTime = ScrollPacing::NextFlush(time, config.syncStep.value);
+				this->ddraw->flushTime = ScrollPacing::NextFlush(time, config.syncStep.value, config.syncStep.capped);
 				this->drawEnabled = FALSE;
 #endif
 		LONG textLeft = 0, textTop = 0;

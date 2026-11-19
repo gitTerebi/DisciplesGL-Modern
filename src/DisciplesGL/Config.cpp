@@ -433,6 +433,7 @@ namespace Config
 
 					ptr = Add(ptr, "ImageAspect", config.image.aspect, "Keep image aspect ratio (0 - no; 1 - yes 'default')");
 					ptr = Add(ptr, "ImageVSync", config.image.vSync, "Enables vertical synchronization (0 - no 'default'; 1 - yes)");
+					ptr = Add(ptr, "FrameLimit", config.image.frameLimit, "Frame rate cap below the monitor refresh rate (0 - off 'default')");
 					ptr = Add(ptr, "Interpolation", (INT)config.image.interpolation, "Image interpolation filter (0 - none; 1 - linear; 2 - hermite; 3 - cubic; 4 - lanczos; 5 - fsr 'default')");
 					ptr = Add(ptr, "Upscaling", MAKELONG(config.image.upscaling, config.image.value), "Image upscaling filter (low word: 0 - none 'default'; 1 - xbrz; 2 - scalehq; 3 - xsal; 4 - eagle; 5 - scalenx; high word - value)");
 					ptr = Add(ptr, "FsrSharpness", config.image.sharpness, "FSR sharpening strength (0 - off; 1 - low; 2 - medium 'default'; 3 - high; 4 - maximum)");
@@ -582,6 +583,7 @@ namespace Config
 
 				config.image.aspect = (BOOL)Config::Get(CONFIG_WRAPPER, "ImageAspect", TRUE);
 				config.image.vSync = (BOOL)Config::Get(CONFIG_WRAPPER, "ImageVSync", TRUE);
+				config.image.frameLimit = (DWORD)Config::Get(CONFIG_WRAPPER, "FrameLimit", 0);
 
 				value = Config::Get(CONFIG_WRAPPER, "Interpolation", InterpolateHermite);
 				config.image.interpolation = *(InterpolationFilter*)&value;
@@ -1326,7 +1328,10 @@ namespace Config
 		DEVMODE devMode = {};
 		devMode.dmSize = sizeof(DEVMODE);
 		config.speed.frequency = EnumDisplaySettings(NULL, ENUM_CURRENT_SETTINGS, &devMode) && (devMode.dmFields & DM_DISPLAYFREQUENCY) ? devMode.dmDisplayFrequency : 60u;
-		
+		config.syncStep.capped = config.image.frameLimit && config.image.frameLimit < config.speed.frequency;
+		if (config.syncStep.capped)
+			config.speed.frequency = config.image.frameLimit;
+
 		QueryPerformanceFrequency((LARGE_INTEGER*)&config.syncStep.frequency);
 		config.syncStep.value = config.syncStep.frequency / config.speed.frequency;
 

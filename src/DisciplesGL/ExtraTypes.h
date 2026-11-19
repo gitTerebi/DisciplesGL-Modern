@@ -353,6 +353,7 @@ struct ConfigItems {
 	struct {
 		LONGLONG frequency;
 		LONGLONG value;
+		BOOL capped;
 	} syncStep;
 	POINT randPos;
 
@@ -476,6 +477,7 @@ struct ConfigItems {
 	struct {
 		BOOL aspect;
 		BOOL vSync;
+		DWORD frameLimit;
 		InterpolationFilter interpolation;
 		UpscalingFilter upscaling;
 		BYTE value;
