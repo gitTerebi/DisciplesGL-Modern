@@ -4621,9 +4621,9 @@ namespace Hooks
 
 	VOID GetScrollTickOffset(POINT* offset)
 	{
-		DOUBLE off = config.scroll.value * (1.0 - 0.005 * config.scroll.speed);
+		DOUBLE off = config.scroll.value * (1.75 - 0.0075 * config.scroll.speed);
 		offset->y = (LONG)MathRound(off);
-		offset->x = (LONG)MathRound(off * 2.0);
+		offset->x = offset->y;
 	}
 
 	VOID __fastcall GetScrollOffset(POINT* offset)
@@ -4708,7 +4708,6 @@ namespace Hooks
 		if (dir != ScrollCenter)
 		{
 			wasdEasing = wasdScroll;
-			config.scroll.speed = wasdScroll ? config.scroll.speed + 70 : config.scroll.speed;
 			config.scroll.dir = dir;
 			if (config.scroll.state != ScrollStarted)
 				config.scroll.state = ScrollStarting;
