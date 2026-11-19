@@ -7759,7 +7759,12 @@ namespace Hooks
 		if (view)
 		{
 			battleSaveView = NULL;
-			SaveBeforeBattle(view);
+
+			// a4 is move state +0x14; path end +0x24 vs last tile reachable this turn +0x2c (Discipl2.exe v3.01b 0x004CC7C8)
+			POINT* last = (POINT*)(a4 + 0x10);
+			POINT* reach = (POINT*)(a4 + 0x18);
+			if (last->x == reach->x && last->y == reach->y)
+				SaveBeforeBattle(view);
 		}
 
 		((VOID(__thiscall*)(DWORD, DWORD, DWORD, DWORD, DWORD))sub_SendStackMove)(phase, a1, a2, a3, a4);
