@@ -9700,7 +9700,7 @@ namespace Hooks
 					if (ReadDWord(hooker, hookSpace->btnItemsUseFix + 2, &back_006307B4))
 					{
 						PatchCall(hooker, hookSpace->btnItemsUseFix, hook_00630434, 1);
-						back_006307B4 += hookSpace->btnItemsUseFix + 6;
+						back_006307B4 += f(hookSpace->btnItemsUseFix + 6);
 						CheckItemRect = hookSpace->version.high == 2 ? CheckItemRectV2 : CheckItemRectV3;
 					}
 
